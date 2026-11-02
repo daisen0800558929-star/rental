@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4fa0">
+<title>大森租賃管理系統</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky header + tab bar, one-column work list; stat strip on overview; dialog forms */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --line:#dde2ea; --fg:#1b2230; --muted:#5d6779;
+  --accent:#1f4fa0; --accent-soft:#e6edf8; --on-accent:#ffffff;
+  --ok:#1d7a4c; --ok-soft:#e3f3ea; --warn:#a15c00; --warn-soft:#fbefdc; --bad:#b4282c; --bad-soft:#fae4e4;
+  --font-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --line:#2c3441; --fg:#e6eaf0; --muted:#9aa4b4;
+  --accent:#7aa2e8; --accent-soft:#22314a; --on-accent:#0e1626;
+  --ok:#5fca94; --ok-soft:#173326; --warn:#e6a44a; --warn-soft:#3a2a12; --bad:#f07a7d; --bad-soft:#3d1c1e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --line:#2c3441; --fg:#e6eaf0; --muted:#9aa4b4;
+  --accent:#7aa2e8; --accent-soft:#22314a; --on-accent:#0e1626;
+  --ok:#5fca94; --ok-soft:#173326; --warn:#e6a44a; --warn-soft:#3a2a12; --bad:#f07a7d; --bad-soft:#3d1c1e; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px 8px}
+h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em}
+.sub{color:var(--muted);font-size:12.5px}
+nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:0}
+nav button{flex:0 0 auto;border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+main{padding-block:18px 48px;display:grid;gap:18px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar input,.toolbar select{flex:1 1 180px;min-width:0}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:100%;box-sizing:border-box}
+textarea{min-height:64px;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-weight:500;padding:9px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.small{padding:5px 10px;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface);padding:14px 16px;display:grid;gap:2px}
+.stat .k{font-size:12.5px;color:var(--muted)}
+.stat .v{font-family:var(--font-mono);font-size:24px;font-weight:500;font-variant-numeric:tabular-nums}
+.stat.bad .v{color:var(--bad)} .stat.warn .v{color:var(--warn)}
+section h2{font-size:15px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+section h2 small{font-weight:400;color:var(--muted);font-size:12.5px}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer;align-items:center}
+.row:first-child{border-top:0}
+.row:hover{background:var(--accent-soft)}
+.row .t{font-weight:500;min-width:0;overflow-wrap:anywhere}
+.row .m{color:var(--muted);font-size:13px;min-width:0;overflow-wrap:anywhere}
+.row .r{text-align:right;display:grid;gap:4px;justify-items:end}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.mute{background:var(--bg);color:var(--muted)}
+.empty{padding:22px 16px;color:var(--muted);text-align:center}
+.note{font-size:13px;color:var(--muted)}
+.banner{padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px)}
+dialog::backdrop{background:rgba(10,14,22,.45)}
+.dlg{display:grid;gap:14px;padding:18px}
+.dlg h3{margin:0;font-size:17px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+label.full{grid-column:1/-1}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.actions .spacer{flex:1}
+.calc{background:var(--bg);border-radius:6px;padding:10px 12px;font-size:13.5px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;z-index:20}
+@media (prefers-reduced-motion:no-preference){.row{transition:background .12s}}
+html,body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.login{min-height:100vh;display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
+.login form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(380px,100%);display:grid;gap:14px;box-sizing:border-box}
+.login h1{font-size:21px}
+.userbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.userbox .sub{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="login" id="loginView">
+  <form id="loginForm" novalidate>
+    <div><h1>大森租賃管理</h1><div class="sub">請使用公司開通的帳號登入</div></div>
+    <div class="banner" id="loginErr" hidden></div>
+    <label>Email<input type="email" id="loginEmail" autocomplete="username" required></label>
+    <label>密碼<input type="password" id="loginPw" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit" id="loginBtn">登入</button>
+    <button class="btn" type="button" id="resetBtn">忘記密碼</button>
+  </form>
+</div>
+<div id="appView" hidden>
+<header>
+  <div class="wrap">
+    <div class="head">
+      <div><h1>租賃管理</h1><div class="sub" id="sync">連線中…</div></div>
+      <div class="userbox"><span class="sub" id="whoami"></span><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
+    </div>
+    <nav role="tablist">
+      <button role="tab" data-tab="overview" aria-selected="true">總覽</button>
+      <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
+      <button role="tab" data-tab="equipment" aria-selected="false">設備</button>
+      <button role="tab" data-tab="customers" aria-selected="false">客戶</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap"><main id="main"></main></div>
+
+<dialog id="dlg"><form class="dlg" id="dlgForm" novalidate></form></dialog>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+const firebaseConfig={apiKey:"AIzaSyA-lXRTR38AeFMgSwYCD91Akywgxgb5ZB4",authDomain:"daisen-rental.firebaseapp.com",projectId:"daisen-rental",storageBucket:"daisen-rental.firebasestorage.app",messagingSenderId:"687274188760",appId:"1:687274188760:web:41035f0278d21ebd99dcad"};
+const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fbApp);
+const S={equipment:[],customers:[],contracts:[],loaded:{equipment:false,customers:false,contracts:false}};
+let db=null, canWrite=true, tab="overview", q="", filter="all";
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=n=>"NT$ "+Math.round(n||0).toLocaleString("zh-TW");
+const todayStr=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const dayNum=s=>{const [y,m,d]=String(s).split("-").map(Number);return Date.UTC(y,m-1,d)/864e5};
+const daysBetween=(a,b)=>dayNum(b)-dayNum(a);
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2200)}
+
+/* 計費：日租 = 天數 × 單價；月租 = 以 30 天為一期，不足一期以一期計 */
+function rentDays(c){const end=c.status==="已歸還"&&c.returnDate?c.returnDate:c.end;return Math.max(1,daysBetween(c.start,end)+1)}
+function rentAmount(c){const d=rentDays(c);return c.unit==="月"?Math.ceil(d/30)*(+c.rate||0):d*(+c.rate||0)}
+function cState(c){
+  if(c.status==="已歸還")return{label:"已歸還",cls:"mute",k:"done"};
+  if(c.status==="已取消")return{label:"已取消",cls:"mute",k:"done"};
+  const t=todayStr();
+  if(c.start>t)return{label:"未開始",cls:"",k:"future"};
+  const left=daysBetween(t,c.end);
+  if(left<0)return{label:"逾期 "+(-left)+" 天",cls:"bad",k:"overdue"};
+  if(left<=7)return{label:left===0?"今日到期":left+" 天後到期",cls:"warn",k:"soon"};
+  return{label:"租賃中",cls:"ok",k:"active"};
+}
+const cust=id=>S.customers.find(x=>x.id===id);
+const equip=id=>S.equipment.find(x=>x.id===id);
+function activeContractOf(eid){return S.contracts.find(c=>c.equipmentId===eid&&c.status==="租賃中")}
+function eState(e){
+  if(e.repair)return{label:"維修中",cls:"warn"};
+  const c=activeContractOf(e.id);
+  if(c)return{label:"出租中",cls:"",c};
+  return{label:"可出租",cls:"ok"};
+}
+
+/* ---------- render ---------- */
+function render(){
+  $("#newBtn").hidden=!canWrite;
+  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
+  const m=$("#main");
+  if(!db){m.innerHTML=`<div class="banner" id="nodb">${esc(dbMsg)}</div>`;return}
+  const loading=!Object.values(S.loaded).every(Boolean);
+  let h="";
+  if(tab==="overview")h=viewOverview(loading);
+  if(tab==="contracts")h=viewContracts(loading);
+  if(tab==="equipment")h=viewEquipment(loading);
+  if(tab==="customers")h=viewCustomers(loading);
+  m.innerHTML=h;
+  const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
+  const sf=$("#f");if(sf){sf.value=filter;sf.onchange=e=>{filter=e.target.value;render()}}
+}
+function renderKeepFocus(){const pos=$("#q")?.selectionStart;render();const el=$("#q");if(el){el.focus();try{el.setSelectionRange(pos,pos)}catch(e){}}}
+function contractRow(c){
+  const st=cState(c),cu=cust(c.customerId),eq=equip(c.equipmentId);
+  return `<div class="row" data-open="contract" data-id="${esc(c.id)}" tabindex="0">
+    <div><div class="t">${esc(cu?.name||"（客戶已刪除）")}　<span class="m">${esc(eq?.name||"（設備已刪除）")}</span></div>
+    <div class="m"><span class="mono">${esc(c.no||"")}</span> · ${esc(c.start)} → ${esc(c.end)}</div></div>
+    <div class="r"><span class="pill ${st.cls}">${esc(st.label)}</span><span class="mono m">${money(rentAmount(c))}</span></div></div>`;
+}
+function emptyOr(rows,loading,msg){if(loading&&!rows.length)return`<div class="empty">資料載入中…</div>`;return rows.length?rows.join(""):`<div class="empty">${msg}</div>`}
+function viewOverview(loading){
+  const live=S.contracts.filter(c=>c.status==="租賃中");
+  const overdue=live.filter(c=>cState(c).k==="overdue").sort((a,b)=>a.end.localeCompare(b.end));
+  const soon=live.filter(c=>cState(c).k==="soon").sort((a,b)=>a.end.localeCompare(b.end));
+  const avail=S.equipment.filter(e=>eState(e).label==="可出租").length;
+  const monthly=live.reduce((s,c)=>s+(c.unit==="月"?+c.rate||0:(+c.rate||0)*30),0);
+  return `<div class="stats">
+    <div class="stat"><span class="k">出租中</span><span class="v">${live.length}</span></div>
+    <div class="stat bad"><span class="k">逾期未還</span><span class="v">${overdue.length}</span></div>
+    <div class="stat warn"><span class="k">7 天內到期</span><span class="v">${soon.length}</span></div>
+    <div class="stat"><span class="k">可出租設備</span><span class="v">${avail}<span class="note"> / ${S.equipment.length}</span></span></div></div>
+  <div class="note">出租中租約每月租金合計約 <span class="mono">${money(monthly)}</span>（日租以 30 天估算）</div>
+  <section><h2>逾期未還 <small>請聯絡客戶歸還或續約</small></h2><div class="list">${emptyOr(overdue.map(contractRow),loading,"目前沒有逾期的租約")}</div></section>
+  <section><h2>即將到期 <small>7 天內</small></h2><div class="list">${emptyOr(soon.map(contractRow),loading,"7 天內沒有到期的租約")}</div></section>`;
+}
+function viewContracts(loading){
+  const qq=q.trim().toLowerCase();
+  let rows=S.contracts.filter(c=>{
+    const st=cState(c).k;
+    if(filter==="live"&&c.status!=="租賃中")return false;
+    if(filter==="overdue"&&st!=="overdue")return false;
+    if(filter==="done"&&st!=="done")return false;
+    if(!qq)return true;
+    return [c.no,cust(c.customerId)?.name,equip(c.equipmentId)?.name,equip(c.equipmentId)?.code].join(" ").toLowerCase().includes(qq);
+  }).sort((a,b)=>b.start.localeCompare(a.start));
+  return `<div class="toolbar"><input id="q" placeholder="搜尋單號、客戶、設備"><select id="f" style="flex:0 1 150px">
+    <option value="all">全部租約</option><option value="live">租賃中</option><option value="overdue">逾期</option><option value="done">已結案</option></select></div>
+  <div class="list">${emptyOr(rows.map(contractRow),loading,S.contracts.length?"沒有符合條件的租約":"還沒有租約。按右上角「新增租約」建立第一筆。")}</div>`;
+}
+function viewEquipment(loading){
+  const qq=q.trim().toLowerCase();
+  const rows=S.equipment.filter(e=>!qq||[e.code,e.name,e.category,e.serial].join(" ").toLowerCase().includes(qq))
+    .sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(e=>{
+    const st=eState(e);const cu=st.c?cust(st.c.customerId):null;
+    return `<div class="row" data-open="equipment" data-id="${esc(e.id)}" tabindex="0">
+      <div><div class="t">${esc(e.name)}</div><div class="m"><span class="mono">${esc(e.code)}</span>${e.category?" · "+esc(e.category):""}${e.serial?" · 序號 "+esc(e.serial):""}${cu?" · 租給 "+esc(cu.name):""}</div></div>
+      <div class="r"><span class="pill ${st.cls}">${st.label}</span><span class="mono m">${e.rate?money(e.rate)+" / "+esc(e.unit||"月"):""}</span></div></div>`});
+  return `<div class="toolbar"><input id="q" placeholder="搜尋編號、名稱、序號">${canWrite?'<button class="btn" type="button" data-new="equipment">＋ 新增設備</button>':""}</div>
+  <div class="list">${emptyOr(rows,loading,"還沒有設備資料。先新增設備，才能建立租約。")}</div>`;
+}
+function viewCustomers(loading){
+  const qq=q.trim().toLowerCase();
+  const rows=S.customers.filter(c=>!qq||[c.name,c.contact,c.phone,c.taxId].join(" ").toLowerCase().includes(qq))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),"zh-Hant")).map(c=>{
+    const n=S.contracts.filter(k=>k.customerId===c.id&&k.status==="租賃中").length;
+    return `<div class="row" data-open="customer" data-id="${esc(c.id)}" tabindex="0">
+      <div><div class="t">${esc(c.name)}</div><div class="m">${esc(c.contact||"")}${c.phone?" · "+esc(c.phone):""}${c.taxId?" · 統編 "+esc(c.taxId):""}</div></div>
+      <div class="r">${n?`<span class="pill">租用中 ${n} 件</span>`:`<span class="pill mute">無租用</span>`}</div></div>`});
+  return `<div class="toolbar"><input id="q" placeholder="搜尋名稱、聯絡人、電話">${canWrite?'<button class="btn" type="button" data-new="customer">＋ 新增客戶</button>':""}</div>
+  <div class="list">${emptyOr(rows,loading,"還沒有客戶資料。")}</div>`;
+}
+
+/* ---------- dialogs ---------- */
+const dlg=$("#dlg"),form=$("#dlgForm");
+let onSubmit=null;
+function openDlg(html,submit){form.oninput=null;form.innerHTML=html;onSubmit=submit;dlg.showModal();const f=form.querySelector("input,select,textarea");if(f)f.focus()}
+form.addEventListener("submit",async e=>{e.preventDefault();if(!onSubmit)return;const btn=form.querySelector("[type=submit]");if(btn)btn.disabled=true;
+  try{const ok=await onSubmit(new FormData(form));if(ok!==false)dlg.close()}catch(err){showErr(err)}finally{if(btn)btn.disabled=false}});
+form.addEventListener("click",e=>{if(e.target.closest("[data-close]"))dlg.close()});
+function showErr(err){let el=form.querySelector(".formerr");if(!el){el=document.createElement("div");el.className="banner formerr";form.prepend(el)}
+  el.textContent=(err?.code==="permission-denied"||err?.code==="invalid_argument")?"你目前沒有修改權限，無法儲存。":err?.code==="quota_exceeded"?"資料已達上限，請先刪除部分舊資料。":(err?.message||"儲存失敗，請再試一次。")}
+const opt=(v,t,sel)=>`<option value="${esc(v)}"${sel?" selected":""}>${esc(t)}</option>`;
+const val=(fd,k)=>String(fd.get(k)??"").trim();
+function confirmDelete(btnSel,label,fn){const b=form.querySelector(btnSel);if(!b)return;b.onclick=async()=>{
+  if(b.dataset.armed){try{await fn();dlg.close();toast("已刪除")}catch(e){showErr(e)}}else{b.dataset.armed="1";b.textContent="再按一次確認刪除"+label}}}
+
+function contractForm(c){
+  const isNew=!c; c=c||{start:todayStr(),end:"",unit:"月",rate:"",deposit:"",status:"租賃中"};
+  const eqOpts=S.equipment.filter(e=>e.id===c.equipmentId||(eState(e).label==="可出租")).map(e=>opt(e.id,`${e.code}　${e.name}`,e.id===c.equipmentId)).join("");
+  const cuOpts=S.customers.map(x=>opt(x.id,x.name,x.id===c.customerId)).join("");
+  if(isNew&&(!S.customers.length||!eqOpts)){openDlg(`<h3>無法新增租約</h3><p class="note">${!S.customers.length?"請先到「客戶」新增客戶。":"目前沒有可出租的設備，請先新增設備或歸還已出租的設備。"}</p><div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null);return}
+  openDlg(`<h3>${isNew?"新增租約":"編輯租約 "+esc(c.no)}</h3>
+  <div class="grid2">
+    <label class="full">客戶<select name="customerId" required>${isNew?'<option value="">請選擇客戶</option>':""}${cuOpts}</select></label>
+    <label class="full">設備<select name="equipmentId" required>${isNew?'<option value="">請選擇可出租的設備</option>':""}${eqOpts}</select></label>
+    <label>起租日<input type="date" name="start" value="${esc(c.start)}" required></label>
+    <label>到期日<input type="date" name="end" value="${esc(c.end)}" required></label>
+    <label>計費方式<select name="unit">${opt("月","月租","月"===c.unit)}${opt("日","日租","日"===c.unit)}</select></label>
+    <label>租金單價（NT$）<input type="number" name="rate" min="0" step="1" inputmode="numeric" value="${esc(c.rate)}" required></label>
+    <label>押金（NT$）<input type="number" name="deposit" min="0" step="1" inputmode="numeric" value="${esc(c.deposit)}"></label>
+    <label>聯絡電話（現場）<input name="sitePhone" value="${esc(c.sitePhone||"")}"></label>
+    <label class="full">使用地點<input name="site" value="${esc(c.site||"")}" placeholder="例：台中市西屯區工地"></label>
+    <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label>
+  </div>
+  <div class="calc" id="calc"></div>
+  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立租約":"儲存"}</button></div>`,
+  async fd=>{
+    const d={customerId:val(fd,"customerId"),equipmentId:val(fd,"equipmentId"),start:val(fd,"start"),end:val(fd,"end"),unit:val(fd,"unit"),
+      rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,site:val(fd,"site"),sitePhone:val(fd,"sitePhone"),note:val(fd,"note")};
+    if(!d.customerId||!d.equipmentId||!d.start||!d.end){showErr({message:"請填寫客戶、設備、起租日與到期日。"});return false}
+    if(d.end<d.start){showErr({message:"到期日不能早於起租日。"});return false}
+    if(isNew){
+      const ref=db.collection("contracts").doc();
+      const base="R"+d.start.replace(/-/g,"");
+      const n=S.contracts.filter(x=>String(x.no).startsWith(base)).length+1;
+      await ref.set({...d,no:base+"-"+String(n).padStart(2,"0"),status:"租賃中",createdAt:new Date().toISOString()});toast("已建立租約");
+    }else{await db.doc("contracts/"+c.id).update(d);toast("已儲存")}
+  });
+  const calc=()=>{const g=n=>form.elements[n]?.value;const t={start:g("start"),end:g("end"),unit:g("unit"),rate:g("rate"),status:"租賃中"};
+    $("#calc").innerHTML=t.start&&t.end&&t.end>=t.start?`租期 <b class="mono">${rentDays(t)}</b> 天${t.unit==="月"?`（${Math.ceil(rentDays(t)/30)} 期）`:""}，租金合計 <b class="mono">${money(rentAmount(t))}</b>`:"填入起訖日後自動計算租金"};
+  form.oninput=calc;calc();
+  form.querySelector("[name=equipmentId]").onchange=e=>{const eq=equip(e.target.value);if(eq&&isNew){if(eq.rate)form.elements.rate.value=eq.rate;if(eq.unit)form.elements.unit.value=eq.unit;if(eq.deposit)form.elements.deposit.value=eq.deposit;calc()}};
+  if(!isNew)confirmDelete("#del","租約",()=>db.doc("contracts/"+c.id).delete());
+}
+function contractDetail(c){
+  const st=cState(c),cu=cust(c.customerId),eq=equip(c.equipmentId),live=c.status==="租賃中";
+  openDlg(`<h3>租約 <span class="mono">${esc(c.no)}</span>　<span class="pill ${st.cls}">${esc(st.label)}</span></h3>
+  <dl class="kv"><dt>客戶</dt><dd>${esc(cu?.name||"—")}${cu?.phone?" · "+esc(cu.phone):""}</dd>
+  <dt>設備</dt><dd>${esc(eq?`${eq.code} ${eq.name}`:"—")}</dd>
+  <dt>租期</dt><dd class="mono">${esc(c.start)} → ${esc(c.end)}</dd>
+  <dt>計費</dt><dd>${esc(c.unit==="日"?"日租":"月租")} <span class="mono">${money(c.rate)}</span></dd>
+  <dt>租金合計</dt><dd class="mono">${money(rentAmount(c))}（${rentDays(c)} 天）</dd>
+  <dt>押金</dt><dd class="mono">${money(c.deposit)}${c.depositReturned?" · 已退還":""}</dd>
+  ${c.site?`<dt>使用地點</dt><dd>${esc(c.site)}${c.sitePhone?" · "+esc(c.sitePhone):""}</dd>`:""}
+  ${c.returnDate?`<dt>歸還日</dt><dd class="mono">${esc(c.returnDate)}</dd>`:""}
+  ${c.returnNote?`<dt>歸還檢查</dt><dd>${esc(c.returnNote)}</dd>`:""}
+  ${c.note?`<dt>備註</dt><dd>${esc(c.note)}</dd>`:""}</dl>
+  <div class="actions">${canWrite?`<button class="btn" type="button" id="edit">編輯</button>${live?'<button class="btn" type="button" id="extend">續約</button><button class="btn primary" type="button" id="ret">辦理歸還</button>':""}`:""}<button class="btn" type="button" data-close>關閉</button></div>`,null);
+  const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
+  on("#edit",()=>{dlg.close();contractForm(c)});
+  on("#ret",()=>{dlg.close();returnForm(c)});
+  on("#extend",()=>{dlg.close();openDlg(`<h3>續約 ${esc(c.no)}</h3><label>新的到期日<input type="date" name="end" min="${esc(c.end)}" value="${esc(c.end)}" required></label>
+    <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認續約</button></div>`,
+    async fd=>{const end=val(fd,"end");if(!end||end<c.start){showErr({message:"請選擇有效的到期日。"});return false}
+      await db.doc("contracts/"+c.id).update({end,note:[c.note,`${todayStr()} 續約至 ${end}`].filter(Boolean).join("\n")});toast("已續約至 "+end)})});
+}
+function returnForm(c){
+  openDlg(`<h3>辦理歸還 ${esc(c.no)}</h3>
+  <div class="grid2"><label>實際歸還日<input type="date" name="returnDate" value="${todayStr()}" required></label>
+  <label>押金<select name="dep"><option value="1">已退還押金</option><option value="0">暫不退還</option></select></label>
+  <label class="full">歸還檢查紀錄<textarea name="returnNote" placeholder="外觀、配件、功能是否正常、需維修項目"></textarea></label>
+  <label class="full"><span><input type="checkbox" name="repair" style="width:auto"> 設備需送修（歸還後標記為維修中）</span></label></div>
+  <div class="calc" id="calc"></div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認歸還</button></div>`,
+  async fd=>{const rd=val(fd,"returnDate");if(!rd||rd<c.start){showErr({message:"歸還日不能早於起租日。"});return false}
+    await db.doc("contracts/"+c.id).update({status:"已歸還",returnDate:rd,returnNote:val(fd,"returnNote"),depositReturned:fd.get("dep")==="1"});
+    if(fd.get("repair")&&equip(c.equipmentId))await db.doc("equipment/"+c.equipmentId).update({repair:true});
+    toast("已完成歸還")});
+  const calc=()=>{const rd=form.elements.returnDate.value;if(!rd)return;const t={...c,status:"已歸還",returnDate:rd};
+    $("#calc").innerHTML=`依實際歸還日計算：<b class="mono">${rentDays(t)}</b> 天，租金 <b class="mono">${money(rentAmount(t))}</b>`};
+  form.oninput=calc;calc();
+}
+function equipmentForm(e){
+  const isNew=!e;e=e||{unit:"月"};
+  const hist=isNew?[]:S.contracts.filter(c=>c.equipmentId===e.id).sort((a,b)=>b.start.localeCompare(a.start)).slice(0,5);
+  openDlg(`<h3>${isNew?"新增設備":"設備 "+esc(e.code)}</h3>
+  <div class="grid2"><label>設備編號<input name="code" value="${esc(e.code||"")}" placeholder="例：EQ-007" required></label>
+  <label>類別<input name="category" value="${esc(e.category||"")}" placeholder="例：發電機"></label>
+  <label class="full">名稱 / 型號<input name="name" value="${esc(e.name||"")}" required></label>
+  <label>出廠序號<input name="serial" value="${esc(e.serial||"")}"></label>
+  <label>預設計費<select name="unit">${opt("月","月租",e.unit!=="日")}${opt("日","日租",e.unit==="日")}</select></label>
+  <label>預設租金（NT$）<input type="number" name="rate" min="0" inputmode="numeric" value="${esc(e.rate??"")}"></label>
+  <label>預設押金（NT$）<input type="number" name="deposit" min="0" inputmode="numeric" value="${esc(e.deposit??"")}"></label>
+  <label class="full"><span><input type="checkbox" name="repair" style="width:auto"${e.repair?" checked":""}> 維修中（暫停出租）</span></label>
+  <label class="full">備註<textarea name="note">${esc(e.note||"")}</textarea></label></div>
+  ${hist.length?`<div><div class="note" style="margin-bottom:6px">最近租賃紀錄</div><div class="list">${hist.map(contractRow).join("")}</div></div>`:""}
+  <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
+  async fd=>{const d={code:val(fd,"code"),name:val(fd,"name"),category:val(fd,"category"),serial:val(fd,"serial"),unit:val(fd,"unit"),rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,repair:!!fd.get("repair"),note:val(fd,"note")};
+    if(!d.code||!d.name){showErr({message:"請填寫設備編號與名稱。"});return false}
+    if(S.equipment.some(x=>x.code===d.code&&x.id!==e.id)){showErr({message:"設備編號 "+d.code+" 已存在。"});return false}
+    if(isNew)await db.collection("equipment").doc().set(d);else await db.doc("equipment/"+e.id).set(d);toast(isNew?"已新增設備":"已儲存")});
+  form.querySelectorAll(".row").forEach(r=>r.removeAttribute("data-open"));
+  if(!isNew)confirmDelete("#del","設備",async()=>{if(activeContractOf(e.id))throw{message:"此設備仍在出租中，請先辦理歸還。"};await db.doc("equipment/"+e.id).delete()});
+}
+function customerForm(c){
+  const isNew=!c;c=c||{};
+  openDlg(`<h3>${isNew?"新增客戶":esc(c.name)}</h3>
+  <div class="grid2"><label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
+  <label>統一編號<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8"></label>
+  <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
+  <label>電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
+  <label>Email<input name="email" value="${esc(c.email||"")}" inputmode="email"></label>
+  <label class="full">地址<input name="address" value="${esc(c.address||"")}"></label>
+  <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
+  <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
+  async fd=>{const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:val(fd,"phone"),email:val(fd,"email"),address:val(fd,"address"),note:val(fd,"note")};
+    if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
+    if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
+  if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
+}
+
+/* ---------- events ---------- */
+document.querySelector("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;tab=b.dataset.tab;q="";render()});
+$("#newBtn").onclick=()=>contractForm(null);
+function openFrom(el){const id=el.dataset.id;({contract:()=>{const c=S.contracts.find(x=>x.id===id);c&&contractDetail(c)},
+  equipment:()=>{const x=equip(id);x&&equipmentForm(x)},customer:()=>{const x=cust(id);x&&customerForm(x)}})[el.dataset.open]?.()}
+$("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");if(n){n.dataset.new==="equipment"?equipmentForm(null):customerForm(null);return}
+  const r=e.target.closest("[data-open]");if(r)openFrom(r)});
+$("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
+form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
+
+/* ---------- data (Firebase) ---------- */
+const wrap=r=>({set:d=>setDoc(r,d),update:d=>updateDoc(r,d),delete:()=>deleteDoc(r)});
+const fsdb={
+  collection:n=>({
+    onSnapshot:(next,err)=>onSnapshot(collection(fs,n),{includeMetadataChanges:true},snap=>next({docs:snap.docs.map(d=>({id:d.id,data:()=>d.data()})),metadata:snap.metadata}),err),
+    doc:id=>wrap(id?doc(fs,n,id):doc(collection(fs,n)))
+  }),
+  doc:p=>wrap(doc(fs,p))
+};
+let dbMsg="正在連線資料庫…", unsubs=[];
+function startData(){
+  db=fsdb; canWrite=true;
+  const timer=setTimeout(()=>{$("#sync").textContent="暫時無法取得最新資料，請檢查網路"},10000);
+  const fresh={};
+  for(const name of ["equipment","customers","contracts"]){
+    unsubs.push(db.collection(name).onSnapshot(snap=>{
+      S[name]=snap.docs.map(d=>({id:d.id,...d.data()}));S.loaded[name]=true;
+      if(!snap.metadata.fromCache)fresh[name]=true;
+      if(Object.keys(fresh).length===3){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用"}
+      if(!dlg.open)render();
+    },err=>{clearTimeout(timer);S.loaded[name]=true;$("#sync").textContent=err.code==="permission-denied"?"此帳號沒有存取權限":"資料連線中斷，請重新整理頁面";render()}));
+  }
+  render();
+}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];for(const k in S.loaded)S.loaded[k]=false}
+const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
+const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
+$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
+  try{await signInWithEmailAndPassword(auth,$("#loginEmail").value.trim(),$("#loginPw").value)}catch(err){loginErr(authMsg(err.code))}finally{b.disabled=false}});
+$("#resetBtn").onclick=async()=>{const em=$("#loginEmail").value.trim();if(!em){loginErr("請先輸入 Email，再按忘記密碼。");return}
+  try{await sendPasswordResetEmail(auth,em);loginErr("");toast("已寄出重設密碼信，請到信箱收信")}catch(err){loginErr(authMsg(err.code))}};
+$("#logoutBtn").onclick=()=>signOut(auth);
+dlg.addEventListener("close",()=>render());
+onAuthStateChanged(auth,async u=>{
+  stopData();
+  if(!u){$("#appView").hidden=true;$("#loginView").hidden=false;return}
+  try{
+    const staff=await getDoc(doc(fs,"staff",String(u.email).toLowerCase()));
+    if(!staff.exists()){await signOut(auth);loginErr("此帳號尚未開通，請聯絡管理員。");return}
+  }catch(err){await signOut(auth);loginErr("此帳號尚未開通，請聯絡管理員。");return}
+  $("#whoami").textContent=u.email;$("#loginView").hidden=true;$("#appView").hidden=false;startData();
+});
+</script>
+</body>
+</html>
