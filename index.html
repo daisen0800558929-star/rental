@@ -43,7 +43,6 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .btn.danger{color:var(--bad);border-color:var(--bad)}
 .btn.small{padding:5px 10px;font-size:13px}
-a.btn{text-decoration:none;display:inline-block}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 @media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .stat{background:var(--surface);padding:14px 16px;display:grid;gap:2px}
@@ -150,22 +149,6 @@ function rentDays(c){const end=c.status==="已歸還"&&c.returnDate?c.returnDate
 function rentAmount(c){const d=rentDays(c);return c.unit==="月"?Math.ceil(d/30)*(+c.rate||0):d*(+c.rate||0)}
 /* 到期提醒天數：每筆租約可自訂，預設 7 天 */
 const remindOf=c=>{const n=parseInt(c.remindDays,10);return Number.isFinite(n)&&n>=0?n:7};
-/* Google 行事曆：產生「新增活動」連結（全天活動） */
-function addDays(d,n){const t=new Date(dayNum(d)*864e5+n*864e5);return t.toISOString().slice(0,10)}
-function gcalUrl(title,date,details,location){
-  const ymd=d=>d.replace(/-/g,"");
-  const p=new URLSearchParams({action:"TEMPLATE",text:title,dates:ymd(date)+"/"+ymd(addDays(date,1)),details,location:location||"",ctz:"Asia/Taipei"});
-  return "https://calendar.google.com/calendar/render?"+p.toString();
-}
-function gcalLinks(c){
-  const cu=cust(c.customerId),eq=equip(c.equipmentId),who=(cu?.name||"客戶")+"－"+(eq?.name||"設備");
-  const info=[`租約單號：${c.no||""}`,`客戶：${cu?.name||""}${cu?.phone?"（"+cu.phone+"）":""}`,`設備：${eq?`${eq.code} ${eq.name}`:""}`,`租期：${c.start} → ${c.end}`,
-    c.site?`使用地點：${c.site}${c.sitePhone?"（"+c.sitePhone+"）":""}`:"",`系統：${location.origin+location.pathname}`].filter(Boolean).join("\n");
-  const rd=remindOf(c),items=[{k:"起租日",d:c.start,t:`【起租】${who}`}];
-  if(rd>0&&addDays(c.end,-rd)>c.start)items.push({k:"提醒日",d:addDays(c.end,-rd),t:`【到期提醒】${who}（${c.end} 到期）`});
-  items.push({k:"到期日",d:c.end,t:`【租約到期】${who}`});
-  return items.map(i=>`<a class="btn small" href="${esc(gcalUrl(i.t,i.d,info,c.site))}" target="_blank" rel="noopener">${i.k} <span class="mono">${esc(i.d.slice(5))}</span></a>`).join("");
-}
 function cState(c){
   if(c.status==="已歸還")return{label:"已歸還",cls:"mute",k:"done"};
   if(c.status==="已取消")return{label:"已取消",cls:"mute",k:"done"};
@@ -333,7 +316,6 @@ function contractDetail(c){
   ${c.returnDate?`<dt>歸還日</dt><dd class="mono">${esc(c.returnDate)}</dd>`:""}
   ${c.returnNote?`<dt>歸還檢查</dt><dd>${esc(c.returnNote)}</dd>`:""}
   ${c.note?`<dt>備註</dt><dd>${esc(c.note)}</dd>`:""}</dl>
-  ${c.status==="租賃中"?`<div><div class="note" style="margin-bottom:6px">加入 Google 行事曆（會開啟新分頁，按「儲存」即完成）</div><div class="toolbar">${gcalLinks(c)}</div></div>`:""}
   <div class="actions">${canWrite?`<button class="btn" type="button" id="edit">編輯</button>${live?'<button class="btn" type="button" id="extend">續約</button><button class="btn primary" type="button" id="ret">辦理歸還</button>':""}`:""}<button class="btn" type="button" data-close>關閉</button></div>`,null);
   const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
   on("#edit",()=>{dlg.close();contractForm(c)});
