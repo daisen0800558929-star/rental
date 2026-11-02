@@ -113,6 +113,7 @@ html,body{margin:0}
       <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
       <button role="tab" data-tab="equipment" aria-selected="false">設備</button>
       <button role="tab" data-tab="customers" aria-selected="false">客戶</button>
+      <button role="tab" data-tab="accounts" aria-selected="false" id="accTab" hidden>帳號</button>
     </nav>
   </div>
 </header>
@@ -126,10 +127,14 @@ html,body{margin:0}
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail,createUserWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 const firebaseConfig={apiKey:"AIzaSyA-lXRTR38AeFMgSwYCD91Akywgxgb5ZB4",authDomain:"daisen-rental.firebaseapp.com",projectId:"daisen-rental",storageBucket:"daisen-rental.firebasestorage.app",messagingSenderId:"687274188760",appId:"1:687274188760:web:41035f0278d21ebd99dcad"};
 const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fbApp);
-const S={equipment:[],customers:[],contracts:[],loaded:{equipment:false,customers:false,contracts:false}};
+/* 系統擁有者：永遠是管理員，用來開通第一批帳號 */
+const OWNER="daisen0800558929@gmail.com";
+const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
+let me=null;
+const S={equipment:[],customers:[],contracts:[],staff:[],loaded:{equipment:false,customers:false,contracts:false}};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -164,6 +169,7 @@ function eState(e){
 
 /* ---------- render ---------- */
 function render(){
+  $("#accTab").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite;
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -174,6 +180,7 @@ function render(){
   if(tab==="contracts")h=viewContracts(loading);
   if(tab==="equipment")h=viewEquipment(loading);
   if(tab==="customers")h=viewCustomers(loading);
+  if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   m.innerHTML=h;
   const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
   const sf=$("#f");if(sf){sf.value=filter;sf.onchange=e=>{filter=e.target.value;render()}}
@@ -378,6 +385,60 @@ $("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");i
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
 form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
 
+/* ---------- accounts ---------- */
+function viewAccounts(){
+  const rows=[...S.staff].sort((a,b)=>(a.active===false)-(b.active===false)||String(a.id).localeCompare(b.id)).map(u=>{
+    const off=u.active===false, role=u.id===OWNER?"admin":(u.role||"staff");
+    return `<div class="row" data-acc="${esc(u.id)}" tabindex="0">
+      <div><div class="t">${esc(u.name||u.id)}${u.id===me.email?'　<span class="m">（你）</span>':""}</div><div class="m">${esc(u.id)}</div></div>
+      <div class="r"><span class="pill ${off?"mute":role==="admin"?"warn":role==="viewer"?"mute":"ok"}">${off?"已停用":ROLES[role]}</span></div></div>`});
+  if(!S.staff.some(u=>u.id===OWNER))rows.unshift(`<div class="row" style="cursor:default"><div><div class="t">系統擁有者</div><div class="m">${esc(OWNER)}</div></div><div class="r"><span class="pill warn">管理員</span></div></div>`);
+  return `<div class="toolbar"><div class="note" style="flex:1 1 240px">管理員：全部功能與帳號管理　員工：可新增、修改資料　檢視：只能查看</div><button class="btn primary" type="button" data-newacc>＋ 新增帳號</button></div>
+  <div class="list">${rows.join("")}</div>
+  <div class="note">停用的帳號無法再登入使用系統；需要時可重新啟用。</div>`;
+}
+let authSecondary=null;
+function accountForm(u){
+  const isNew=!u;u=u||{role:"staff",active:true};
+  const self=!isNew&&u.id===me.email, owner=!isNew&&u.id===OWNER, locked=self||owner;
+  openDlg(`<h3>${isNew?"新增帳號":esc(u.name||u.id)}</h3>
+  <div class="grid2">
+    <label class="full">姓名<input name="name" value="${esc(u.name||"")}" required></label>
+    <label class="full">Email（登入帳號）<input type="email" name="email" value="${esc(u.id||"")}" ${isNew?"required":"disabled"} autocomplete="off"></label>
+    ${isNew?`<label class="full">初始密碼（至少 6 個字）<input type="text" name="pw" minlength="6" autocomplete="new-password" required></label>`:""}
+    <label>權限<select name="role" ${locked?"disabled":""}>${Object.entries(ROLES).map(([k,v])=>opt(k,v,(owner?"admin":u.role||"staff")===k)).join("")}</select></label>
+    <label>狀態<select name="active" ${locked?"disabled":""}>${opt("1","啟用",u.active!==false)}${opt("0","停用",u.active===false)}</select></label>
+  </div>
+  ${isNew?'<div class="note">建立後請把 Email 和初始密碼告訴同事，並請他登入後用「忘記密碼」自行改成新密碼。</div>':""}
+  ${locked?'<div class="note">'+(owner?"系統擁有者固定為管理員。":"不能變更自己的權限或停用自己。")+'</div>':""}
+  <div class="actions">${!isNew?'<button class="btn" type="button" id="resetPw">寄重設密碼信</button>'+(!locked?'<button class="btn danger" type="button" id="del">移除</button>':"")+'<span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立帳號":"儲存"}</button></div>`,
+  async fd=>{
+    const d={name:val(fd,"name"),role:locked?(owner?"admin":u.role||"staff"):val(fd,"role"),active:locked?true:fd.get("active")==="1",updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(!d.name){showErr({message:"請填寫姓名。"});return false}
+    if(isNew){
+      const email=val(fd,"email").toLowerCase(),pw=String(fd.get("pw")||"");
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){showErr({message:"Email 格式不正確。"});return false}
+      if(pw.length<6){showErr({message:"初始密碼至少需要 6 個字。"});return false}
+      if(S.staff.some(x=>x.id===email)){showErr({message:"這個 Email 已經有帳號了。"});return false}
+      let existed=false;
+      try{
+        if(!authSecondary)authSecondary=getAuth(initializeApp(firebaseConfig,"secondary"));
+        await createUserWithEmailAndPassword(authSecondary,email,pw);await signOut(authSecondary);
+      }catch(err){
+        if(err.code==="auth/email-already-in-use")existed=true;
+        else{showErr({message:({"auth/weak-password":"密碼太簡單，請至少 6 個字。","auth/invalid-email":"Email 格式不正確。"})[err.code]||"建立帳號失敗："+(err.code||err.message)});return false}
+      }
+      await setDoc(doc(fs,"staff",email),{...d,createdAt:new Date().toISOString(),createdBy:me.email});
+      toast(existed?"此 Email 已有登入帳號，已開通權限（密碼沿用原本的）":"已建立帳號 "+email);
+    }else{await setDoc(doc(fs,"staff",u.id),d,{merge:true});toast("已儲存")}
+  });
+  const rp=form.querySelector("#resetPw");if(rp)rp.onclick=async()=>{try{await sendPasswordResetEmail(auth,u.id);toast("已寄出重設密碼信到 "+u.id)}catch(e){showErr({message:"寄送失敗，請稍後再試。"})}};
+  if(!isNew&&!locked)confirmDelete("#del","帳號",()=>deleteDoc(doc(fs,"staff",u.id)));
+}
+$("#main").addEventListener("click",e=>{if(e.target.closest("[data-newacc]")){accountForm(null);return}
+  const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}});
+$("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}}});
+
 /* ---------- data (Firebase) ---------- */
 const wrap=r=>({set:d=>setDoc(r,d),update:d=>updateDoc(r,d),delete:()=>deleteDoc(r)});
 const fsdb={
@@ -389,7 +450,7 @@ const fsdb={
 };
 let dbMsg="正在連線資料庫…", unsubs=[];
 function startData(){
-  db=fsdb; canWrite=true;
+  db=fsdb; canWrite=me.role!=="viewer";
   const timer=setTimeout(()=>{$("#sync").textContent="暫時無法取得最新資料，請檢查網路"},10000);
   const fresh={};
   for(const name of ["equipment","customers","contracts"]){
@@ -400,9 +461,10 @@ function startData(){
       if(!dlg.open)render();
     },err=>{clearTimeout(timer);S.loaded[name]=true;$("#sync").textContent=err.code==="permission-denied"?"此帳號沒有存取權限":"資料連線中斷，請重新整理頁面";render()}));
   }
+  if(me.role==="admin")unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
@@ -414,11 +476,13 @@ dlg.addEventListener("close",()=>render());
 onAuthStateChanged(auth,async u=>{
   stopData();
   if(!u){$("#appView").hidden=true;$("#loginView").hidden=false;return}
-  try{
-    const staff=await getDoc(doc(fs,"staff",String(u.email).toLowerCase()));
-    if(!staff.exists()){await signOut(auth);loginErr("此帳號尚未開通，請聯絡管理員。");return}
-  }catch(err){await signOut(auth);loginErr("此帳號尚未開通，請聯絡管理員。");return}
-  $("#whoami").textContent=u.email;$("#loginView").hidden=true;$("#appView").hidden=false;startData();
+  const email=String(u.email).toLowerCase();
+  let info=null;
+  try{const snap=await getDoc(doc(fs,"staff",email));if(snap.exists())info=snap.data()}catch(err){}
+  if(email===OWNER)info={...(info||{}),role:"admin",active:true};
+  if(!info||info.active===false){await signOut(auth);loginErr(info?"此帳號已停用，請聯絡管理員。":"此帳號尚未開通，請聯絡管理員。");return}
+  me={email,name:info.name||"",role:ROLES[info.role]?info.role:"staff"};
+  $("#whoami").textContent=(me.name||email)+" · "+ROLES[me.role];$("#loginView").hidden=true;$("#appView").hidden=false;startData();
 });
 </script>
 </body>
