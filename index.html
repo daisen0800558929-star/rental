@@ -181,7 +181,7 @@ const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 const S={equipment:[],customers:[],contracts:[],quotes:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false}};
 /* 公司資料：印在報價單抬頭 */
-const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園縣蘆竹區海湖東路372巷58號"};
+const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
