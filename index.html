@@ -179,7 +179,7 @@ const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 const S={equipment:[],customers:[],contracts:[],quotes:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false}};
 /* 公司資料：印在報價單抬頭 */
-const COMPANY={name:"大森節能事業有限公司"};
+const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園縣蘆竹區海湖東路372巷58號"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -542,7 +542,7 @@ function quoteSheet(x){
   const t=quoteCalc(x),c=x.cust||{},rows=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td><td>${esc(i.spec)}</td><td class="c">${esc(i.cat||"")}</td><td class="c">${esc(i.unit||"")}</td><td class="n">${(+i.qty).toLocaleString("zh-TW")}</td><td class="n">${(+i.price).toLocaleString("zh-TW")}</td><td class="n">${i.sub.toLocaleString("zh-TW")}</td></tr>`).join("");
   const sum=`<tr><td colspan="6" class="n">小計合計</td><td class="n">${t.sum.toLocaleString("zh-TW")}</td></tr>${x.taxMode==="excl"?`<tr><td colspan="6" class="n">營業稅 5%</td><td class="n">${t.tax.toLocaleString("zh-TW")}</td></tr>`:""}<tr><td colspan="6" class="n"><b>總計（新台幣${x.taxMode==="incl"?"，含稅":x.taxMode==="none"?"，未稅":"，含稅"}）</b></td><td class="n"><b>${t.total.toLocaleString("zh-TW")}</b></td></tr>`;
   return `<div class="sheet">
-    <div class="sh-head"><div><div class="sh-co">${esc(COMPANY.name)}</div></div><div style="text-align:right"><div class="sh-title">報價單</div><div class="small">單號 ${esc(x.no||"")}</div></div></div>
+    <div class="sh-head"><div style="display:grid;gap:2px"><div class="sh-co">${esc(COMPANY.name)}</div><div class="small">全國服務專線 <b style="color:var(--ink)">${esc(COMPANY.hotline)}</b>　網站 ${esc(COMPANY.web)}　信箱 ${esc(COMPANY.email)}</div><div class="small">總公司：${esc(COMPANY.hq)}　北部服務處：${esc(COMPANY.north)}</div></div><div style="text-align:right"><div class="sh-title">報價單</div><div class="small">單號 ${esc(x.no||"")}</div></div></div>
     <table class="grid-info"><tbody>
       <tr><th>客戶名稱</th><td colspan="3">${esc(c.name||"")}</td><th>報價日期</th><td>${esc(x.date||"")}</td></tr>
       <tr><th>統編</th><td>${esc(c.taxId||"")}</td><th>公司電話</th><td>${esc(c.phone||"")}</td><th>傳真</th><td>${esc(c.fax||"")}</td></tr>
@@ -554,7 +554,7 @@ function quoteSheet(x){
     <table><tbody><tr><th>備註</th><td style="white-space:pre-wrap;min-height:48px">${esc(x.note||"")}</td></tr></tbody></table>
     <div class="sign">
       <div class="signbox"><div>客戶簽章</div><div>${x.signature?`<img src="${x.signature}" alt="客戶簽名">`:""}</div><div class="small">${x.signedAt?"簽署人："+esc(x.signerName||"")+"　日期："+esc(x.signedAt.slice(0,10)):"簽署人：＿＿＿＿＿＿　日期：＿＿＿＿＿＿"}</div></div>
-      <div class="signbox"><div>${esc(COMPANY.name)}</div><div></div><div class="small">業務：${esc(x.sales||"")}　${esc(x.salesMobile||"")}</div></div>
+      <div class="signbox"><div>${esc(COMPANY.name)}</div><div></div><div class="small">業務：${esc(x.sales||"")}　${esc(x.salesMobile||"")}　服務專線 ${esc(COMPANY.hotline)}</div></div>
     </div>
   </div>`;
 }
