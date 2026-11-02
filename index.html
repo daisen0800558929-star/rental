@@ -80,6 +80,47 @@ label.full{grid-column:1/-1}
 .kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;z-index:20}
 @media (prefers-reduced-motion:no-preference){.row{transition:background .12s}}
+dialog.wide{width:min(980px,calc(100vw - 32px))}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table.items{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+table.items th{background:var(--bg);color:var(--muted);font-weight:500;font-size:12.5px;text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.items td{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.items td input{padding:7px 8px}
+table.items .num{text-align:right}
+table.items td.idx{color:var(--muted);text-align:center;width:36px}
+.totals{display:grid;grid-template-columns:auto auto;justify-content:end;gap:4px 18px;font-size:14px}
+.totals .grand{font-size:17px;font-weight:700}
+fieldset{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0;min-width:0}
+legend{font-size:13px;color:var(--muted);padding:0 6px}
+/* 報價單（預覽與列印） */
+.sheet{--ink:var(--fg);--rule:var(--line);background:var(--surface);color:var(--ink);font-size:13.5px;line-height:1.5;display:grid;gap:14px}
+.sheet .sh-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:8px;flex-wrap:wrap}
+.sheet .sh-co{font-size:19px;font-weight:700;letter-spacing:.04em}
+.sheet .sh-title{font-size:22px;font-weight:700;letter-spacing:.5em}
+.sheet table{border-collapse:collapse;width:100%}
+.sheet th,.sheet td{border:1px solid var(--rule);padding:5px 7px;vertical-align:top;text-align:left}
+.sheet th{font-weight:500;white-space:nowrap;width:1%}
+.sheet .grid-info td{width:auto}
+.sheet .it th{text-align:center;width:auto}
+.sheet .it td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sheet .it td.c{text-align:center}
+.sheet .sign{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sheet .signbox{border:1px solid var(--rule);min-height:120px;padding:8px 10px;display:grid;grid-template-rows:auto 1fr auto}
+.sheet .signbox img{max-height:90px;max-width:100%;background:#fff}
+.sheet .small{font-size:12px;color:var(--muted)}
+.sheet-wrap{border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto}
+.sheet-wrap .sheet{min-width:640px}
+.sigpad{width:100%;height:220px;background:#fff;border:1px dashed var(--muted);border-radius:6px;touch-action:none;display:block}
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:12mm}
+  body{background:#fff!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important}
+  #printArea .sheet{--ink:#000;--rule:#555;background:#fff;color:#000}
+  #printArea .sheet .small{color:#333}
+  #printArea .sheet-wrap{border:0;padding:0}
+}
 html,body{margin:0}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 [hidden]{display:none!important}
@@ -113,6 +154,7 @@ html,body{margin:0}
       <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
       <button role="tab" data-tab="equipment" aria-selected="false">設備</button>
       <button role="tab" data-tab="customers" aria-selected="false">客戶</button>
+      <button role="tab" data-tab="quotes" aria-selected="false">報價</button>
       <button role="tab" data-tab="accounts" aria-selected="false" id="accTab" hidden>帳號</button>
     </nav>
   </div>
@@ -123,6 +165,7 @@ html,body{margin:0}
 <dialog id="dlg"><form class="dlg" id="dlgForm" novalidate></form></dialog>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div id="printArea"></div>
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
@@ -134,7 +177,9 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],staff:[],loaded:{equipment:false,customers:false,contracts:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false}};
+/* 公司資料：印在報價單抬頭 */
+const COMPANY={name:"大森節能事業有限公司"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -183,6 +228,7 @@ function render(){
   if(tab==="contracts")h=viewContracts(loading);
   if(tab==="equipment")h=viewEquipment(loading);
   if(tab==="customers")h=viewCustomers(loading);
+  if(tab==="quotes")h=viewQuotes(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   m.innerHTML=h;
   const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
@@ -252,7 +298,7 @@ function viewCustomers(loading){
 /* ---------- dialogs ---------- */
 const dlg=$("#dlg"),form=$("#dlgForm");
 let onSubmit=null;
-function openDlg(html,submit){form.oninput=null;form.innerHTML=html;onSubmit=submit;dlg.showModal();const f=form.querySelector("input,select,textarea");if(f)f.focus()}
+function openDlg(html,submit,wide){dlg.classList.toggle("wide",!!wide);form.oninput=null;form.innerHTML=html;onSubmit=submit;dlg.showModal();const f=form.querySelector("input,select,textarea");if(f)f.focus()}
 form.addEventListener("submit",async e=>{e.preventDefault();if(!onSubmit)return;const btn=form.querySelector("[type=submit]");if(btn)btn.disabled=true;
   try{const ok=await onSubmit(new FormData(form));if(ok!==false)dlg.close()}catch(err){showErr(err)}finally{if(btn)btn.disabled=false}});
 form.addEventListener("click",e=>{if(e.target.closest("[data-close]"))dlg.close()});
@@ -368,13 +414,16 @@ function customerForm(c){
   openDlg(`<h3>${isNew?"新增客戶":esc(c.name)}</h3>
   <div class="grid2"><label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
   <label>統一編號<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8"></label>
+  <label>公司電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
+  <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
   <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
-  <label>電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
-  <label>Email<input name="email" value="${esc(c.email||"")}" inputmode="email"></label>
-  <label class="full">地址<input name="address" value="${esc(c.address||"")}"></label>
+  <label>手機<input name="mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
+  <label class="full">Email<input name="email" value="${esc(c.email||"")}" inputmode="email"></label>
+  <label class="full">公司地址<input name="address" value="${esc(c.address||"")}"></label>
+  <label class="full">送貨地址<input name="delivery" value="${esc(c.delivery||"")}" placeholder="與公司地址相同可留空"></label>
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
-  async fd=>{const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:val(fd,"phone"),email:val(fd,"email"),address:val(fd,"address"),note:val(fd,"note")};
+  async fd=>{const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:val(fd,"phone"),fax:val(fd,"fax"),mobile:val(fd,"mobile"),email:val(fd,"email"),address:val(fd,"address"),delivery:val(fd,"delivery"),note:val(fd,"note")};
     if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
@@ -384,11 +433,164 @@ function customerForm(c){
 document.querySelector("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;tab=b.dataset.tab;q="";render()});
 $("#newBtn").onclick=()=>contractForm(null);
 function openFrom(el){const id=el.dataset.id;({contract:()=>{const c=S.contracts.find(x=>x.id===id);c&&contractDetail(c)},
-  equipment:()=>{const x=equip(id);x&&equipmentForm(x)},customer:()=>{const x=cust(id);x&&customerForm(x)}})[el.dataset.open]?.()}
-$("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");if(n){n.dataset.new==="equipment"?equipmentForm(null):customerForm(null);return}
+  equipment:()=>{const x=equip(id);x&&equipmentForm(x)},customer:()=>{const x=cust(id);x&&customerForm(x)},quote:()=>{const x=S.quotes.find(k=>k.id===id);x&&quoteDetail(x)}})[el.dataset.open]?.()}
+$("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");if(n){({equipment:()=>equipmentForm(null),customer:()=>customerForm(null),quote:()=>quoteForm(null)})[n.dataset.new]?.();return}
   const r=e.target.closest("[data-open]");if(r)openFrom(r)});
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
 form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
+
+/* ---------- 報價 ---------- */
+const QSTATUS={draft:["草稿","mute"],sent:["已報價",""],signed:["已簽回","ok"],lost:["未成交","bad"]};
+const TAX={none:"未稅",excl:"外加 5% 營業稅",incl:"含稅"};
+function quoteCalc(q){
+  const items=(q.items||[]).map(i=>({...i,sub:Math.round((+i.qty||0)*(+i.price||0))}));
+  const sum=items.reduce((s,i)=>s+i.sub,0);
+  const tax=q.taxMode==="excl"?Math.round(sum*0.05):0;
+  return{items,sum,tax,total:sum+tax};
+}
+function viewQuotes(loading){
+  const qq=q.trim().toLowerCase();
+  const rows=S.quotes.filter(x=>!qq||[x.no,x.cust?.name,x.cust?.contact,x.sales].join(" ").toLowerCase().includes(qq))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.no).localeCompare(String(a.no))).map(x=>{
+    const st=QSTATUS[x.status]||QSTATUS.draft;
+    return `<div class="row" data-open="quote" data-id="${esc(x.id)}" tabindex="0">
+      <div><div class="t">${esc(x.cust?.name||"（未填客戶）")}</div><div class="m"><span class="mono">${esc(x.no)}</span> · ${esc(x.date)}${x.sales?" · 業務 "+esc(x.sales):""} · ${(x.items||[]).length} 項</div></div>
+      <div class="r"><span class="pill ${st[1]}">${st[0]}</span><span class="mono m">${money(quoteCalc(x).total)}</span></div></div>`});
+  return `<div class="toolbar"><input id="q" placeholder="搜尋單號、客戶、業務">${canWrite?'<button class="btn primary" type="button" data-new="quote">＋ 新增報價</button>':""}</div>
+  <div class="list">${emptyOr(rows,loading,"還沒有報價單。按「新增報價」建立第一張。")}</div>`;
+}
+function itemRow(i={}){
+  return `<tr><td class="idx"></td>
+  <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="設備名稱、型號、規格"></td>
+  <td style="width:120px"><input name="i_cat" list="catList" value="${esc(i.cat||"")}"></td>
+  <td style="width:70px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
+  <td style="width:80px"><input name="i_qty" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.qty??1)}"></td>
+  <td style="width:110px"><input name="i_price" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.price??"")}"></td>
+  <td class="num mono" style="width:110px" data-sub></td>
+  <td style="width:40px"><button class="btn small" type="button" data-delrow aria-label="刪除此列">✕</button></td></tr>`;
+}
+function quoteForm(src,copy){
+  const isNew=!src||copy;
+  const x=src?JSON.parse(JSON.stringify(src)):{date:todayStr(),sales:me.name||"",salesMobile:me.mobile||"",taxMode:"excl",status:"draft",items:[{}],cust:{}};
+  if(copy){x.date=todayStr();x.status="draft";delete x.signature;delete x.signedAt;delete x.signerName}
+  const c=x.cust||{};
+  const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
+  openDlg(`<h3>${isNew?(copy?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
+  <datalist id="specList">${S.equipment.map(e=>`<option value="${esc(e.name)}">`).join("")}</datalist>
+  <datalist id="catList">${cats.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+  <fieldset><legend>客戶資料</legend><div class="grid2">
+    <label class="full">選擇既有客戶（自動帶入資料）<select name="customerId"><option value="">— 新客戶 / 手動填寫 —</option>${S.customers.map(k=>opt(k.id,k.name,k.id===x.customerId)).join("")}</select></label>
+    <label class="full">客戶名稱<input name="c_name" value="${esc(c.name||"")}" required></label>
+    <label>統編<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8"></label>
+    <label>公司電話<input name="c_phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
+    <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
+    <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
+    <label>手機電話<input name="c_mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
+    <label class="full">公司地址<input name="c_address" value="${esc(c.address||"")}"></label>
+    <label class="full">送貨地址<input name="c_delivery" value="${esc(c.delivery||"")}"></label>
+    <label class="full" id="saveCustWrap"><span><input type="checkbox" name="saveCust" style="width:auto" checked> 同時新增到客戶資料</span></label>
+  </div></fieldset>
+  <fieldset><legend>報價資訊</legend><div class="grid2">
+    <label>報價日期<input type="date" name="date" value="${esc(x.date)}" required></label>
+    <label>狀態<select name="status">${Object.entries(QSTATUS).map(([k,v])=>opt(k,v[0],k===x.status)).join("")}</select></label>
+    <label>業務人員<input name="sales" value="${esc(x.sales||"")}"></label>
+    <label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>
+  </div></fieldset>
+  <fieldset><legend>報價內容</legend>
+    <div class="tablewrap"><table class="items"><thead><tr><th>項次</th><th>設備規格</th><th>類別</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
+    <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
+      <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
+    <div class="totals" id="totals" style="margin-top:10px"></div>
+  </fieldset>
+  <label>備註<textarea name="note" placeholder="例：報價有效期限 30 天、交貨方式、付款條件">${esc(x.note||"")}</textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立報價單":"儲存"}</button></div>`,
+  async fd=>{
+    const g=k=>fd.getAll(k).map(v=>String(v).trim());
+    const sp=g("i_spec"),ca=g("i_cat"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
+    const items=sp.map((v,i)=>({spec:v,cat:ca[i],unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
+    const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:val(fd,"c_phone"),fax:val(fd,"c_fax"),contact:val(fd,"c_contact"),mobile:val(fd,"c_mobile"),address:val(fd,"c_address"),delivery:val(fd,"c_delivery")};
+    if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
+    if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
+    let customerId=val(fd,"customerId");
+    if(!customerId&&fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:val(fd,"salesMobile"),taxMode:val(fd,"taxMode"),items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(isNew){
+      const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
+      d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
+      await db.collection("quotes").doc().set(d);toast("已建立報價單 "+d.no);
+    }else{await db.doc("quotes/"+x.id).update(d);toast("已儲存")}
+  },true);
+  const body=$("#itemsBody");
+  const calc=()=>{
+    body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;
+      const v=n=>+tr.querySelector(`[name=${n}]`).value||0;tr.querySelector("[data-sub]").textContent=Math.round(v("i_qty")*v("i_price")).toLocaleString("zh-TW")});
+    const t=quoteCalc({taxMode:form.elements.taxMode.value,items:[...body.querySelectorAll("tr")].map(tr=>({qty:tr.querySelector("[name=i_qty]").value,price:tr.querySelector("[name=i_price]").value}))});
+    $("#totals").innerHTML=`<span>小計合計</span><span class="mono">${money(t.sum)}</span>${form.elements.taxMode.value==="excl"?`<span>營業稅 5%</span><span class="mono">${money(t.tax)}</span>`:""}<span class="grand">總計${form.elements.taxMode.value==="incl"?"（含稅）":form.elements.taxMode.value==="none"?"（未稅）":""}</span><span class="grand mono">${money(t.total)}</span>`;
+    $("#saveCustWrap").hidden=!!form.elements.customerId.value;
+  };
+  form.oninput=calc;
+  $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());calc();body.lastElementChild.querySelector("input").focus()};
+  body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
+  body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
+    if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
+    if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
+  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){const m={c_name:k.name,c_taxId:k.taxId,c_phone:k.phone,c_fax:k.fax,c_contact:k.contact,c_mobile:k.mobile,c_address:k.address,c_delivery:k.delivery||k.address};for(const n in m)form.elements[n].value=m[n]||""}calc()};
+  calc();
+}
+function quoteSheet(x){
+  const t=quoteCalc(x),c=x.cust||{},rows=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td><td>${esc(i.spec)}</td><td class="c">${esc(i.cat||"")}</td><td class="c">${esc(i.unit||"")}</td><td class="n">${(+i.qty).toLocaleString("zh-TW")}</td><td class="n">${(+i.price).toLocaleString("zh-TW")}</td><td class="n">${i.sub.toLocaleString("zh-TW")}</td></tr>`).join("");
+  const sum=`<tr><td colspan="6" class="n">小計合計</td><td class="n">${t.sum.toLocaleString("zh-TW")}</td></tr>${x.taxMode==="excl"?`<tr><td colspan="6" class="n">營業稅 5%</td><td class="n">${t.tax.toLocaleString("zh-TW")}</td></tr>`:""}<tr><td colspan="6" class="n"><b>總計（新台幣${x.taxMode==="incl"?"，含稅":x.taxMode==="none"?"，未稅":"，含稅"}）</b></td><td class="n"><b>${t.total.toLocaleString("zh-TW")}</b></td></tr>`;
+  return `<div class="sheet">
+    <div class="sh-head"><div><div class="sh-co">${esc(COMPANY.name)}</div></div><div style="text-align:right"><div class="sh-title">報價單</div><div class="small">單號 ${esc(x.no||"")}</div></div></div>
+    <table class="grid-info"><tbody>
+      <tr><th>客戶名稱</th><td colspan="3">${esc(c.name||"")}</td><th>報價日期</th><td>${esc(x.date||"")}</td></tr>
+      <tr><th>統編</th><td>${esc(c.taxId||"")}</td><th>公司電話</th><td>${esc(c.phone||"")}</td><th>傳真</th><td>${esc(c.fax||"")}</td></tr>
+      <tr><th>聯絡人</th><td>${esc(c.contact||"")}</td><th>手機電話</th><td>${esc(c.mobile||"")}</td><th>業務人員</th><td>${esc(x.sales||"")}</td></tr>
+      <tr><th>公司地址</th><td colspan="3">${esc(c.address||"")}</td><th>業務手機</th><td>${esc(x.salesMobile||"")}</td></tr>
+      <tr><th>送貨地址</th><td colspan="5">${esc(c.delivery||c.address||"")}</td></tr>
+    </tbody></table>
+    <table class="it"><thead><tr><th>項次</th><th>設備規格</th><th>類別</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th></tr></thead><tbody>${rows}${sum}</tbody></table>
+    <table><tbody><tr><th>備註</th><td style="white-space:pre-wrap;min-height:48px">${esc(x.note||"")}</td></tr></tbody></table>
+    <div class="sign">
+      <div class="signbox"><div>客戶簽章</div><div>${x.signature?`<img src="${x.signature}" alt="客戶簽名">`:""}</div><div class="small">${x.signedAt?"簽署人："+esc(x.signerName||"")+"　日期："+esc(x.signedAt.slice(0,10)):"簽署人：＿＿＿＿＿＿　日期：＿＿＿＿＿＿"}</div></div>
+      <div class="signbox"><div>${esc(COMPANY.name)}</div><div></div><div class="small">業務：${esc(x.sales||"")}　${esc(x.salesMobile||"")}</div></div>
+    </div>
+  </div>`;
+}
+function printQuote(x){$("#printArea").innerHTML=`<div class="sheet-wrap">${quoteSheet(x)}</div>`;const old=document.title;document.title="報價單_"+(x.no||"")+"_"+(x.cust?.name||"");window.print();document.title=old}
+function quoteDetail(x){
+  const st=QSTATUS[x.status]||QSTATUS.draft;
+  openDlg(`<h3>報價單 <span class="mono">${esc(x.no)}</span>　<span class="pill ${st[1]}">${st[0]}</span></h3>
+  <div class="sheet-wrap">${quoteSheet(x)}</div>
+  <div class="actions">${canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span><button class="btn" type="button" id="copyQ">複製</button><button class="btn" type="button" id="editQ">編輯</button><button class="btn" type="button" id="signQ">'+(x.signature?"重新簽名":"客戶簽名")+'</button>':""}<button class="btn primary" type="button" id="printQ">列印 / 存成 PDF</button><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
+  const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
+  on("#printQ",()=>printQuote(x));
+  on("#editQ",()=>{dlg.close();quoteForm(x)});
+  on("#copyQ",()=>{dlg.close();quoteForm(x,true)});
+  on("#signQ",()=>{dlg.close();signQuote(x)});
+  if(canWrite)confirmDelete("#del","報價單",()=>db.doc("quotes/"+x.id).delete());
+}
+function signQuote(x){
+  openDlg(`<h3>客戶簽名　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">請客戶在下方框內用手指或滑鼠簽名。</div>
+  <canvas class="sigpad" id="sigpad"></canvas>
+  <label>簽署人姓名<input name="signerName" value="${esc(x.signerName||x.cust?.contact||"")}"></label>
+  <div class="actions"><button class="btn" type="button" id="clearSig">清除重簽</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認簽名</button></div>`,
+  async fd=>{
+    if(!drawn){showErr({message:"請先在框內簽名。"});return false}
+    const img=cv.toDataURL("image/png");
+    await db.doc("quotes/"+x.id).update({signature:img,signerName:val(fd,"signerName"),signedAt:new Date().toISOString(),status:"signed"});toast("已完成簽名");
+  });
+  const cv=$("#sigpad"),ctx=cv.getContext("2d");let drawn=false,down=false;
+  const size=()=>{const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#fff";ctx.fillRect(0,0,r.width,r.height);ctx.lineWidth=2.4;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#111";drawn=false};
+  size();
+  const pt=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+  cv.addEventListener("pointerdown",e=>{down=true;cv.setPointerCapture(e.pointerId);const[a,b]=pt(e);ctx.beginPath();ctx.moveTo(a,b)});
+  cv.addEventListener("pointermove",e=>{if(!down)return;const[a,b]=pt(e);ctx.lineTo(a,b);ctx.stroke();drawn=true});
+  cv.addEventListener("pointerup",()=>down=false);cv.addEventListener("pointercancel",()=>down=false);
+  $("#clearSig").onclick=size;
+}
 
 /* ---------- 到期提醒 ---------- */
 function remindList(){return S.contracts.filter(c=>c.status==="租賃中"&&["soon","overdue"].includes(cState(c).k)).sort((a,b)=>a.end.localeCompare(b.end))}
@@ -429,7 +631,8 @@ function accountForm(u){
   const self=!isNew&&u.id===me.email, owner=!isNew&&u.id===OWNER, locked=self||owner;
   openDlg(`<h3>${isNew?"新增帳號":esc(u.name||u.id)}</h3>
   <div class="grid2">
-    <label class="full">姓名<input name="name" value="${esc(u.name||"")}" required></label>
+    <label>姓名<input name="name" value="${esc(u.name||"")}" required></label>
+    <label>手機（印在報價單）<input name="mobile" value="${esc(u.mobile||"")}" inputmode="tel"></label>
     <label class="full">Email（登入帳號）<input type="email" name="email" value="${esc(u.id||"")}" ${isNew?"required":"disabled"} autocomplete="off"></label>
     ${isNew?`<label class="full">初始密碼（至少 6 個字）<input type="text" name="pw" minlength="6" autocomplete="new-password" required></label>`:""}
     <label>權限<select name="role" ${locked?"disabled":""}>${Object.entries(ROLES).map(([k,v])=>opt(k,v,(owner?"admin":u.role||"staff")===k)).join("")}</select></label>
@@ -439,7 +642,7 @@ function accountForm(u){
   ${locked?'<div class="note">'+(owner?"系統擁有者固定為管理員。":"不能變更自己的權限或停用自己。")+'</div>':""}
   <div class="actions">${!isNew?'<button class="btn" type="button" id="resetPw">寄重設密碼信</button>'+(!locked?'<button class="btn danger" type="button" id="del">移除</button>':"")+'<span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立帳號":"儲存"}</button></div>`,
   async fd=>{
-    const d={name:val(fd,"name"),role:locked?(owner?"admin":u.role||"staff"):val(fd,"role"),active:locked?true:fd.get("active")==="1",updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={name:val(fd,"name"),mobile:val(fd,"mobile"),role:locked?(owner?"admin":u.role||"staff"):val(fd,"role"),active:locked?true:fd.get("active")==="1",updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(!d.name){showErr({message:"請填寫姓名。"});return false}
     if(isNew){
       const email=val(fd,"email").toLowerCase(),pw=String(fd.get("pw")||"");
@@ -479,18 +682,18 @@ function startData(){
   db=fsdb; canWrite=me.role!=="viewer"; startData.reminded=false;
   const timer=setTimeout(()=>{$("#sync").textContent="暫時無法取得最新資料，請檢查網路"},10000);
   const fresh={};
-  for(const name of ["equipment","customers","contracts"]){
+  for(const name of ["equipment","customers","contracts","quotes"]){
     unsubs.push(db.collection(name).onSnapshot(snap=>{
       S[name]=snap.docs.map(d=>({id:d.id,...d.data()}));S.loaded[name]=true;
       if(!snap.metadata.fromCache)fresh[name]=true;
-      if(Object.keys(fresh).length===3){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用";if(!startData.reminded){startData.reminded=true;setTimeout(autoRemind,300)}}
+      if(Object.keys(fresh).length===4){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用";if(!startData.reminded){startData.reminded=true;setTimeout(autoRemind,300)}}
       if(!dlg.open)render();
     },err=>{clearTimeout(timer);S.loaded[name]=true;$("#sync").textContent=err.code==="permission-denied"?"此帳號沒有存取權限":"資料連線中斷，請重新整理頁面";render()}));
   }
   if(me.role==="admin")unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
@@ -507,7 +710,7 @@ onAuthStateChanged(auth,async u=>{
   try{const snap=await getDoc(doc(fs,"staff",email));if(snap.exists())info=snap.data()}catch(err){}
   if(email===OWNER)info={...(info||{}),role:"admin",active:true};
   if(!info||info.active===false){await signOut(auth);loginErr(info?"此帳號已停用，請聯絡管理員。":"此帳號尚未開通，請聯絡管理員。");return}
-  me={email,name:info.name||"",role:ROLES[info.role]?info.role:"staff"};
+  me={email,name:info.name||"",mobile:info.mobile||"",role:ROLES[info.role]?info.role:"staff"};
   $("#whoami").textContent=(me.name||email)+" · "+ROLES[me.role];$("#loginView").hidden=true;$("#appView").hidden=false;startData();
 });
 </script>
