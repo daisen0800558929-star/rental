@@ -106,7 +106,7 @@ html,body{margin:0}
   <div class="wrap">
     <div class="head">
       <div><h1>租賃管理</h1><div class="sub" id="sync">連線中…</div></div>
-      <div class="userbox"><span class="sub" id="whoami"></span><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
+      <div class="userbox"><span class="sub" id="whoami"></span><button class="btn small" id="remindBtn" type="button" hidden>到期提醒 <b class="mono" id="remindCount">0</b></button><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
     </div>
     <nav role="tablist">
       <button role="tab" data-tab="overview" aria-selected="true">總覽</button>
@@ -147,6 +147,8 @@ function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTim
 /* 計費：日租 = 天數 × 單價；月租 = 以 30 天為一期，不足一期以一期計 */
 function rentDays(c){const end=c.status==="已歸還"&&c.returnDate?c.returnDate:c.end;return Math.max(1,daysBetween(c.start,end)+1)}
 function rentAmount(c){const d=rentDays(c);return c.unit==="月"?Math.ceil(d/30)*(+c.rate||0):d*(+c.rate||0)}
+/* 到期提醒天數：每筆租約可自訂，預設 7 天 */
+const remindOf=c=>{const n=parseInt(c.remindDays,10);return Number.isFinite(n)&&n>=0?n:7};
 function cState(c){
   if(c.status==="已歸還")return{label:"已歸還",cls:"mute",k:"done"};
   if(c.status==="已取消")return{label:"已取消",cls:"mute",k:"done"};
@@ -154,7 +156,7 @@ function cState(c){
   if(c.start>t)return{label:"未開始",cls:"",k:"future"};
   const left=daysBetween(t,c.end);
   if(left<0)return{label:"逾期 "+(-left)+" 天",cls:"bad",k:"overdue"};
-  if(left<=7)return{label:left===0?"今日到期":left+" 天後到期",cls:"warn",k:"soon"};
+  if(left<=remindOf(c))return{label:left===0?"今日到期":left+" 天後到期",cls:"warn",k:"soon"};
   return{label:"租賃中",cls:"ok",k:"active"};
 }
 const cust=id=>S.customers.find(x=>x.id===id);
@@ -169,6 +171,7 @@ function eState(e){
 
 /* ---------- render ---------- */
 function render(){
+  updateRemind();
   $("#accTab").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite;
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
@@ -203,11 +206,11 @@ function viewOverview(loading){
   return `<div class="stats">
     <div class="stat"><span class="k">出租中</span><span class="v">${live.length}</span></div>
     <div class="stat bad"><span class="k">逾期未還</span><span class="v">${overdue.length}</span></div>
-    <div class="stat warn"><span class="k">7 天內到期</span><span class="v">${soon.length}</span></div>
+    <div class="stat warn"><span class="k">即將到期</span><span class="v">${soon.length}</span></div>
     <div class="stat"><span class="k">可出租設備</span><span class="v">${avail}<span class="note"> / ${S.equipment.length}</span></span></div></div>
   <div class="note">出租中租約每月租金合計約 <span class="mono">${money(monthly)}</span>（日租以 30 天估算）</div>
   <section><h2>逾期未還 <small>請聯絡客戶歸還或續約</small></h2><div class="list">${emptyOr(overdue.map(contractRow),loading,"目前沒有逾期的租約")}</div></section>
-  <section><h2>即將到期 <small>7 天內</small></h2><div class="list">${emptyOr(soon.map(contractRow),loading,"7 天內沒有到期的租約")}</div></section>`;
+  <section><h2>即將到期 <small>到期前 7 天開始提醒（可在租約中調整）</small></h2><div class="list">${emptyOr(soon.map(contractRow),loading,"近期沒有即將到期的租約")}</div></section>`;
 }
 function viewContracts(loading){
   const qq=q.trim().toLowerCase();
@@ -274,6 +277,7 @@ function contractForm(c){
     <label>計費方式<select name="unit">${opt("月","月租","月"===c.unit)}${opt("日","日租","日"===c.unit)}</select></label>
     <label>租金單價（NT$）<input type="number" name="rate" min="0" step="1" inputmode="numeric" value="${esc(c.rate)}" required></label>
     <label>押金（NT$）<input type="number" name="deposit" min="0" step="1" inputmode="numeric" value="${esc(c.deposit)}"></label>
+    <label>到期前幾天提醒<input type="number" name="remindDays" min="0" max="90" step="1" inputmode="numeric" value="${esc(c.remindDays??7)}"></label>
     <label>聯絡電話（現場）<input name="sitePhone" value="${esc(c.sitePhone||"")}"></label>
     <label class="full">使用地點<input name="site" value="${esc(c.site||"")}" placeholder="例：台中市西屯區工地"></label>
     <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label>
@@ -282,7 +286,7 @@ function contractForm(c){
   <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立租約":"儲存"}</button></div>`,
   async fd=>{
     const d={customerId:val(fd,"customerId"),equipmentId:val(fd,"equipmentId"),start:val(fd,"start"),end:val(fd,"end"),unit:val(fd,"unit"),
-      rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,site:val(fd,"site"),sitePhone:val(fd,"sitePhone"),note:val(fd,"note")};
+      rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,remindDays:Math.max(0,Math.min(90,parseInt(val(fd,"remindDays"),10)||0)),site:val(fd,"site"),sitePhone:val(fd,"sitePhone"),note:val(fd,"note")};
     if(!d.customerId||!d.equipmentId||!d.start||!d.end){showErr({message:"請填寫客戶、設備、起租日與到期日。"});return false}
     if(d.end<d.start){showErr({message:"到期日不能早於起租日。"});return false}
     if(isNew){
@@ -306,6 +310,7 @@ function contractDetail(c){
   <dt>租期</dt><dd class="mono">${esc(c.start)} → ${esc(c.end)}</dd>
   <dt>計費</dt><dd>${esc(c.unit==="日"?"日租":"月租")} <span class="mono">${money(c.rate)}</span></dd>
   <dt>租金合計</dt><dd class="mono">${money(rentAmount(c))}（${rentDays(c)} 天）</dd>
+  <dt>到期提醒</dt><dd>${remindOf(c)?"到期前 "+remindOf(c)+" 天":"不提醒"}</dd>
   <dt>押金</dt><dd class="mono">${money(c.deposit)}${c.depositReturned?" · 已退還":""}</dd>
   ${c.site?`<dt>使用地點</dt><dd>${esc(c.site)}${c.sitePhone?" · "+esc(c.sitePhone):""}</dd>`:""}
   ${c.returnDate?`<dt>歸還日</dt><dd class="mono">${esc(c.returnDate)}</dd>`:""}
@@ -385,6 +390,27 @@ $("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");i
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
 form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
 
+/* ---------- 到期提醒 ---------- */
+function remindList(){return S.contracts.filter(c=>c.status==="租賃中"&&["soon","overdue"].includes(cState(c).k)).sort((a,b)=>a.end.localeCompare(b.end))}
+function updateRemind(){const n=db?remindList().length:0;const b=$("#remindBtn");if(!b)return;b.hidden=!n;$("#remindCount").textContent=n;b.classList.toggle("danger",remindList().some(c=>cState(c).k==="overdue"))}
+function showReminders(){
+  const list=remindList();if(!list.length)return;
+  const od=list.filter(c=>cState(c).k==="overdue"),sn=list.filter(c=>cState(c).k==="soon");
+  openDlg(`<h3>租約到期提醒</h3>
+  <div class="note">${od.length?`<b style="color:var(--bad)">${od.length} 筆已逾期</b>　`:""}${sn.length?`<b style="color:var(--warn)">${sn.length} 筆即將到期</b>`:""}　請聯絡客戶續約或安排歸還。</div>
+  ${od.length?`<div><div class="note" style="margin-bottom:6px">已逾期</div><div class="list">${od.map(contractRow).join("")}</div></div>`:""}
+  ${sn.length?`<div><div class="note" style="margin-bottom:6px">即將到期</div><div class="list">${sn.map(contractRow).join("")}</div></div>`:""}
+  <div class="actions"><button class="btn primary" type="button" data-close>我知道了</button></div>`,null);
+}
+$("#remindBtn").onclick=showReminders;
+/* 每位使用者每天第一次開啟系統時自動跳出一次 */
+function autoRemind(){
+  if(!me||!remindList().length||dlg.open)return;
+  const key="remind:"+me.email+":"+todayStr();
+  try{if(localStorage.getItem(key))return;localStorage.setItem(key,"1")}catch(e){}
+  showReminders();
+}
+
 /* ---------- accounts ---------- */
 function viewAccounts(){
   const rows=[...S.staff].sort((a,b)=>(a.active===false)-(b.active===false)||String(a.id).localeCompare(b.id)).map(u=>{
@@ -450,14 +476,14 @@ const fsdb={
 };
 let dbMsg="正在連線資料庫…", unsubs=[];
 function startData(){
-  db=fsdb; canWrite=me.role!=="viewer";
+  db=fsdb; canWrite=me.role!=="viewer"; startData.reminded=false;
   const timer=setTimeout(()=>{$("#sync").textContent="暫時無法取得最新資料，請檢查網路"},10000);
   const fresh={};
   for(const name of ["equipment","customers","contracts"]){
     unsubs.push(db.collection(name).onSnapshot(snap=>{
       S[name]=snap.docs.map(d=>({id:d.id,...d.data()}));S.loaded[name]=true;
       if(!snap.metadata.fromCache)fresh[name]=true;
-      if(Object.keys(fresh).length===3){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用"}
+      if(Object.keys(fresh).length===3){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用";if(!startData.reminded){startData.reminded=true;setTimeout(autoRemind,300)}}
       if(!dlg.open)render();
     },err=>{clearTimeout(timer);S.loaded[name]=true;$("#sync").textContent=err.code==="permission-denied"?"此帳號沒有存取權限":"資料連線中斷，請重新整理頁面";render()}));
   }
