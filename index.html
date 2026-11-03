@@ -41,6 +41,9 @@ nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--a
 .addr-t{font-size:13px;color:var(--fg);font-weight:500;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addr .inl{display:inline-flex;flex-direction:row;align-items:center;gap:6px;font-weight:400;color:var(--muted)}
 .addr .inl input{width:auto}
+.taxchk{display:grid;gap:6px;margin-top:-4px}
+.taxchk .inl{display:inline-flex;flex-direction:row;align-items:center;gap:6px;color:var(--muted)}
+.taxchk .inl input{width:auto}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -502,7 +505,8 @@ function customerForm(c){
   const isNew=!c;c=c||{};
   openDlg(`<h3>${isNew?"新增客戶":esc(c.name)}</h3>
   <div class="grid2"><label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
-  <label>統一編號<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8"></label>
+  <label>統一編號<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+  ${taxBlock("k",c.taxExempt)}
   <label>公司電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
   <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
   <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
@@ -515,10 +519,11 @@ function customerForm(c){
   async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
     const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email"),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
     if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
-    if(d.taxId&&!/^\d{8}$/.test(d.taxId)){showErr({message:"統編需為 8 位數字。"});return false}
+    {const e=await taxGate("k");if(e){showErr({message:e});return false}}
+    d.taxExempt=fd.get("k_exempt")?val(fd,"k_exemptType"):"";d.taxVerified=d.taxId&&!d.taxExempt?new Date().toISOString():"";
     {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
-  bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});
+  bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});bindTax("k","name","taxId");
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
 }
 
@@ -532,6 +537,65 @@ $("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");i
   const r=e.target.closest("[data-open]");if(r)openFrom(r)});
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
 form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
+
+/* ---------- 統編驗證：檢查碼 + 經濟部商工登記查詢 ---------- */
+const TAX_EXEMPT=["政府機關","部隊","境外公司","其他單位"];
+function taxChecksum(no){
+  if(!/^\d{8}$/.test(no))return false;
+  const w=[1,2,1,2,1,2,4,1];let s=0;
+  for(let i=0;i<8;i++){const p=+no[i]*w[i];s+=Math.floor(p/10)+p%10}
+  return s%5===0||(no[6]==="7"&&(s+1)%5===0);
+}
+const normName=n=>String(n||"").normalize("NFKC").replace(/[\s　]/g,"").replace(/臺/g,"台");
+const taxCache={};
+async function fetchJSON(url){const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),9000);
+  try{const r=await fetch(url,{signal:ctl.signal});if(!r.ok)throw new Error("HTTP "+r.status);const tx=await r.text();return tx.trim()?JSON.parse(tx):null}finally{clearTimeout(t)}}
+/* 依序查詢：經濟部公司登記 → 經濟部商業(行號)登記 → g0v 公司資料 */
+async function lookupTax(no){
+  if(taxCache[no])return taxCache[no];
+  const G="https://data.gcis.nat.gov.tw/od/data/api/",q=f=>"?$format=json&$filter="+encodeURIComponent(f)+"&$skip=0&$top=1";
+  const src=[
+    async()=>{const j=await fetchJSON(G+"5F64D864-61CB-4D0D-8AD9-492047CC1EA6"+q("Business_Accounting_NO eq "+no));const r=Array.isArray(j)?j[0]:null;return r?.Company_Name?{name:r.Company_Name,status:r.Company_Status_Desc||"",kind:"公司"}:null},
+    async()=>{const j=await fetchJSON(G+"7E6AFA72-AD6A-46D3-8681-ED77951D912D"+q("President_No eq "+no));const r=Array.isArray(j)?j[0]:null;return r?.Business_Name?{name:r.Business_Name,status:r.Business_Current_Status_Desc||"",kind:"商號"}:null},
+    async()=>{const j=await fetchJSON("https://company.g0v.ronny.tw/api/show/"+no);const d=j?.data;const n=d&&(d["公司名稱"]||d["商業名稱"]||d["名稱"]);return n?{name:Array.isArray(n)?n[0]:n,status:d["公司狀況"]||d["現況"]||"",kind:d["商業名稱"]?"商號":"公司"}:null}
+  ];
+  let reached=false;
+  for(const f of src){try{const r=await f();reached=true;if(r){return taxCache[no]={found:true,...r}}}catch(e){console.warn("統編查詢來源失敗",e)}}
+  const res=reached?{found:false}:{error:true};if(reached)taxCache[no]=res;return res;
+}
+/* 綁定表單：nameF 公司名稱欄、taxF 統編欄、P 前綴 */
+function taxBlock(P,ex){return `<div class="full taxchk" id="${P}_taxbox"><div class="note" id="${P}_taxmsg"></div>
+  <label class="inl"><input type="checkbox" name="${P}_exempt" ${ex?"checked":""}> 政府機關、部隊、境外公司或其他單位（免驗證統編）</label>
+  <select name="${P}_exemptType" ${ex?"":"hidden"} style="max-width:220px">${TAX_EXEMPT.map(t=>opt(t,t,t===ex)).join("")}</select></div>`}
+function bindTax(P,nameF,taxF){
+  const F=form.elements,nm=F[nameF],tx=F[taxF],ex=F[P+"_exempt"],et=F[P+"_exemptType"],msg=$("#"+P+"_taxmsg");
+  const st={ok:false,pending:null,info:null};form["_tax_"+P]=st;
+  const show=(t,c)=>{msg.innerHTML=t;msg.style.color=c==="ok"?"var(--ok)":c==="bad"?"var(--bad)":"var(--muted)"};
+  const check=async()=>{
+    const no=tx.value.replace(/\D/g,"").slice(0,8);if(tx.value!==no)tx.value=no;
+    st.ok=false;st.info=null;
+    if(ex.checked){show("已勾選免驗證："+esc(et.value));st.ok=true;return}
+    if(!no){show("");st.ok=true;return}
+    if(no.length<8){show("統編需為 8 位數字","bad");return}
+    if(!taxChecksum(no)){show("✕ 統編檢查碼錯誤，請確認是否輸入正確","bad");return}
+    show("查詢經濟部登記資料中…");
+    const p=st.pending=lookupTax(no);const r=await p;if(st.pending!==p)return;st.pending=null;
+    if(tx.value!==no||ex.checked)return check();
+    st.info=r;
+    if(r.error){show("✕ 目前無法連線查詢登記資料，請稍後再試。若為政府機關等單位可勾選下方免驗證","bad");return}
+    if(!r.found){show("✕ 查無此統編的登記資料，請確認統編是否正確","bad");return}
+    const same=normName(r.name)===normName(nm.value);
+    if(same){show(`✓ 統編相符：${esc(r.name)}${r.status?"（"+esc(r.status)+"）":""}`,"ok");st.ok=true}
+    else show(`✕ 此統編登記名稱為「${esc(r.name)}」，與輸入的公司名稱不符　<button class="btn small" type="button" data-usename="${P}">改用登記名稱</button>`,"bad");
+  };
+  form.addEventListener("click",e=>{const b=e.target.closest(`[data-usename="${P}"]`);if(b&&st.info?.name){nm.value=st.info.name;nm.dispatchEvent(new Event("input",{bubbles:true}));check()}});
+  let t=null;const later=()=>{clearTimeout(t);t=setTimeout(check,350)};
+  tx.addEventListener("input",later);nm.addEventListener("input",later);nm.addEventListener("change",later);
+  ex.addEventListener("change",()=>{et.hidden=!ex.checked;check()});et.addEventListener("change",check);
+  st.run=check;check();
+}
+async function taxGate(P){const st=form["_tax_"+P];if(!st)return"";if(st.pending)await st.pending.catch(()=>{});await st.run();
+  if(st.ok)return"";return"統編驗證未通過："+$("#"+P+"_taxmsg").textContent.replace(/^✕\s*/,"").replace("改用登記名稱","")}
 
 /* ---------- 客戶通聯 ---------- */
 const CALL_TYPES=["新客戶詢問","舊客戶詢問","報價追蹤","報修／維修","客訴","帳款／發票","廠商來電","其他"];
@@ -724,7 +788,8 @@ function quoteForm(src,copy){
   <fieldset><legend>客戶資料</legend><div class="grid2">
     <label class="full">選擇既有客戶（自動帶入資料）<select name="customerId"><option value="">— 新客戶 / 手動填寫 —</option>${S.customers.map(k=>opt(k.id,k.name,k.id===x.customerId)).join("")}</select></label>
     <label class="full">客戶名稱<input name="c_name" value="${esc(c.name||"")}" required></label>
-    <label>統編<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8"></label>
+    <label>統編<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    ${taxBlock("q",c.taxExempt)}
     <label>公司電話<input name="c_phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
     <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
     <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
@@ -755,7 +820,8 @@ function quoteForm(src,copy){
     const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
     const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
     if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
-    if(cust.taxId&&!/^\d{8}$/.test(cust.taxId)){showErr({message:"統編需為 8 位數字。"});return false}
+    {const e=await taxGate("q");if(e){showErr({message:e});return false}}
+    cust.taxExempt=fd.get("q_exempt")?val(fd,"q_exemptType"):"";
     {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"公司地址")||(cdSame?"":addrErr(qd,"送貨地址"));if(e){showErr({message:e});return false}}
     if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
     let customerId=val(fd,"customerId");
@@ -781,10 +847,10 @@ function quoteForm(src,copy){
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
-  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){const m={c_name:k.name,c_taxId:k.taxId,c_phone:fmtTel(k.phone||""),c_fax:fmtTel(k.fax||""),c_contact:k.contact,c_mobile:fmtMobile(k.mobile||""),};for(const n in m)form.elements[n].value=m[n]||"";
+  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){form.elements.q_exempt.checked=!!k.taxExempt;if(k.taxExempt)form.elements.q_exemptType.value=k.taxExempt;form.elements.q_exempt.dispatchEvent(new Event("change"));const m={c_name:k.name,c_taxId:k.taxId,c_phone:fmtTel(k.phone||""),c_fax:fmtTel(k.fax||""),c_contact:k.contact,c_mobile:fmtMobile(k.mobile||""),};for(const n in m)form.elements[n].value=m[n]||"";
     form.querySelector('[data-addr="ca"]')._set(k.addr||parseAddr(k.address));const same=!k.delivery||k.delivery===k.address;form.elements.cd_same.checked=same;form.elements.cd_same.dispatchEvent(new Event("change"));if(!same)form.querySelector('[data-addr="cd"]')._set(k.dlv||parseAddr(k.delivery));
-    ["c_phone","c_fax","c_mobile"].forEach(n=>form.elements[n].dispatchEvent(new Event("input")))}calc()};
-  bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});
+    ["c_phone","c_fax","c_mobile","c_taxId"].forEach(n=>form.elements[n].dispatchEvent(new Event("input")))}calc()};
+  bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});bindTax("q","c_name","c_taxId");
   calc();
 }
 function quoteSheet(x){
