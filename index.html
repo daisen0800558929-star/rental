@@ -602,12 +602,13 @@ function countBy(list,key,order){const m={};list.forEach(x=>{const k=x[key]||"�
 function staffLabel(email){const u=S.staff.find(x=>x.id===email);if(!u)return email||"未填";return (u.code?u.code+" ":"")+(u.name||u.id)}
 /* 防呆：市話自動加區碼橫線，手機格式 0912-345-678 */
 function fmtTel(v){
-  let d=String(v).replace(/[^\d#]/g,""),ext="";const h=d.indexOf("#");if(h>=0){ext=d.slice(h).replace(/#+/,"#");d=d.slice(0,h)}
+  /* 分機：可輸入 #、*、轉、分機、ext、x，一律存成 # */
+  let d=String(v).replace(/(分機|轉|ext\.?|x|\*|,|，)/gi,"#").replace(/[^\d#]/g,""),ext="";const h=d.indexOf("#");if(h>=0){ext="#"+d.slice(h).replace(/#/g,"").slice(0,6);d=d.slice(0,h)}
   d=d.slice(0,10);if(!d)return ext;
   const ac=/^(0826|0836)/.test(d)?4:/^(037|049|082|089)/.test(d)?3:d[0]==="0"?2:0;
   return(ac&&d.length>ac?d.slice(0,ac)+"-"+d.slice(ac):d)+ext;
 }
-function telOk(v){if(!v)return true;const d=v.split("#")[0].replace(/\D/g,"");return /^0[2-8]/.test(d)&&!/^09/.test(d)&&d.length>=9&&d.length<=10}
+function telOk(v){if(!v)return true;const[m,e]=v.split("#"),d=m.replace(/\D/g,"");return /^0[2-8]/.test(d)&&!/^09/.test(d)&&d.length>=9&&d.length<=10&&(e===undefined||/^\d{0,6}$/.test(e))}
 function fmtMobile(v){const d=String(v).replace(/\D/g,"").slice(0,10);return d.length>7?d.slice(0,4)+"-"+d.slice(4,7)+"-"+d.slice(7):d.length>4?d.slice(0,4)+"-"+d.slice(4):d}
 const mobileOk=v=>!v||/^09\d{2}-\d{3}-\d{3}$/.test(v);
 function nowLocal(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
@@ -653,9 +654,9 @@ function addrErr(o,label){
   return"";
 }
 function bindPhones(map){const F=form.elements;for(const[n,k]of Object.entries(map)){const el=F[n];if(!el)continue;
-  el.setAttribute("autocomplete","off");if(k==="mobile"){el.setAttribute("inputmode","numeric");el.maxLength=12;el.placeholder="0965-585-129"}else{el.setAttribute("inputmode","tel");el.placeholder="04-7510728"}
+  el.setAttribute("autocomplete","off");if(k==="mobile"){el.setAttribute("inputmode","numeric");el.maxLength=12;el.placeholder="0965-585-129"}else{el.setAttribute("inputmode","tel");el.placeholder="04-7510728 或 04-7510728#12"}
   const hint=document.createElement("span");hint.className="note";hint.style.color="var(--bad)";el.after(hint);
-  const chk=()=>{const ok=k==="mobile"?mobileOk(el.value):telOk(el.value);hint.textContent=ok?"":(k==="mobile"?"手機需 09 開頭共 10 碼":"請輸入區碼加號碼，例如 04-7510728")};
+  const chk=()=>{const ok=k==="mobile"?mobileOk(el.value):telOk(el.value);hint.textContent=ok?"":(k==="mobile"?"手機需 09 開頭共 10 碼":"請輸入區碼加號碼，例如 04-7510728，分機請用 # 例如 #12")};
   el.addEventListener("input",()=>{el.value=k==="mobile"?fmtMobile(el.value):fmtTel(el.value);chk()});el.value=k==="mobile"?fmtMobile(el.value):fmtTel(el.value);chk()}}
 function phoneErr(vals){for(const[label,v,k]of vals){if(k==="mobile"?!mobileOk(v):!telOk(v))return label+(k==="mobile"?" 格式不正確，請輸入 09 開頭共 10 碼，例如 0965-585-129。":" 格式不正確，請輸入區碼加號碼，例如 04-7510728。")}return""}
 let callRange="today";
