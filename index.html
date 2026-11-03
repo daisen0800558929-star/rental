@@ -218,7 +218,7 @@ html,body{margin:0}
   <div class="wrap">
     <div class="head">
       <div><h1 id="pageTitle">大森 ERP</h1><div class="sub" id="sync">連線中…</div></div>
-      <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn small" id="remindBtn" type="button" hidden>到期提醒 <b class="mono" id="remindCount">0</b></button><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
+      <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
     </div>
     <nav role="tablist">
       <button role="tab" data-tab="analysis" aria-selected="false">分析</button>
@@ -775,7 +775,7 @@ function signQuote(x){
 
 /* ---------- 到期提醒 ---------- */
 function remindList(){return S.contracts.filter(c=>c.status==="租賃中"&&["soon","overdue"].includes(cState(c).k)).sort((a,b)=>a.end.localeCompare(b.end))}
-function updateRemind(){const n=db?remindList().length:0;const b=$("#remindBtn");if(!b)return;b.hidden=!n;$("#remindCount").textContent=n;b.classList.toggle("danger",remindList().some(c=>cState(c).k==="overdue"))}
+function updateRemind(){}
 function showReminders(){
   const list=remindList();if(!list.length)return;
   const od=list.filter(c=>cState(c).k==="overdue"),sn=list.filter(c=>cState(c).k==="soon");
@@ -785,7 +785,7 @@ function showReminders(){
   ${sn.length?`<div><div class="note" style="margin-bottom:6px">即將到期</div><div class="list">${sn.map(contractRow).join("")}</div></div>`:""}
   <div class="actions"><button class="btn primary" type="button" data-close>我知道了</button></div>`,null);
 }
-$("#remindBtn").onclick=showReminders;
+
 /* 每位使用者每天第一次開啟系統時自動跳出一次 */
 let splashGone=false,remindPending=false;
 function autoRemind(){
