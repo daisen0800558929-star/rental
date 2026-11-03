@@ -114,6 +114,8 @@ legend{font-size:13px;color:var(--muted);padding:0 6px}
 /* 轉 PDF / 圖片時的離屏畫布：固定 A4 寬度、白底黑字 */
 .sheet-render{position:fixed;left:-12000px;top:0;width:760px;padding:17px;background:#fff}
 .sheet-render .sheet,#printArea .sheet,.sheet.light{--ink:#000;--rule:#444;--fg:#000;--surface:#fff;background:#fff;color:#000}
+.histbox{background:var(--ok-soft);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.histbox select{width:100%}
 .sendopts{display:grid;gap:10px}
 .sendopts button{text-align:left;display:grid;gap:2px;padding:12px 14px}
 .sendopts button .note{font-weight:400}
@@ -798,7 +800,9 @@ function quoteForm(src,copy){
     <label class="full">選擇既有客戶（自動帶入資料）<select name="customerId"><option value="">— 新客戶 / 手動填寫 —</option>${S.customers.map(k=>opt(k.id,k.name,k.id===x.customerId)).join("")}</select></label>
     <label class="full">統編（填入後自動帶出公司名稱）<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
     ${taxBlock("q",c.taxExempt)}
-    <label class="full">客戶名稱<input name="c_name" value="${esc(c.name||"")}" required></label>
+    <label class="full">客戶名稱<input name="c_name" list="custNames" autocomplete="off" value="${esc(c.name||"")}" required></label>
+    <datalist id="custNames">${[...new Set([...S.customers.map(k=>k.name),...S.quotes.map(p=>p.cust?.name)].filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+    <div class="full histbox" id="histBox" hidden></div>
     <label>公司電話<input name="c_phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
     <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
     <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
@@ -866,9 +870,47 @@ function quoteForm(src,copy){
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
-  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){form.elements.q_exempt.checked=!!k.taxExempt;if(k.taxExempt)form.elements.q_exemptType.value=k.taxExempt;form.elements.q_exempt.dispatchEvent(new Event("change"));const m={c_name:k.name,c_taxId:k.taxId,c_phone:fmtTel(k.phone||""),c_fax:fmtTel(k.fax||""),c_contact:k.contact,c_mobile:fmtMobile(k.mobile||""),};for(const n in m)form.elements[n].value=m[n]||"";
+  /* 帶入客戶基本資料（客戶資料或過去報價單的客戶欄位） */
+  const setCust=(k,keepName)=>{form.elements.q_exempt.checked=!!k.taxExempt;if(k.taxExempt)form.elements.q_exemptType.value=k.taxExempt;form.elements.q_exempt.dispatchEvent(new Event("change"));
+    const m={c_taxId:k.taxId,c_phone:fmtTel(k.phone||""),c_fax:fmtTel(k.fax||""),c_contact:k.contact,c_mobile:fmtMobile(k.mobile||"")};if(!keepName)m.c_name=k.name;
+    for(const n in m)if(m[n]||n!=="c_taxId")form.elements[n].value=m[n]||"";
     form.querySelector('[data-addr="ca"]')._set(k.addr||parseAddr(k.address));const same=!k.delivery||k.delivery===k.address;form.elements.cd_same.checked=same;form.elements.cd_same.dispatchEvent(new Event("change"));if(!same)form.querySelector('[data-addr="cd"]')._set(k.dlv||parseAddr(k.delivery));
-    ["c_phone","c_fax","c_mobile","c_taxId"].forEach(n=>form.elements[n].dispatchEvent(new Event("input")))}calc()};
+    ["c_phone","c_fax","c_mobile","c_taxId"].forEach(n=>form.elements[n].dispatchEvent(new Event("input")))};
+  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){setCust(k);hist.last="";findHist()}calc()};
+  /* 自動偵測曾報價過的客戶：依統編或客戶名稱比對過去的報價單 */
+  const hist={last:""},hb=$("#histBox");
+  const itemsEmpty=()=>[...body.querySelectorAll("tr")].every(tr=>!tr.querySelector("[name=i_spec]").value.trim()&&!tr.querySelector("[name=i_price]").value);
+  const applyQuote=p=>{
+    body.innerHTML=(p&&p.items?.length?p.items:[{}]).map(itemRow).join("");
+    if(p){const F=form.elements;F.taxMode.value=p.taxMode||"excl";F.pay.value=PAYS.includes(p.pay)?p.pay:"";F.volt.value=p.volt||"";F.voltOther.value=p.voltOther||"";
+      if([...F.validDays.options].some(o=>+o.value===+p.validDays))F.validDays.value=p.validDays;F.note.value=p.note||""}
+    calc()};
+  const qLabel=p=>{const t=quoteCalc(p),it=(p.items||[]).map(i=>i.spec).filter(Boolean);return `${p.date||""}　${p.no||""}　${(QSTATUS[p.status]||QSTATUS.draft)[0]}　${it.slice(0,2).join("、")}${it.length>2?" 等 "+it.length+" 項":""}　${money(t.total)}`};
+  function findHist(){
+    if(!isNew||copy)return;
+    const tx=form.elements.c_taxId.value.replace(/\D/g,""),nm=normName(form.elements.c_name.value),cid=form.elements.customerId.value;
+    const list=S.quotes.filter(p=>(cid&&p.customerId===cid)||(tx.length===8&&p.cust?.taxId===tx)||(nm&&normName(p.cust?.name)===nm))
+      .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.no).localeCompare(String(a.no)));
+    const key=list.map(p=>p.id).join(",");if(key===hist.last)return;hist.last=key;
+    if(!list.length){hb.hidden=true;hb.innerHTML="";return}
+    const last=list[0];
+    /* 基本資料：以最近一次報價為準；並連結到既有客戶資料 */
+    if(!cid){const k=(last.customerId&&cust(last.customerId))||S.customers.find(k=>normName(k.name)===normName(last.cust?.name));if(k)form.elements.customerId.value=k.id}
+    const base=(form.elements.customerId.value&&cust(form.elements.customerId.value))||last.cust||{};
+    setCust({...last.cust,...base},true);if(!form.elements.c_name.value.trim())form.elements.c_name.value=base.name||last.cust?.name||"";
+    const auto=itemsEmpty();if(auto)applyQuote(last);
+    hb.hidden=false;
+    hb.innerHTML=list.length===1
+      ?`<div class="note"><b style="color:var(--ok)">✓ 舊客戶</b>：曾報價 1 次（${esc(qLabel(last))}），已帶出基本資料${auto?"及報價內容":""}。</div>
+        <div class="toolbar" style="margin-top:6px"><button class="btn small" type="button" data-hq="${esc(last.id)}">${auto?"重新帶入報價內容":"帶入這張的報價內容"}</button>${auto?'<button class="btn small" type="button" data-hq="">清空報價內容</button>':""}</div>`
+      :`<div class="note"><b style="color:var(--ok)">✓ 舊客戶</b>：曾報價 ${list.length} 次，已帶出基本資料${auto?"及最近一次的報價內容":""}。可從下面選擇要帶入哪一次的報價：</div>
+        <label style="margin-top:6px">過去的報價單<select name="histQuote">${opt("","— 不帶入報價內容 —",!auto)}${list.map((p,i)=>opt(p.id,qLabel(p),auto&&i===0)).join("")}</select></label>`;
+    calc();
+  }
+  hb.addEventListener("click",e=>{const b=e.target.closest("[data-hq]");if(!b)return;applyQuote(S.quotes.find(p=>p.id===b.dataset.hq));toast(b.dataset.hq?"已帶入報價內容":"已清空報價內容")});
+  hb.addEventListener("change",e=>{if(e.target.name!=="histQuote")return;applyQuote(S.quotes.find(p=>p.id===e.target.value));toast(e.target.value?"已帶入報價內容":"已清空報價內容")});
+  {let t=null;const later=()=>{clearTimeout(t);t=setTimeout(findHist,400)};
+   form.elements.c_name.addEventListener("input",later);form.elements.c_name.addEventListener("change",later);form.elements.c_taxId.addEventListener("input",later)}
   bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});bindTax("q","c_name","c_taxId");
   calc();
 }
