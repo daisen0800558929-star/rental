@@ -218,7 +218,7 @@ html,body{margin:0}
   <div class="wrap">
     <div class="head">
       <div><h1 id="pageTitle">大森 ERP</h1><div class="sub" id="sync">連線中…</div></div>
-      <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
+      <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
     </div>
     <nav role="tablist">
       <button role="tab" data-tab="analysis" aria-selected="false">分析</button>
@@ -1016,7 +1016,7 @@ $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr(
   try{await signInWithEmailAndPassword(auth,$("#loginEmail").value.trim(),$("#loginPw").value)}catch(err){loginErr(authMsg(err.code))}finally{b.disabled=false}});
 $("#resetBtn").onclick=async()=>{const em=$("#loginEmail").value.trim();if(!em){loginErr("請先輸入 Email，再按忘記密碼。");return}
   try{await sendPasswordResetEmail(auth,em);loginErr("");toast("已寄出重設密碼信，請到信箱收信")}catch(err){loginErr(authMsg(err.code))}};
-$("#logoutBtn").onclick=()=>signOut(auth);
+
 dlg.addEventListener("close",()=>render());
 onAuthStateChanged(auth,async u=>{
   stopData();
