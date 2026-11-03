@@ -131,6 +131,29 @@ html,body{margin:0}
 .login h1{font-size:21px}
 .userbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .userbox .sub{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 內容分析 */
+.an-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.an-grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:10px;align-content:start;min-width:0}
+.card h3{margin:0;font-size:14.5px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card h3 small{font-weight:400;color:var(--muted);font-size:12px}
+.hb{display:grid;grid-template-columns:minmax(0,7.5em) minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:13px}
+.hb .lb{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .tr{display:block;height:12px;background:var(--bg);border-radius:0 4px 4px 0;overflow:hidden}
+.hb .bar{display:block;height:100%;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.hb .vl{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.vb{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:10px;align-items:end;height:170px;border-bottom:1px solid var(--line);padding-top:18px}
+.vb .col{display:grid;grid-template-rows:auto 1fr;height:100%;align-items:end;justify-items:center;gap:4px;min-width:0}
+.vb .v{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.vb .b{display:block;width:min(38px,70%);background:var(--accent);border-radius:4px 4px 0 0;min-height:2px;align-self:end}
+.vb-x{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:10px;font-size:12px;color:var(--muted);text-align:center}
+.stack{display:flex;height:18px;border-radius:4px;overflow:hidden;gap:2px;background:var(--surface)}
+.stack span{min-width:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.modlist{display:grid;gap:0}
+.modlist .row{cursor:default;grid-template-columns:minmax(0,1fr) auto}
+.modlist .row[data-mod]{cursor:pointer}
 /* 功能選單 */
 .menu-top{background:var(--surface);border-bottom:1px solid var(--line)}
 .menu-top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px;flex-wrap:wrap}
@@ -148,10 +171,13 @@ html,body{margin:0}
 .node:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
 @media (prefers-reduced-motion:no-preference){.node{transition:transform .15s ease,opacity .15s}.node:hover{transform:translate(-50%,-50%) scale(1.08)}}
 .node .badge{position:absolute;top:2%;right:2%;min-width:1.6em;height:1.6em;border-radius:999px;background:#fff;color:#b4282c;font-size:.8em;display:grid;place-items:center;padding:0 .3em;box-shadow:0 1px 3px rgba(0,0,0,.25)}
-.hub{position:absolute;left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:#4a7ebb;color:#fff;
+.hub{border:0;font:inherit;cursor:pointer;position:absolute;left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:#4a7ebb;color:#fff;
   display:grid;place-content:center;text-align:center;gap:2px;box-shadow:0 3px 10px rgba(0,0,0,.2)}
 .hub b{font-size:clamp(20px,8cqw,52px);letter-spacing:.02em;line-height:1}
 .hub small{font-size:clamp(10px,2.6cqw,16px);opacity:.9}
+.hub .hub-sub{font-size:clamp(9px,2.2cqw,13px);opacity:.85;border-top:1px solid rgba(255,255,255,.45);padding-top:3px;margin-top:2px}
+.hub:focus-visible{outline:3px solid var(--fg);outline-offset:4px}
+@media (prefers-reduced-motion:no-preference){.hub{transition:transform .15s}.hub:hover{transform:translate(-50%,-50%) scale(1.04)}}
 .wheel-note{text-align:center;font-size:12.5px;color:var(--muted)}
 #splash{position:fixed;inset:0;z-index:50;background:#ffffff;display:grid;place-items:center;cursor:pointer;
   padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(16px,env(safe-area-inset-left,0px))}
@@ -183,16 +209,17 @@ html,body{margin:0}
     <img src="logo.png" alt="大森節能">
     <div class="userbox"><span class="sub" id="whoami2"></span><button class="btn small" id="logoutBtn2" type="button">登出</button></div>
   </div></div>
-  <div class="wrap"><main class="menu-main"><div class="wheel-wrap"><div class="wheel" id="tiles"></div></div><div class="wheel-note">點選圓圈進入功能　淡色為建置中</div></main></div>
+  <div class="wrap"><main class="menu-main"><div class="wheel-wrap"><div class="wheel" id="tiles"></div></div><div class="wheel-note">點選圓圈進入功能　點中間 ERP 查看內容分析　淡色為建置中</div></main></div>
 </div>
 <div id="appView" hidden>
 <header>
   <div class="wrap">
     <div class="head">
-      <div><h1>租賃管理</h1><div class="sub" id="sync">連線中…</div></div>
+      <div><h1>大森 ERP</h1><div class="sub" id="sync">連線中…</div></div>
       <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn small" id="remindBtn" type="button" hidden>到期提醒 <b class="mono" id="remindCount">0</b></button><button class="btn small" id="logoutBtn" type="button">登出</button><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
     </div>
     <nav role="tablist">
+      <button role="tab" data-tab="analysis" aria-selected="false">分析</button>
       <button role="tab" data-tab="overview" aria-selected="true">總覽</button>
       <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
       <button role="tab" data-tab="equipment" aria-selected="false">設備</button>
@@ -273,6 +300,7 @@ function render(){
   if(tab==="equipment")h=viewEquipment(loading);
   if(tab==="customers")h=viewCustomers(loading);
   if(tab==="quotes")h=viewQuotes(loading);
+  if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   m.innerHTML=h;
   const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
@@ -650,7 +678,9 @@ function showReminders(){
 }
 $("#remindBtn").onclick=showReminders;
 /* 每位使用者每天第一次開啟系統時自動跳出一次 */
+let splashGone=false,remindPending=false;
 function autoRemind(){
+  if(!splashGone){remindPending=true;return}
   if(!me||!remindList().length||dlg.open)return;
   const key="remind:"+me.email+":"+todayStr();
   try{if(localStorage.getItem(key))return;localStorage.setItem(key,"1")}catch(e){}
@@ -712,6 +742,73 @@ $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newacc]")){ac
   const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}});
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}}});
 
+/* ---------- 內容分析 ---------- */
+function openAnalysis(){$("#menuView").hidden=true;$("#appView").hidden=false;tab="analysis";q="";render();window.scrollTo(0,0)}
+const monthKey=d=>String(d||"").slice(0,7);
+function lastMonths(n){const out=[],d=new Date();d.setDate(1);for(let i=n-1;i>=0;i--){const t=new Date(d.getFullYear(),d.getMonth()-i,1);out.push(t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0"))}return out}
+const short=n=>{n=Math.round(n||0);return n>=1e8?(n/1e8).toFixed(1).replace(/\.0$/,"")+" 億":n>=1e4?(n/1e4).toFixed(1).replace(/\.0$/,"")+" 萬":n.toLocaleString("zh-TW")};
+function hbars(rows,fmt=v=>v.toLocaleString("zh-TW"),color){
+  if(!rows.length||rows.every(r=>!r.v))return '<div class="empty">尚無資料</div>';
+  const mx=Math.max(...rows.map(r=>r.v),1);
+  return `<div class="hb">${rows.map(r=>`<span class="lb" title="${esc(r.l)}">${esc(r.l)}</span><span class="tr"><span class="bar" style="width:${r.v/mx*100}%;${color?`background:${color}`:r.c?`background:${r.c}`:""}" title="${esc(r.l+"："+fmt(r.v))}"></span></span><span class="vl">${fmt(r.v)}</span>`).join("")}</div>`;
+}
+function vbars(rows,fmt){
+  const mx=Math.max(...rows.map(r=>r.v),1);
+  return `<div class="vb">${rows.map(r=>`<div class="col" title="${esc(r.l+"："+money(r.v))}"><span class="v">${r.v?fmt(r.v):""}</span><span class="b" style="height:${r.v/mx*100}%"></span></div>`).join("")}</div>
+  <div class="vb-x">${rows.map(r=>`<span>${esc(r.x)}</span>`).join("")}</div>`;
+}
+function viewAnalysis(loading){
+  if(loading)return '<div class="empty">資料載入中…</div>';
+  const t=todayStr(),thisM=monthKey(t);
+  const live=S.contracts.filter(c=>c.status==="租賃中");
+  const monthly=live.reduce((s,c)=>s+(c.unit==="月"?+c.rate||0:(+c.rate||0)*30),0);
+  const eqRent=S.equipment.filter(e=>eState(e).label==="出租中").length,eqRep=S.equipment.filter(e=>e.repair).length,eqFree=S.equipment.length-eqRent-eqRep;
+  const qTot=x=>quoteCalc(x).total;
+  const qMonth=S.quotes.filter(x=>monthKey(x.date)===thisM);
+  const decided=S.quotes.filter(x=>x.status==="signed"||x.status==="lost");
+  const win=decided.length?Math.round(S.quotes.filter(x=>x.status==="signed").length/decided.length*100):null;
+  const rem=remindList(),overdue=rem.filter(c=>cState(c).k==="overdue").length;
+  const kpi=(k,v,cls="")=>`<div class="stat ${cls}"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  // charts data
+  const months=lastMonths(6);
+  const qByM=months.map(m=>({x:Number(m.slice(5))+"月",l:m,v:S.quotes.filter(x=>monthKey(x.date)===m).reduce((s,x)=>s+qTot(x),0)}));
+  const qByS=Object.entries(QSTATUS).map(([k,v])=>({l:v[0],v:S.quotes.filter(x=>(x.status||"draft")===k).length}));
+  const custVal={};
+  S.quotes.filter(x=>x.status==="signed").forEach(x=>{const n=x.cust?.name||"（未填）";custVal[n]=(custVal[n]||0)+qTot(x)});
+  S.contracts.filter(c=>c.status!=="已取消").forEach(c=>{const n=cust(c.customerId)?.name;if(n)custVal[n]=(custVal[n]||0)+rentAmount(c)});
+  const topCust=Object.entries(custVal).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([l,v])=>({l,v}));
+  const due=[["7 天內",0,7],["8–30 天",8,30],["31–60 天",31,60],["61–90 天",61,90]].map(([l,a,b])=>({l,v:live.filter(c=>{const d=daysBetween(t,c.end);return d>=a&&d<=b}).length}));
+  due.unshift({l:"已逾期",v:live.filter(c=>daysBetween(t,c.end)<0).length,c:"var(--bad)"});
+  const cats={};S.equipment.forEach(e=>{const k=e.category||"未分類";cats[k]=cats[k]||{n:0,r:0};cats[k].n++;if(eState(e).label==="出租中")cats[k].r++});
+  const catRows=Object.entries(cats).sort((a,b)=>b[1].n-a[1].n).slice(0,6).map(([l,o])=>({l:l+`（${o.r}/${o.n}）`,v:Math.round(o.r/o.n*100)}));
+  const pct=n=>n+"%";
+  const stk=(a,c,l)=>a?`<span style="flex:${a};background:${c}" title="${l}：${a}"></span>`:"";
+  const modRows=MODULES.map((m,i)=>`<div class="row" ${m.go?`data-mod="${m.k}" tabindex="0"`:""}><div><div class="t"><span class="mono m">${String(i+1).padStart(2,"0")}</span>　${esc(m.nm)}</div><div class="m">${m.go?esc(moduleStat(m)):"建置中，尚無資料可分析"}</div></div><div class="r">${m.go?'<span class="pill ok">使用中</span>':'<span class="pill mute">建置中</span>'}</div></div>`).join("");
+  return `<section><h2>全公司重點 <small>資料即時更新　${esc(t)}</small></h2>
+  <div class="stats">
+    ${kpi("客戶數",S.customers.length)}
+    ${kpi("本月報價金額",short(qMonth.reduce((s,x)=>s+qTot(x),0)))}
+    ${kpi("報價成交率",win==null?"—":win+"%")}
+    ${kpi("出租中租約",live.length)}
+    ${kpi("每月租金估算",short(monthly))}
+    ${kpi("設備出租率",S.equipment.length?Math.round(eqRent/S.equipment.length*100)+"%":"—")}
+    ${kpi("設備總數",S.equipment.length)}
+    ${kpi("待處理提醒",rem.length,overdue?"bad":rem.length?"warn":"")}
+  </div></section>
+  <div class="an-grid">
+    <div class="card"><h3>近 6 個月報價金額 <small>NT$，依報價日期</small></h3>${S.quotes.length?vbars(qByM,short):'<div class="empty">還沒有報價單</div>'}</div>
+    <div class="card"><h3>報價單狀態 <small>張數</small></h3>${hbars(qByS)}<div class="note">成交率 = 已簽回 ÷（已簽回＋未成交）${win==null?"，目前尚無結案的報價":""}</div></div>
+    <div class="card"><h3>設備狀態 <small>共 ${S.equipment.length} 台</small></h3>
+      ${S.equipment.length?`<div class="stack">${stk(eqRent,"var(--accent)","出租中")}${stk(eqFree,"var(--ok)","可出租")}${stk(eqRep,"var(--warn)","維修中")}</div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>出租中 ${eqRent}</span><span><i style="background:var(--ok)"></i>可出租 ${eqFree}</span><span><i style="background:var(--warn)"></i>維修中 ${eqRep}</span></div>`:'<div class="empty">還沒有設備資料</div>'}</div>
+    <div class="card"><h3>租約到期時程 <small>出租中租約筆數</small></h3>${live.length?hbars(due):'<div class="empty">目前沒有出租中的租約</div>'}</div>
+    <div class="card"><h3>各類設備出租率 <small>出租中／總數</small></h3>${hbars(catRows,pct)}</div>
+    <div class="card"><h3>主要客戶 <small>已簽回報價＋租金，NT$</small></h3>${hbars(topCust,short)}</div>
+  </div>
+  <section><h2>12 項功能狀態</h2><div class="list modlist">${modRows}</div></section>`;
+}
+$("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.target.closest(".modlist [data-mod]");if(r)openModule(r.dataset.mod)});
+
 /* ---------- 功能選單 ---------- */
 const WHEEL_COLORS=["#c0504d","#9bbb59","#8064a2","#4bacc6","#f79646"];
 const MODULES=[
@@ -745,7 +842,7 @@ function renderMenu(){
     const[x,y]=pos(i),ready=!!m.go,stat=ready?moduleStat(m):"建置中",n=m.k==="remind"&&db?remindList().length:0;
     return `<button class="node${ready?"":" soon"}" type="button" data-mod="${m.k}" style="--c:${col(i)};left:${x}%;top:${y}%" title="${esc(m.nm+"："+m.ds+(stat?"（"+stat+"）":""))}" aria-label="${esc(m.nm+(ready?"":"（建置中）"))}">
       <span>${m.lb.split("|").map(esc).join("<br>")}</span>${n?`<span class="badge mono">${n}</span>`:""}</button>`}).join("");
-  el.innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true">${arcs}</svg><div class="hub"><b>ERP</b><small>大森節能</small></div>${nodes}`;
+  el.innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true">${arcs}</svg><button class="hub" type="button" data-hub aria-label="開啟全部項目內容分析"><b>ERP</b><small>大森節能</small><small class="hub-sub">內容分析</small></button>${nodes}`;
 }
 function showMenu(){$("#appView").hidden=true;$("#menuView").hidden=false;if(dlg.open)dlg.close();renderMenu();window.scrollTo(0,0)}
 function openModule(k){
@@ -756,13 +853,13 @@ function openModule(k){
   else{tab=m.go;q="";filter="all";render()}
   window.scrollTo(0,0);
 }
-$("#tiles").addEventListener("click",e=>{const t=e.target.closest("[data-mod]");if(t)openModule(t.dataset.mod)});
+$("#tiles").addEventListener("click",e=>{if(e.target.closest("[data-hub]")){openAnalysis();return}const t=e.target.closest("[data-mod]");if(t)openModule(t.dataset.mod)});
 $("#menuBtn").onclick=showMenu;
 $("#logoutBtn2").onclick=()=>signOut(auth);
 
 /* ---------- 進入首頁 ---------- */
 (()=>{const sp=$("#splash");let gone=false;
-  const enter=()=>{if(gone)return;gone=true;sp.classList.add("leave");setTimeout(()=>sp.remove(),400);const f=$("#loginView:not([hidden]) input");if(f)setTimeout(()=>f.focus(),420)};
+  const enter=()=>{if(gone)return;gone=true;splashGone=true;if(remindPending){remindPending=false;setTimeout(autoRemind,450)}sp.classList.add("leave");setTimeout(()=>sp.remove(),400);const f=$("#loginView:not([hidden]) input");if(f)setTimeout(()=>f.focus(),420)};
   sp.addEventListener("click",enter);
   document.addEventListener("keydown",e=>{if(!gone&&(e.key==="Enter"||e.key===" ")){e.preventDefault();enter()}});
   $("#enterBtn").focus();
