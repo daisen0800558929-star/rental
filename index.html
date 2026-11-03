@@ -745,7 +745,7 @@ const SIGNM={onsite:"現場簽名",remote:"線上簽名",paper:"紙本簽回"};
 const TAX={none:"未稅",excl:"外加 5% 營業稅",incl:"含稅"};
 const SVCS=["出租","銷售","維修"];
 const VOLTS=["單相110V","單相220V","三相220V","三相380V","其他"];
-const PAYS=["現金","匯款","支票"];
+const PAYS=["貨到付款","款到發貨","匯款","支票"];
 const SIGN_DAYS=30; /* 簽名連結有效天數 */
 function quoteCalc(q){
   const items=(q.items||[]).map(i=>({...i,sub:Math.round((+i.qty||0)*(+i.price||0))}));
@@ -810,7 +810,7 @@ function quoteForm(src,copy){
     <label>業務人員<input name="sales" value="${esc(x.sales||"")}"></label>
     <label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>
     <label>報價效期（天）<input type="number" name="validDays" min="1" step="1" inputmode="numeric" value="${esc(x.validDays??30)}"></label>
-    <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}</select></label>
+    <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
     <label>電壓<select name="volt">${opt("","— 待確認 —",!x.volt)}${VOLTS.map(v=>opt(v,v,x.volt===v)).join("")}</select></label>
     <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
   </div></fieldset>
@@ -911,7 +911,7 @@ function quoteSheet(x,o={}){
       <tr><td class="vt" rowspan="9">合約內容</td><td colspan="2">※請確認電壓：${VOLTS.map(v=>ck(x.volt===v)+v).join("　")}：${blank(x.volt==="其他"?esc(x.voltOther||""):"",90)}</td></tr>
       <tr><td colspan="2">＊產品保固壹年（不含耗材），但如遇下列情況，不包含在產品保固範圍內，客戶須自行負擔修護費用。</td></tr>
       <tr><td colspan="2">附註：凡因天災、遇不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。</td></tr>
-      <tr><td colspan="2">＊付款方式：合約回傳並支付定金後，合約正式成立。${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元<br>　定金部分公司不做退還，作為人員作業費用。</td></tr>
+      <tr><td colspan="2">＊付款方式：合約回傳並支付定金後，合約正式成立。${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}${x.pay&&!PAYS.includes(x.pay)?" "+ck(true)+esc(x.pay):""}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元<br>　定金部分公司不做退還，作為人員作業費用。</td></tr>
       <tr><td colspan="2">＊貨款未付清前，設備仍屬${esc(COMPANY.name)}所有。</td></tr>
       <tr><td colspan="2">　送貨抵達，請支付所有尾款。開立支票部份，請開立即期票據，並註明禁止背書轉讓。</td></tr>
       <tr><td colspan="2">＊以上敘述如沒有問題請簽名，以便安排出貨及安裝期程。</td></tr>
