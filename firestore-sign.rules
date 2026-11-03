@@ -1,0 +1,30 @@
+// 把下面整段貼進 Firebase 主控台 → Firestore Database → 規則，
+// 放在 match /databases/{database}/documents { ... } 的大括號裡面，再按「發布」。
+
+    function daisenStaff() {
+      return request.auth != null && (
+        request.auth.token.email.lower() == "daisen0800558929@gmail.com" ||
+        exists(/databases/$(database)/documents/staff/$(request.auth.token.email.lower()))
+      );
+    }
+
+    // 線上簽名連結：知道連結的人只能讀這一張，並且只能簽一次
+    match /signReqs/{token} {
+      allow get: if true;
+      allow list, create, delete: if daisenStaff();
+      allow update: if daisenStaff() || (
+        resource.data.status == "open"
+        && request.time < resource.data.expiresAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "signature", "signerName", "signedAt"])
+        && request.resource.data.status == "signed"
+        && request.resource.data.signature is string
+        && request.resource.data.signature.size() < 400000
+        && request.resource.data.signerName is string
+        && request.resource.data.signerName.size() <= 40
+      );
+    }
+
+    // 紙本簽回檔（照片 / PDF）
+    match /quoteFiles/{quoteId} {
+      allow read, write: if daisenStaff();
+    }

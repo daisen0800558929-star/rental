@@ -1,0 +1,48 @@
+/* 報價單 & 合約書（畫面預覽、列印、轉 PDF/圖片、遠端簽名頁共用） */
+.sheet{--ink:var(--fg);--rule:var(--line);background:var(--surface);color:var(--ink);font-size:13px;line-height:1.45;display:grid;gap:0;font-family:"Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",sans-serif}
+.sheet table{border-collapse:collapse;width:100%;table-layout:fixed}
+.sheet th,.sheet td{border:1px solid var(--rule);padding:4px 6px;vertical-align:middle;text-align:left;font-weight:400;word-break:break-word}
+.sheet .frame{border:2px solid var(--ink)}
+.sheet .frame>table{border:0}
+.sheet .frame>table+table{border-top:1.5px solid var(--ink)}
+.sheet .frame>table tr:first-child>*{border-top:0}
+.sheet .frame>table tr:last-child>*{border-bottom:0}
+.sheet .frame>table tr>*:first-child{border-left:0}
+.sheet .frame>table tr>*:last-child{border-right:0}
+/* 抬頭 */
+.sheet .hd td{border:0;padding:8px 10px;vertical-align:middle}
+.sheet .hd .logo img{height:62px;width:auto;display:block;background:#fff;border-radius:3px}
+.sheet .hd .logo .w{font-size:10.5px;margin-top:2px;letter-spacing:.02em}
+.sheet .hd .mid{text-align:center}
+.sheet .hd .co{font-size:22px;font-weight:700;letter-spacing:.32em;margin-right:-.32em}
+.sheet .hd .tt{font-size:17px;font-weight:700;letter-spacing:.3em;margin:2px -.3em 0 0}
+.sheet .hd .tel{font-size:15px;letter-spacing:.12em;font-variant-numeric:tabular-nums}
+.sheet .hd .no{font-size:11px;margin-top:2px}
+.sheet .hd .qr{text-align:center;width:96px}
+.sheet .hd .qr img{width:78px;height:78px;image-rendering:pixelated;display:block;margin:0 auto;background:#fff}
+.sheet .hd .qr div{font-size:10px;margin-top:2px;white-space:nowrap}
+/* 欄位 */
+.sheet .lb{white-space:nowrap;letter-spacing:.06em}
+.sheet .kv b{font-weight:400;letter-spacing:.06em}
+.sheet .co-side{font-variant-numeric:tabular-nums}
+.sheet .it th{text-align:center;letter-spacing:.12em}
+.sheet .it td{height:30px}
+.sheet .it td.c{text-align:center}
+.sheet .it td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sheet .it .sub{font-size:11.5px;opacity:.8}
+.sheet .svc{font-size:12px;line-height:1.55;white-space:nowrap}
+.sheet .bx{display:inline-block;width:.95em;height:.95em;border:1px solid var(--ink);vertical-align:-.12em;margin:0 2px 0 1px;line-height:.9em;text-align:center;font-size:.95em;font-weight:700}
+.sheet .tot td{height:28px}
+.sheet .tot .nt{vertical-align:top;white-space:pre-wrap}
+.sheet .tot .lbl{text-align:center;letter-spacing:.12em}
+/* 合約內容 */
+.sheet .ct td{font-size:12px;line-height:1.5;padding:3px 6px}
+.sheet .ct .vt{writing-mode:vertical-rl;text-orientation:upright;text-align:center;font-weight:700;letter-spacing:.4em;font-size:14px;width:30px;padding:6px 0}
+.sheet .ct .blank{display:inline-block;min-width:72px;border-bottom:1px solid var(--ink);text-align:center;font-variant-numeric:tabular-nums}
+.sheet .bank td{font-size:12.5px;padding:5px 8px;letter-spacing:.03em}
+/* 簽名 */
+.sheet .sg td{height:118px;vertical-align:top;padding:6px 8px}
+.sheet .sg .sigimg{max-height:78px;max-width:100%;display:block;margin:4px 0 0;background:#fff}
+.sheet .sg .who{font-size:11.5px;margin-top:4px}
+.sheet .sg .paper{display:inline-block;margin-top:14px;padding:3px 8px;border:1.5px solid var(--ink);font-size:12px;letter-spacing:.08em}
+.sheet .muted{opacity:.75}

@@ -8,6 +8,8 @@
 <link rel="apple-touch-icon" href="logo.png">
 <title>大森租賃管理系統</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="sheet.css">
+<script src="lib/qrcode.js"></script>
 <style>
 /* Layout: sticky header + tab bar, one-column work list; stat strip on overview; dialog forms */
 :root{
@@ -107,34 +109,25 @@ table.items td.idx{color:var(--muted);text-align:center;width:36px}
 .totals .grand{font-size:17px;font-weight:700}
 fieldset{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0;min-width:0}
 legend{font-size:13px;color:var(--muted);padding:0 6px}
-/* 報價單（預覽與列印） */
-.sheet{--ink:var(--fg);--rule:var(--line);background:var(--surface);color:var(--ink);font-size:13.5px;line-height:1.5;display:grid;gap:14px}
-.sheet .sh-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:8px;flex-wrap:wrap}
-.sheet .sh-co{font-size:19px;font-weight:700;letter-spacing:.04em}
-.sheet .sh-title{font-size:22px;font-weight:700;letter-spacing:.5em}
-.sheet table{border-collapse:collapse;width:100%}
-.sheet th,.sheet td{border:1px solid var(--rule);padding:5px 7px;vertical-align:top;text-align:left}
-.sheet th{font-weight:500;white-space:nowrap;width:1%}
-.sheet .grid-info td{width:auto}
-.sheet .it th{text-align:center;width:auto}
-.sheet .it td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.sheet .it td.c{text-align:center}
-.sheet .sign{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.sheet .signbox{border:1px solid var(--rule);min-height:120px;padding:8px 10px;display:grid;grid-template-rows:auto 1fr auto}
-.sheet .signbox img{max-height:90px;max-width:100%;background:#fff}
-.sheet .small{font-size:12px;color:var(--muted)}
-.sheet-wrap{border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto}
-.sheet-wrap .sheet{min-width:640px}
+.sheet-wrap{border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;background:var(--surface)}
+.sheet-wrap .sheet{min-width:700px}
+/* 轉 PDF / 圖片時的離屏畫布：固定 A4 寬度、白底黑字 */
+.sheet-render{position:fixed;left:-12000px;top:0;width:760px;padding:17px;background:#fff}
+.sheet-render .sheet,#printArea .sheet,.sheet.light{--ink:#000;--rule:#444;--fg:#000;--surface:#fff;background:#fff;color:#000}
+.sendopts{display:grid;gap:10px}
+.sendopts button{text-align:left;display:grid;gap:2px;padding:12px 14px}
+.sendopts button .note{font-weight:400}
+.linkbox{font-family:var(--font-mono);font-size:12.5px;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.scanview{max-width:100%;display:block;margin:0 auto;border:1px solid var(--line);background:#fff}
 .sigpad{width:100%;height:220px;background:#fff;border:1px dashed var(--muted);border-radius:6px;touch-action:none;display:block}
 #printArea{display:none}
 @media print{
-  @page{size:A4;margin:12mm}
+  @page{size:A4;margin:9mm 10mm}
   body{background:#fff!important}
   body>*:not(#printArea){display:none!important}
   #printArea{display:block!important}
-  #printArea .sheet{--ink:#000;--rule:#555;background:#fff;color:#000}
-  #printArea .sheet .small{color:#333}
-  #printArea .sheet-wrap{border:0;padding:0}
+  #printArea .sheet-wrap{border:0;padding:0;overflow:visible}
+  #printArea .sheet{min-width:0}
 }
 html,body{margin:0}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -253,7 +246,7 @@ html,body{margin:0}
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc,query,where,Timestamp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail,createUserWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 const firebaseConfig={apiKey:"AIzaSyA-lXRTR38AeFMgSwYCD91Akywgxgb5ZB4",authDomain:"daisen-rental.firebaseapp.com",projectId:"daisen-rental",storageBucket:"daisen-rental.firebasestorage.app",messagingSenderId:"687274188760",appId:"1:687274188760:web:41035f0278d21ebd99dcad"};
 const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fbApp);
@@ -263,7 +256,7 @@ const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
-const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號"};
+const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -747,39 +740,52 @@ $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){c
 $("#main").addEventListener("keydown",e=>{if(e.key!=="Enter")return;const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 
 /* ---------- 報價 ---------- */
-const QSTATUS={draft:["草稿","mute"],sent:["已報價",""],signed:["已簽回","ok"],lost:["未成交","bad"]};
+const QSTATUS={draft:["草稿","mute"],sent:["待簽回","warn"],signed:["已簽回","ok"],lost:["未成交","bad"]};
+const SIGNM={onsite:"現場簽名",remote:"線上簽名",paper:"紙本簽回"};
 const TAX={none:"未稅",excl:"外加 5% 營業稅",incl:"含稅"};
+const SVCS=["出租","銷售","維修"];
+const VOLTS=["單相110V","單相220V","三相220V","三相380V","其他"];
+const PAYS=["現金","匯款","支票"];
+const SIGN_DAYS=30; /* 簽名連結有效天數 */
 function quoteCalc(q){
   const items=(q.items||[]).map(i=>({...i,sub:Math.round((+i.qty||0)*(+i.price||0))}));
   const sum=items.reduce((s,i)=>s+i.sub,0);
   const tax=q.taxMode==="excl"?Math.round(sum*0.05):0;
-  return{items,sum,tax,total:sum+tax};
+  const total=sum+tax,deposit=Math.round(total/2);
+  return{items,sum,tax,total,deposit,balance:total-deposit};
 }
+const signUrl=x=>x.signToken&&x.status!=="signed"&&x.signExpires&&x.signExpires>new Date().toISOString()?new URL("sign.html?t="+x.signToken,location.href).href:"";
 function viewQuotes(loading){
   const qq=q.trim().toLowerCase();
-  const rows=S.quotes.filter(x=>!qq||[x.no,x.cust?.name,x.cust?.contact,x.sales].join(" ").toLowerCase().includes(qq))
+  const all=S.quotes.filter(x=>filter==="all"||(x.status||"draft")===filter);
+  const rows=all.filter(x=>!qq||[x.no,x.cust?.name,x.cust?.contact,x.sales].join(" ").toLowerCase().includes(qq))
     .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.no).localeCompare(String(a.no))).map(x=>{
     const st=QSTATUS[x.status]||QSTATUS.draft;
+    const sub=x.status==="signed"&&SIGNM[x.signMethod]?"·"+SIGNM[x.signMethod].slice(0,2):x.status==="sent"&&x.signToken?"·已傳送":"";
     return `<div class="row" data-open="quote" data-id="${esc(x.id)}" tabindex="0">
       <div><div class="t">${esc(x.cust?.name||"（未填客戶）")}</div><div class="m"><span class="mono">${esc(x.no)}</span> · ${esc(x.date)}${x.sales?" · 業務 "+esc(x.sales):""} · ${(x.items||[]).length} 項</div></div>
-      <div class="r"><span class="pill ${st[1]}">${st[0]}</span><span class="mono m">${money(quoteCalc(x).total)}</span></div></div>`});
-  return `<div class="toolbar"><input id="q" placeholder="搜尋單號、客戶、業務">${canWrite?'<button class="btn primary" type="button" data-new="quote">＋ 新增報價</button>':""}</div>
-  <div class="list">${emptyOr(rows,loading,"還沒有報價單。按「新增報價」建立第一張。")}</div>`;
+      <div class="r"><span class="pill ${st[1]}">${st[0]}${sub}</span><span class="mono m">${money(quoteCalc(x).total)}</span></div></div>`});
+  const n=k=>S.quotes.filter(x=>(x.status||"draft")===k).length;
+  return `<div class="toolbar"><input id="q" placeholder="搜尋單號、客戶、業務"><select id="f" style="flex:0 1 140px">
+    <option value="all">全部報價</option>${Object.entries(QSTATUS).map(([k,v])=>`<option value="${k}">${v[0]}（${n(k)}）</option>`).join("")}</select>${canWrite?'<button class="btn primary" type="button" data-new="quote">＋ 新增報價</button>':""}</div>
+  <div class="list">${emptyOr(rows,loading,S.quotes.length?"沒有符合條件的報價單":"還沒有報價單。按「新增報價」建立第一張。")}</div>`;
 }
 function itemRow(i={}){
   return `<tr><td class="idx"></td>
   <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="設備名稱、型號、規格"></td>
-  <td style="width:120px"><input name="i_cat" list="catList" value="${esc(i.cat||"")}"></td>
-  <td style="width:70px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
-  <td style="width:80px"><input name="i_qty" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.qty??1)}"></td>
-  <td style="width:110px"><input name="i_price" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.price??"")}"></td>
-  <td class="num mono" style="width:110px" data-sub></td>
+  <td style="width:110px"><input name="i_cat" list="catList" value="${esc(i.cat||"")}"></td>
+  <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
+  <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
+  <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
+  <td style="width:72px"><input name="i_qty" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.qty??1)}"></td>
+  <td style="width:100px"><input name="i_price" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.price??"")}"></td>
+  <td class="num mono" style="width:90px" data-sub></td>
   <td style="width:40px"><button class="btn small" type="button" data-delrow aria-label="刪除此列">✕</button></td></tr>`;
 }
 function quoteForm(src,copy){
   const isNew=!src||copy;
-  const x=src?JSON.parse(JSON.stringify(src)):{date:todayStr(),sales:me.name||"",salesMobile:me.mobile||"",taxMode:"excl",status:"draft",items:[{}],cust:{}};
-  if(copy){x.date=todayStr();x.status="draft";delete x.signature;delete x.signedAt;delete x.signerName}
+  const x=src?JSON.parse(JSON.stringify(src)):{date:todayStr(),sales:me.name||"",salesMobile:me.mobile||"",taxMode:"excl",status:"draft",validDays:30,items:[{}],cust:{}};
+  if(copy){x.date=todayStr();x.status="draft";["signature","signedAt","signerName","signMethod","signToken","signExpires","sentAt","hasScan"].forEach(k=>delete x[k])}
   const c=x.cust||{};
   const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
   openDlg(`<h3>${isNew?(copy?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
@@ -794,8 +800,8 @@ function quoteForm(src,copy){
     <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
     <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
     <label>手機電話<input name="c_mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
-    ${addrFields("ca","公司地址",c.addr||parseAddr(c.address))}
-    ${addrFields("cd","送貨地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address)}
+    ${addrFields("ca","通訊地址",c.addr||parseAddr(c.address))}
+    ${addrFields("cd","安裝地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address)}
     <label class="full" id="saveCustWrap"><span><input type="checkbox" name="saveCust" style="width:auto" checked> 同時新增到客戶資料</span></label>
   </div></fieldset>
   <fieldset><legend>報價資訊</legend><div class="grid2">
@@ -803,47 +809,57 @@ function quoteForm(src,copy){
     <label>狀態<select name="status">${Object.entries(QSTATUS).map(([k,v])=>opt(k,v[0],k===x.status)).join("")}</select></label>
     <label>業務人員<input name="sales" value="${esc(x.sales||"")}"></label>
     <label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>
+    <label>報價效期（天）<input type="number" name="validDays" min="1" step="1" inputmode="numeric" value="${esc(x.validDays??30)}"></label>
+    <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}</select></label>
+    <label>電壓<select name="volt">${opt("","— 待確認 —",!x.volt)}${VOLTS.map(v=>opt(v,v,x.volt===v)).join("")}</select></label>
+    <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items"><thead><tr><th>項次</th><th>設備規格</th><th>類別</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" style="min-width:900px"><thead><tr><th>項次</th><th>產品名稱 / 規格</th><th>品項</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
     <div class="totals" id="totals" style="margin-top:10px"></div>
   </fieldset>
-  <label>備註<textarea name="note" placeholder="例：報價有效期限 30 天、交貨方式、付款條件">${esc(x.note||"")}</textarea></label>
+  <label>注意事項<textarea name="note" placeholder="例：交貨方式、安裝位置、特殊需求">${esc(x.note||"")}</textarea></label>
   <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立報價單":"儲存"}</button></div>`,
   async fd=>{
     const g=k=>fd.getAll(k).map(v=>String(v).trim());
-    const sp=g("i_spec"),ca=g("i_cat"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
-    const items=sp.map((v,i)=>({spec:v,cat:ca[i],unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
+    const sp=g("i_spec"),ca=g("i_cat"),sv=g("i_svc"),dy=g("i_days"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
+    const items=sp.map((v,i)=>({spec:v,cat:ca[i],svc:sv[i],days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
     const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
     const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
     if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
     {const e=await taxGate("q");if(e){showErr({message:e});return false}}
     cust.taxExempt=fd.get("q_exempt")?val(fd,"q_exemptType"):"";
-    {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"公司地址")||(cdSame?"":addrErr(qd,"送貨地址"));if(e){showErr({message:e});return false}}
+    {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"通訊地址")||(cdSame?"":addrErr(qd,"安裝地址"));if(e){showErr({message:e});return false}}
     if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
     let customerId=val(fd,"customerId");
     if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
-    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:fmtMobile(val(fd,"salesMobile")),taxMode:val(fd,"taxMode"),items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:fmtMobile(val(fd,"salesMobile")),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
       d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
       await db.collection("quotes").doc().set(d);toast("已建立報價單 "+d.no);
-    }else{await db.doc("quotes/"+x.id).update(d);toast("已儲存")}
+    }else{
+      await db.doc("quotes/"+x.id).update(d);toast("已儲存");
+      /* 已傳出的簽名連結同步成最新內容 */
+      if(x.signToken&&d.status!=="signed")try{await updateDoc(doc(fs,"signReqs",x.signToken),{sheetHtml:quoteSheet({...x,...d},{noQr:true})})}catch(e){}
+    }
   },true);
   const body=$("#itemsBody");
   const calc=()=>{
     body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;
-      const v=n=>+tr.querySelector(`[name=${n}]`).value||0;tr.querySelector("[data-sub]").textContent=Math.round(v("i_qty")*v("i_price")).toLocaleString("zh-TW")});
+      const v=n=>+tr.querySelector(`[name=${n}]`).value||0;tr.querySelector("[data-sub]").textContent=Math.round(v("i_qty")*v("i_price")).toLocaleString("zh-TW");
+      tr.querySelector("[name=i_days]").disabled=tr.querySelector("[name=i_svc]").value!=="出租"});
     const t=quoteCalc({taxMode:form.elements.taxMode.value,items:[...body.querySelectorAll("tr")].map(tr=>({qty:tr.querySelector("[name=i_qty]").value,price:tr.querySelector("[name=i_price]").value}))});
-    $("#totals").innerHTML=`<span>小計合計</span><span class="mono">${money(t.sum)}</span>${form.elements.taxMode.value==="excl"?`<span>營業稅 5%</span><span class="mono">${money(t.tax)}</span>`:""}<span class="grand">總計${form.elements.taxMode.value==="incl"?"（含稅）":form.elements.taxMode.value==="none"?"（未稅）":""}</span><span class="grand mono">${money(t.total)}</span>`;
+    $("#totals").innerHTML=`<span>小計</span><span class="mono">${money(t.sum)}</span>${form.elements.taxMode.value==="excl"?`<span>稅額 5%</span><span class="mono">${money(t.tax)}</span>`:""}<span class="grand">總額${form.elements.taxMode.value==="incl"?"（含稅）":form.elements.taxMode.value==="none"?"（未稅）":""}</span><span class="grand mono">${money(t.total)}</span><span class="note">定金 50%</span><span class="note mono">${money(t.deposit)}</span>`;
     $("#saveCustWrap").hidden=!!form.elements.customerId.value;
+    form.elements.voltOther.disabled=form.elements.volt.value!=="其他";
   };
   form.oninput=calc;
   $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());calc();body.lastElementChild.querySelector("input").focus()};
-  body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
+  body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input,select").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
@@ -853,58 +869,215 @@ function quoteForm(src,copy){
   bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});bindTax("q","c_name","c_taxId");
   calc();
 }
-function quoteSheet(x){
-  const t=quoteCalc(x),c=x.cust||{},rows=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td><td>${esc(i.spec)}</td><td class="c">${esc(i.cat||"")}</td><td class="c">${esc(i.unit||"")}</td><td class="n">${(+i.qty).toLocaleString("zh-TW")}</td><td class="n">${(+i.price).toLocaleString("zh-TW")}</td><td class="n">${i.sub.toLocaleString("zh-TW")}</td></tr>`).join("");
-  const sum=`<tr><td colspan="6" class="n">小計合計</td><td class="n">${t.sum.toLocaleString("zh-TW")}</td></tr>${x.taxMode==="excl"?`<tr><td colspan="6" class="n">營業稅 5%</td><td class="n">${t.tax.toLocaleString("zh-TW")}</td></tr>`:""}<tr><td colspan="6" class="n"><b>總計（新台幣${x.taxMode==="incl"?"，含稅":x.taxMode==="none"?"，未稅":"，含稅"}）</b></td><td class="n"><b>${t.total.toLocaleString("zh-TW")}</b></td></tr>`;
+
+/* 報價單 & 合約書版面。opt.qr = QR code 內容（預設官網），opt.noQr = 不放 QR（遠端簽名頁用） */
+function qrImg(text){try{if(!window.qrcode)return"";const g=qrcode(0,"M");g.addData(text);g.make();return `<img src="${g.createDataURL(4,0)}" alt="QR code">`}catch(e){return""}}
+function quoteSheet(x,o={}){
+  const t=quoteCalc(x),c=x.cust||{},N=v=>(+v||0).toLocaleString("zh-TW");
+  const ck=on=>`<span class="bx">${on?"✓":""}</span>`;
+  const blank=(v,w)=>`<span class="blank"${w?` style="min-width:${w}px"`:""}>${v||"&nbsp;"}</span>`;
+  const items=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td>
+    <td>${esc(i.spec)}${i.cat?`<div class="sub">${esc(i.cat)}</div>`:""}</td>
+    <td class="svc">${ck(i.svc==="出租")}出租服務；天數：${i.svc==="出租"&&i.days?esc(i.days):""}<br>${ck(i.svc==="銷售")}銷售服務<br>${ck(i.svc==="維修")}維修服務</td>
+    <td class="n">${N(i.qty)} ${esc(i.unit||"")}</td><td class="n">${N(i.price)}</td><td class="n">${N(i.sub)}</td></tr>`);
+  while(items.length<3)items.push(`<tr><td class="c">${items.length+1}</td><td></td><td></td><td></td><td></td><td></td></tr>`);
+  const taxTxt=x.taxMode==="excl"?"稅額5%外加":x.taxMode==="incl"?"含稅":"未稅";
+  const qr=o.noQr?"":(o.qr?qrImg(o.qr)+`<div>掃描線上簽名</div>`:qrImg("https://"+COMPANY.web));
+  const signed=x.status==="signed";
+  const sigCell=x.signature&&signed?`<img class="sigimg" src="${x.signature}" alt="客戶簽名"><div class="who">簽署人：${esc(x.signerName||"")}　日期：${esc(String(x.signedAt||"").slice(0,10))}${x.signMethod==="remote"?"　（線上簽署）":""}</div>`
+    :x.signMethod==="paper"&&signed?`<div><span class="paper">已紙本簽回</span></div><div class="who">簽署人：${esc(x.signerName||"")}　日期：${esc(String(x.signedAt||"").slice(0,10))}</div>`:"";
+  const COLS=`<colgroup><col style="width:6%"><col style="width:31%"><col style="width:22%"><col style="width:11%"><col style="width:14%"><col style="width:16%"></colgroup>`;
   return `<div class="sheet">
-    <div class="sh-head"><div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img src="logo.png" alt="大森節能" style="height:56px;width:auto;background:#fff;border-radius:4px"><div style="display:grid;gap:2px"><div class="sh-co">${esc(COMPANY.name)}</div><div class="small">全國服務專線 <b style="color:var(--ink)">${esc(COMPANY.hotline)}</b>　網站 ${esc(COMPANY.web)}　信箱 ${esc(COMPANY.email)}</div><div class="small">總公司：${esc(COMPANY.hq)}　北部服務處：${esc(COMPANY.north)}</div></div></div><div style="text-align:right"><div class="sh-title">報價單</div><div class="small">單號 ${esc(x.no||"")}</div></div></div>
-    <table class="grid-info"><tbody>
-      <tr><th>客戶名稱</th><td colspan="3">${esc(c.name||"")}</td><th>報價日期</th><td>${esc(x.date||"")}</td></tr>
-      <tr><th>統編</th><td>${esc(c.taxId||"")}</td><th>公司電話</th><td>${esc(c.phone||"")}</td><th>傳真</th><td>${esc(c.fax||"")}</td></tr>
-      <tr><th>聯絡人</th><td>${esc(c.contact||"")}</td><th>手機電話</th><td>${esc(c.mobile||"")}</td><th>業務人員</th><td>${esc(x.sales||"")}</td></tr>
-      <tr><th>公司地址</th><td colspan="3">${esc(c.address||"")}</td><th>業務手機</th><td>${esc(x.salesMobile||"")}</td></tr>
-      <tr><th>送貨地址</th><td colspan="5">${esc(c.delivery||c.address||"")}</td></tr>
+  <div class="frame">
+    <table class="hd"><colgroup><col style="width:24%"><col><col style="width:96px"></colgroup><tbody><tr>
+      <td class="logo"><img src="logo.png" alt="大森節能"><div class="w">${esc(COMPANY.web)}</div></td>
+      <td class="mid"><div class="co">${esc(COMPANY.name)}</div><div class="tt">報價單&amp;合約書</div><div class="tel">${esc(COMPANY.hotline)}</div><div class="no">單號 ${esc(x.no||"")}</div></td>
+      <td class="qr">${qr}</td></tr></tbody></table>
+    <table class="info"><colgroup><col style="width:12%"><col style="width:23%"><col style="width:8%"><col style="width:22%"><col style="width:35%"></colgroup><tbody>
+      <tr><td class="lb">客戶名稱：</td><td colspan="3">${esc(c.name||"")}</td><td class="co-side">報價日期：${esc(x.date||"")}</td></tr>
+      <tr><td class="lb">聯絡電話：</td><td>${esc(c.phone||"")}</td><td class="lb">傳真：</td><td>${esc(c.fax||"")}</td><td class="co-side">業務手機：${esc(x.salesMobile||"")}</td></tr>
+      <tr><td class="lb">聯絡人：</td><td>${esc(c.contact||"")}</td><td class="lb">手機：</td><td>${esc(c.mobile||"")}</td><td class="co-side">公司電話：${esc(COMPANY.tel)}</td></tr>
+      <tr><td class="lb">通訊地址：</td><td colspan="3">${esc(c.address||"")}</td><td class="co-side">總公司電話：${esc(COMPANY.hqTel)}</td></tr>
+      <tr><td class="lb">安裝地址：</td><td colspan="3">${esc(c.delivery||c.address||"")}</td><td class="co-side">公司傳真：${esc(COMPANY.fax)}</td></tr>
+      <tr><td class="lb">統一編號：</td><td colspan="3">${esc(c.taxId||"")}</td><td class="co-side">報價效期：${esc(x.validDays||30)}日／${taxTxt}</td></tr>
     </tbody></table>
-    <table class="it"><thead><tr><th>項次</th><th>設備規格</th><th>類別</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th></tr></thead><tbody>${rows}${sum}</tbody></table>
-    <table><tbody><tr><th>備註</th><td style="white-space:pre-wrap;min-height:48px">${esc(x.note||"")}</td></tr></tbody></table>
-    <div class="sign">
-      <div class="signbox"><div>客戶簽章</div><div>${x.signature?`<img src="${x.signature}" alt="客戶簽名">`:""}</div><div class="small">${x.signedAt?"簽署人："+esc(x.signerName||"")+"　日期："+esc(x.signedAt.slice(0,10)):"簽署人：＿＿＿＿＿＿　日期：＿＿＿＿＿＿"}</div></div>
-      <div class="signbox"><div>${esc(COMPANY.name)}</div><div></div><div class="small">業務：${esc(x.sales||"")}　${esc(x.salesMobile||"")}　服務專線 ${esc(COMPANY.hotline)}</div></div>
-    </div>
-  </div>`;
+    <table class="it">${COLS}<thead><tr><th>項次</th><th>產品名稱</th><th>類別</th><th>數量</th><th>單價</th><th>小計</th></tr></thead><tbody>${items.join("")}</tbody></table>
+    <table class="tot">${COLS}<tbody>
+      <tr><td colspan="4" rowspan="3" class="nt">※注意事項：${x.note?"\n"+esc(x.note):""}</td><td class="lbl">小計</td><td class="n" style="text-align:right">${N(t.sum)}</td></tr>
+      <tr><td class="lbl">稅額(5%)</td><td style="text-align:right">${x.taxMode==="excl"?N(t.tax):x.taxMode==="incl"?"含稅":"未稅"}</td></tr>
+      <tr><td class="lbl"><b>總額</b></td><td style="text-align:right"><b>${N(t.total)}</b></td></tr>
+    </tbody></table>
+    <table class="ct"><colgroup><col style="width:30px"><col><col style="width:22%"></colgroup><tbody>
+      <tr><td class="vt" rowspan="9">合約內容</td><td colspan="2">※請確認電壓：${VOLTS.map(v=>ck(x.volt===v)+v).join("　")}：${blank(x.volt==="其他"?esc(x.voltOther||""):"",90)}</td></tr>
+      <tr><td colspan="2">＊產品保固壹年（不含耗材），但如遇下列情況，不包含在產品保固範圍內，客戶須自行負擔修護費用。</td></tr>
+      <tr><td colspan="2">附註：凡因天災、遇不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。</td></tr>
+      <tr><td colspan="2">＊付款方式：合約回傳並支付定金後，合約正式成立。${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元<br>　定金部分公司不做退還，作為人員作業費用。</td></tr>
+      <tr><td colspan="2">＊貨款未付清前，設備仍屬${esc(COMPANY.name)}所有。</td></tr>
+      <tr><td colspan="2">　送貨抵達，請支付所有尾款。開立支票部份，請開立即期票據，並註明禁止背書轉讓。</td></tr>
+      <tr><td colspan="2">＊以上敘述如沒有問題請簽名，以便安排出貨及安裝期程。</td></tr>
+      <tr><td rowspan="2">　匯款後請來電告知帳號後五碼，或將匯款單據傳真拍照至公司，無此動作將視為訂單未成立。</td><td>定金50%　${t.total?N(t.deposit):""}</td></tr>
+      <tr><td>尾款50%　${t.total?N(t.balance):""}</td></tr>
+    </tbody></table>
+    <table class="bank"><tbody><tr><td>戶名：${esc(COMPANY.bankName)}　銀行：${esc(COMPANY.bank)}　帳號：${esc(COMPANY.bankAcct)}</td></tr></tbody></table>
+    <table class="sg"><colgroup><col style="width:60%"><col></colgroup><tbody><tr>
+      <td>客戶簽名：${sigCell}</td>
+      <td>服務專員：${esc(x.sales||"")}<div class="who">${x.salesMobile?"手機 "+esc(x.salesMobile)+"　":""}服務專線 ${esc(COMPANY.hotline)}</div></td></tr></tbody></table>
+  </div></div>`;
 }
-function printQuote(x){$("#printArea").innerHTML=`<div class="sheet-wrap">${quoteSheet(x)}</div>`;const old=document.title;document.title="報價單_"+(x.no||"")+"_"+(x.cust?.name||"");window.print();document.title=old}
+function printQuote(x){$("#printArea").innerHTML=`<div class="sheet-wrap">${quoteSheet(x,{qr:signUrl(x)})}</div>`;const old=document.title;document.title=fileBase(x);window.print();document.title=old}
+const fileBase=x=>("報價單_"+(x.no||"")+"_"+(x.cust?.name||"")).replace(/[\\/:*?"<>|\s]+/g,"_");
 function quoteDetail(x){
-  const st=QSTATUS[x.status]||QSTATUS.draft;
+  const st=QSTATUS[x.status]||QSTATUS.draft,link=signUrl(x);
+  const info=x.status==="signed"?`已簽回：${SIGNM[x.signMethod]||"簽名"}　${esc(String(x.signedAt||"").slice(0,10))}${x.signerName?"　簽署人 "+esc(x.signerName):""}`
+    :link?`已傳給客戶簽名，連結有效到 ${esc(x.signExpires.slice(0,10))}。客戶簽完會自動更新。`:"";
   openDlg(`<h3>報價單 <span class="mono">${esc(x.no)}</span>　<span class="pill ${st[1]}">${st[0]}</span></h3>
-  <div class="sheet-wrap">${quoteSheet(x)}</div>
-  <div class="actions">${canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span><button class="btn" type="button" id="copyQ">複製</button><button class="btn" type="button" id="editQ">編輯</button><button class="btn" type="button" id="signQ">'+(x.signature?"重新簽名":"客戶簽名")+'</button>':""}<button class="btn primary" type="button" id="printQ">列印 / 存成 PDF</button><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
+  ${info?`<div class="note">${info}</div>`:""}
+  <div class="sheet-wrap">${quoteSheet(x,{qr:link})}</div>
+  ${canWrite?`<div class="actions" style="justify-content:flex-start;flex-wrap:wrap">
+    <button class="btn" type="button" id="signQ">${x.signature&&x.status==="signed"?"重新簽名（現場）":"現場簽名"}</button>
+    <button class="btn" type="button" id="sendQ">傳給客戶簽名</button>
+    <button class="btn" type="button" id="upQ">上傳簽回檔</button>
+    ${x.hasScan?'<button class="btn" type="button" id="scanQ">查看簽回檔</button>':""}</div>`:""}
+  <div class="actions">${canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span><button class="btn" type="button" id="copyQ">複製</button><button class="btn" type="button" id="editQ">編輯</button>':""}<button class="btn primary" type="button" id="printQ">列印 / 存成 PDF</button><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
   const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
   on("#printQ",()=>printQuote(x));
   on("#editQ",()=>{dlg.close();quoteForm(x)});
   on("#copyQ",()=>{dlg.close();quoteForm(x,true)});
   on("#signQ",()=>{dlg.close();signQuote(x)});
-  if(canWrite)confirmDelete("#del","報價單",()=>db.doc("quotes/"+x.id).delete());
+  on("#sendQ",()=>{dlg.close();sendForSign(x)});
+  on("#upQ",()=>{dlg.close();uploadSigned(x)});
+  on("#scanQ",()=>{dlg.close();viewScan(x)});
+  if(canWrite)confirmDelete("#del","報價單",async()=>{await db.doc("quotes/"+x.id).delete();
+    if(x.signToken)try{await deleteDoc(doc(fs,"signReqs",x.signToken))}catch(e){}
+    if(x.hasScan)try{await deleteDoc(doc(fs,"quoteFiles",x.id))}catch(e){}});
 }
-function signQuote(x){
-  openDlg(`<h3>客戶簽名　<span class="mono note">${esc(x.no)}</span></h3>
-  <div class="note">請客戶在下方框內用手指或滑鼠簽名。</div>
-  <canvas class="sigpad" id="sigpad"></canvas>
-  <label>簽署人姓名<input name="signerName" value="${esc(x.signerName||x.cust?.contact||"")}"></label>
-  <div class="actions"><button class="btn" type="button" id="clearSig">清除重簽</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認簽名</button></div>`,
-  async fd=>{
-    if(!drawn){showErr({message:"請先在框內簽名。"});return false}
-    const img=cv.toDataURL("image/png");
-    await db.doc("quotes/"+x.id).update({signature:img,signerName:val(fd,"signerName"),signedAt:new Date().toISOString(),status:"signed"});toast("已完成簽名");
-  });
-  const cv=$("#sigpad"),ctx=cv.getContext("2d");let drawn=false,down=false;
-  const size=()=>{const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#fff";ctx.fillRect(0,0,r.width,r.height);ctx.lineWidth=2.4;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#111";drawn=false};
+/* 簽名板：回傳 {get():dataURL|null, clear()} */
+function sigPad(cv){
+  const ctx=cv.getContext("2d");let drawn=false,down=false;
+  const size=()=>{const r=cv.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);cv.width=r.width*dpr;cv.height=r.height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#fff";ctx.fillRect(0,0,r.width,r.height);ctx.lineWidth=2.4;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#111";drawn=false};
   size();
   const pt=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
   cv.addEventListener("pointerdown",e=>{down=true;cv.setPointerCapture(e.pointerId);const[a,b]=pt(e);ctx.beginPath();ctx.moveTo(a,b)});
   cv.addEventListener("pointermove",e=>{if(!down)return;const[a,b]=pt(e);ctx.lineTo(a,b);ctx.stroke();drawn=true});
   cv.addEventListener("pointerup",()=>down=false);cv.addEventListener("pointercancel",()=>down=false);
-  $("#clearSig").onclick=size;
+  return{clear:size,get:()=>drawn?cv.toDataURL("image/png"):null};
+}
+function signQuote(x){
+  openDlg(`<h3>現場簽名　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">請客戶在下方框內用手指或滑鼠簽名。</div>
+  <canvas class="sigpad" id="sigpad"></canvas>
+  <label>簽署人姓名<input name="signerName" value="${esc(x.signerName||x.cust?.contact||"")}"></label>
+  <div class="actions"><button class="btn" type="button" id="clearSig">清除重簽</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認簽名</button></div>`,
+  async fd=>{
+    const img=pad.get();if(!img){showErr({message:"請先在框內簽名。"});return false}
+    await db.doc("quotes/"+x.id).update({signature:img,signerName:val(fd,"signerName"),signedAt:new Date().toISOString(),status:"signed",signMethod:"onsite"});toast("已完成簽名");
+    if(x.signToken)try{await deleteDoc(doc(fs,"signReqs",x.signToken))}catch(e){}
+  });
+  const pad=sigPad($("#sigpad"));$("#clearSig").onclick=pad.clear;
+}
+
+/* ---------- 客戶不在現場：傳送待簽版 ---------- */
+const loadScript=(()=>{const c={};return src=>c[src]||(c[src]=new Promise((ok,no)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>{delete c[src];no(new Error("載入元件失敗，請檢查網路後再試一次。"))};document.head.appendChild(s)}))})();
+function newToken(){const a=new Uint8Array(18);crypto.getRandomValues(a);return [...a].map(b=>b.toString(36).padStart(2,"0")).join("").slice(0,30)}
+/* 建立（或延長）這張報價單的線上簽名連結，回傳最新的報價單資料 */
+async function ensureSignReq(x){
+  const token=x.signToken||newToken(),exp=new Date(Date.now()+SIGN_DAYS*864e5);
+  const y={...x,signToken:token,signExpires:exp.toISOString(),status:x.status==="draft"||!x.status?"sent":x.status};
+  await setDoc(doc(fs,"signReqs",token),{quoteId:x.id,no:x.no||"",cust:x.cust?.name||"",contact:x.cust?.contact||"",sheetHtml:quoteSheet(y,{noQr:true}),status:"open",createdAt:new Date().toISOString(),createdBy:me.email,expiresAt:Timestamp.fromDate(exp)});
+  await db.doc("quotes/"+x.id).update({signToken:token,signExpires:y.signExpires,status:y.status,sentAt:new Date().toISOString()});
+  return y;
+}
+/* 把報價單畫成 A4 圖片或 PDF */
+async function renderSheet(x,kind){
+  await loadScript("lib/html2canvas.min.js");
+  if(kind==="pdf")await loadScript("lib/jspdf.umd.min.js");
+  const box=document.createElement("div");box.className="sheet-render";box.innerHTML=quoteSheet(x,{qr:signUrl(x)});document.body.appendChild(box);
+  try{
+    await Promise.all([...box.querySelectorAll("img")].map(i=>i.decode?i.decode().catch(()=>{}):null));
+    try{await document.fonts.ready}catch(e){}
+    const cv=await html2canvas(box,{scale:2,backgroundColor:"#ffffff",logging:false});
+    if(kind==="png")return await new Promise(ok=>cv.toBlob(b=>ok(new File([b],fileBase(x)+".png",{type:"image/png"})),"image/png"));
+    const pdf=new window.jspdf.jsPDF({orientation:"p",unit:"mm",format:"a4"});
+    let w=210,h=cv.height*w/cv.width;if(h>297){h=297;w=cv.width*h/cv.height}
+    pdf.addImage(cv.toDataURL("image/jpeg",0.92),"JPEG",(210-w)/2,0,w,h);
+    return new File([pdf.output("blob")],fileBase(x)+".pdf",{type:"application/pdf"});
+  }finally{box.remove()}
+}
+function sendForSign(x){
+  openDlg(`<h3>傳給客戶簽名　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">客戶不在現場時使用。三種方式都附同一個簽名連結（有效 ${SIGN_DAYS} 天），客戶線上簽完會自動回到這張報價單；客戶若列印簽名後拍照回傳，請用「上傳簽回檔」。</div>
+  <div class="sendopts">
+    <button class="btn" type="button" data-send="link"><b>傳簽名連結（建議）</b><span class="note">客戶用手機打開，直接用手指簽名</span></button>
+    <button class="btn" type="button" data-send="pdf"><b>傳 PDF 檔</b><span class="note">可列印簽名回傳，或掃上面的 QR code 線上簽</span></button>
+    <button class="btn" type="button" data-send="png"><b>傳圖片</b><span class="note">在 LINE 裡直接就能看</span></button>
+  </div>
+  <div id="sendOut"></div>
+  <div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null);
+  const out=$("#sendOut");
+  form.querySelectorAll("[data-send]").forEach(b=>b.onclick=async()=>{
+    const kind=b.dataset.send;form.querySelectorAll("[data-send]").forEach(k=>k.disabled=true);
+    out.innerHTML=`<div class="note">${kind==="link"?"建立簽名連結中…":"製作檔案中，約需幾秒…"}</div>`;
+    try{
+      const y=await ensureSignReq(x);x=y;const url=signUrl(y);
+      const msg=`${COMPANY.name} 報價單&合約書 ${y.no}\n${y.cust?.name||""} 您好，請確認內容後簽名回覆，謝謝。\n線上簽名：${url}`;
+      const file=kind==="link"?null:await renderSheet(y,kind);
+      const data=file?{files:[file],title:file.name,text:msg}:{title:"報價單 "+y.no,text:msg};
+      const canShare=!!navigator.share&&(!file||navigator.canShare?.({files:[file]}));
+      out.innerHTML=`${kind==="link"?`<div class="linkbox">${esc(url)}</div>`:`<div class="note">已完成：${esc(file.name)}（${Math.max(1,Math.round(file.size/1024))} KB）</div>`}
+        <div class="actions" style="justify-content:flex-start">${canShare?'<button class="btn primary" type="button" id="shareNow">分享（LINE、Email…）</button>':""}
+        ${file?`<a class="btn" id="dlNow" download="${esc(file.name)}">下載</a>`:""}<button class="btn" type="button" id="copyNow">複製${file?"訊息與連結":"連結"}</button></div>`;
+      if(file)$("#dlNow").href=URL.createObjectURL(file);
+      if(canShare)$("#shareNow").onclick=async()=>{try{await navigator.share(data)}catch(e){if(e.name!=="AbortError")toast("無法分享，請改用下載或複製")}};
+      $("#copyNow").onclick=async()=>{try{await navigator.clipboard.writeText(file?msg:url);toast("已複製")}catch(e){toast("無法複製，請長按連結自行複製")}};
+    }catch(err){out.innerHTML="";showErr(err)}
+    finally{form.querySelectorAll("[data-send]").forEach(k=>k.disabled=false)}
+  });
+}
+/* 客戶紙本簽回：照片壓縮後存進 quoteFiles/{報價單id}（單筆上限約 1MB） */
+async function fileToData(f){
+  const rd=b=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(new Error("讀取檔案失敗"));r.readAsDataURL(b)});
+  if(f.type==="application/pdf"){if(f.size>700*1024)throw new Error("PDF 超過 700 KB，請改用手機拍照上傳。");return rd(f)}
+  if(!f.type.startsWith("image/"))throw new Error("請選擇照片或 PDF 檔。");
+  const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("無法讀取這張照片，請換一張再試。"));i.src=URL.createObjectURL(f)});
+  for(const [max,qq] of [[2000,.8],[1600,.72],[1300,.65],[1000,.6]]){
+    const s=Math.min(1,max/Math.max(img.width,img.height)),cv=document.createElement("canvas");cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);
+    const g=cv.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,cv.width,cv.height);g.drawImage(img,0,0,cv.width,cv.height);
+    const d=cv.toDataURL("image/jpeg",qq);if(d.length<900000)return d}
+  throw new Error("照片太大，請重新拍照（不要用最高畫質）再上傳。");
+}
+function uploadSigned(x){
+  openDlg(`<h3>上傳簽回檔　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">客戶列印簽名後拍照或掃描回傳的檔案。可直接用手機拍照。上傳後這張報價單會標示為「已簽回・紙本」。</div>
+  <label>照片或 PDF<input type="file" name="file" accept="image/*,application/pdf" required></label>
+  <div id="upPrev"></div>
+  <div class="grid2"><label>簽署人姓名<input name="signerName" value="${esc(x.signerName||x.cust?.contact||"")}"></label>
+  <label>簽回日期<input type="date" name="date" value="${todayStr()}" required></label></div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">上傳</button></div>`,
+  async fd=>{
+    const f=fd.get("file");if(!f||!f.size){showErr({message:"請先選擇檔案。"});return false}
+    const data=await fileToData(f);
+    await db.doc("quoteFiles/"+x.id).set({data,type:data.slice(5,data.indexOf(";")),name:f.name,quoteNo:x.no||"",at:new Date().toISOString(),by:me.email});
+    await db.doc("quotes/"+x.id).update({status:"signed",signMethod:"paper",hasScan:true,signature:null,signerName:val(fd,"signerName"),signedAt:val(fd,"date")+"T12:00:00+08:00"});
+    if(x.signToken)try{await deleteDoc(doc(fs,"signReqs",x.signToken))}catch(e){}
+    toast("已上傳簽回檔");
+  });
+  form.elements.file.onchange=e=>{const f=e.target.files[0];$("#upPrev").innerHTML=f&&f.type.startsWith("image/")?`<img class="scanview" style="max-height:260px" src="${URL.createObjectURL(f)}" alt="預覽">`:f?`<div class="note">${esc(f.name)}</div>`:""};
+}
+async function viewScan(x){
+  let r=null;try{const s=await getDoc(doc(fs,"quoteFiles",x.id));if(s.exists())r=s.data()}catch(e){}
+  if(!r){toast("找不到簽回檔");return}
+  const blob=await (await fetch(r.data)).blob(),u=URL.createObjectURL(blob),nm=fileBase(x)+"_簽回"+(r.type==="application/pdf"?".pdf":".jpg");
+  openDlg(`<h3>簽回檔　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">上傳：${esc(String(r.at||"").slice(0,10))}　${esc(r.by||"")}</div>
+  ${r.type==="application/pdf"?`<a class="btn" href="${u}" target="_blank" rel="noopener">開啟 PDF</a>`:`<img class="scanview" src="${u}" alt="簽回檔">`}
+  <div class="actions"><a class="btn" href="${u}" download="${esc(nm)}">下載</a><span class="spacer"></span><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
+}
+/* 客戶在線上簽完 → 自動寫回報價單（任何一位有編輯權限的同仁開著系統即可） */
+async function applyRemote(d){
+  const r=d.data();
+  try{await updateDoc(doc(fs,"quotes",r.quoteId),{signature:r.signature,signerName:r.signerName||"",signedAt:r.signedAt||new Date().toISOString(),status:"signed",signMethod:"remote"});toast(`${r.cust||"客戶"} 已線上完成簽名（${r.no}）`)}
+  catch(e){if(e.code!=="not-found")return}
+  try{await updateDoc(d.ref,{status:"applied",appliedAt:new Date().toISOString()})}catch(e){}
 }
 
 /* ---------- 到期提醒 ---------- */
@@ -1143,6 +1316,7 @@ function startData(){
       if(!dlg.open)render();
     },err=>{S.loaded[name]=true;fresh[name]=true;console.warn("讀取失敗",name,err.code);if(Object.keys(fresh).length===5)clearTimeout(timer);$("#sync").textContent=err.code==="permission-denied"?"部分資料沒有存取權限（"+name+"）":"資料連線中斷，請重新整理頁面";render()}));
   }
+  if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
