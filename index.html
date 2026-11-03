@@ -809,7 +809,7 @@ function quoteForm(src,copy){
     <label>狀態<select name="status">${Object.entries(QSTATUS).map(([k,v])=>opt(k,v[0],k===x.status)).join("")}</select></label>
     <label>業務人員<input name="sales" value="${esc(x.sales||"")}"></label>
     <label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>
-    <label>報價效期（天）<input type="number" name="validDays" min="1" step="1" inputmode="numeric" value="${esc(x.validDays??30)}"></label>
+    <label>報價效期<select name="validDays">${[30,15,7].map(n=>opt(n,n+"日",+(x.validDays??30)===n)).join("")}${x.validDays&&![30,15,7].includes(+x.validDays)?opt(x.validDays,x.validDays+"日（舊設定）",true):""}</select></label>
     <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
     <label>電壓<select name="volt">${opt("","— 待確認 —",!x.volt)}${VOLTS.map(v=>opt(v,v,x.volt===v)).join("")}</select></label>
     <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
