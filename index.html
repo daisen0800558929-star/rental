@@ -37,6 +37,10 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em}
 nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:0}
 nav button{flex:0 0 auto;border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer}
 nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
+.seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg button:focus-visible{outline:2px solid var(--accent)}
 main{padding-block:18px 48px;display:grid;gap:18px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .toolbar input,.toolbar select{flex:1 1 180px;min-width:0}
@@ -209,7 +213,7 @@ html,body{margin:0}
 <div id="menuView" hidden>
   <div class="menu-top"><div class="wrap">
     <img src="logo.png" alt="大森節能">
-    <div class="userbox"><span class="sub" id="whoami2"></span><button class="btn small" id="logoutBtn2" type="button">登出</button></div>
+    <div class="userbox"><span class="sub" id="whoami2"></span><button class="btn small" id="accBtn" type="button" hidden>帳號管理</button><button class="btn small" id="logoutBtn2" type="button">登出</button></div>
   </div></div>
   <div class="wrap"><main class="menu-main"><div class="wheel-wrap"><div class="wheel" id="tiles"></div></div><div class="wheel-note">點選圓圈進入功能　點中間 ERP 查看內容分析　淡色為建置中</div></main></div>
 </div>
@@ -220,7 +224,7 @@ html,body{margin:0}
       <div><h1 id="pageTitle">大森 ERP</h1><div class="sub" id="sync">連線中…</div></div>
       <div class="userbox"><button class="btn small" id="menuBtn" type="button">☰ 功能選單</button><span class="sub" id="whoami"></span><button class="btn primary" id="newBtn" type="button">＋ 新增租約</button></div>
     </div>
-    <nav role="tablist">
+    <nav role="tablist" hidden>
       <button role="tab" data-tab="analysis" aria-selected="false">分析</button>
       <button role="tab" data-tab="overview" aria-selected="true">總覽</button>
       <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
@@ -291,7 +295,7 @@ function eState(e){
 function render(){
   renderMenu();
   updateRemind();
-  $("#accTab").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
+  $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
   {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
@@ -308,6 +312,9 @@ function render(){
   if(tab==="quotes")h=viewQuotes(loading);
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
+  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]]];
+  const grp=SEG.find(g=>g.some(([k])=>k===tab));
+  if(grp&&h)h=`<div class="seg" role="group">${grp.map(([k,v])=>`<button type="button" data-seg="${k}" aria-pressed="${k===tab}">${v}</button>`).join("")}</div>`+h;
   m.innerHTML=h;
   const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
   const sf=$("#f");if(sf){sf.value=filter;sf.onchange=e=>{filter=e.target.value;render()}}
@@ -508,6 +515,7 @@ function customerForm(c){
 }
 
 /* ---------- events ---------- */
+$("#main").addEventListener("click",e=>{const b=e.target.closest("[data-seg]");if(!b)return;tab=b.dataset.seg;q="";filter="all";render();window.scrollTo(0,0)});
 document.querySelector("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;tab=b.dataset.tab;q="";filter="all";render()});
 $("#newBtn").onclick=()=>contractForm(null);
 function openFrom(el){const id=el.dataset.id;({contract:()=>{const c=S.contracts.find(x=>x.id===id);c&&contractDetail(c)},
@@ -975,6 +983,7 @@ function openModule(k){
 $("#tiles").addEventListener("click",e=>{if(e.target.closest("[data-hub]")){openAnalysis();return}const t=e.target.closest("[data-mod]");if(t)openModule(t.dataset.mod)});
 $("#menuBtn").onclick=showMenu;
 $("#logoutBtn2").onclick=()=>signOut(auth);
+$("#accBtn").onclick=()=>{$("#menuView").hidden=true;$("#appView").hidden=false;tab="accounts";q="";render();window.scrollTo(0,0)};
 
 /* ---------- 進入首頁 ---------- */
 (()=>{const sp=$("#splash");let gone=false;
