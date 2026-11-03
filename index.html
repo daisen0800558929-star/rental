@@ -497,9 +497,9 @@ function equipmentForm(e){
 function customerForm(c){
   const isNew=!c;c=c||{};
   openDlg(`<h3>${isNew?"新增客戶":esc(c.name)}</h3>
-  <div class="grid2"><label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
-  <label>統一編號<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+  <div class="grid2"><label class="full">統一編號（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
   ${taxBlock("k",c.taxExempt)}
+  <label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
   <label>公司電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
   <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
   <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
@@ -577,8 +577,10 @@ function bindTax(P,nameF,taxF){
     st.info=r;
     if(r.error){show("✕ 目前無法連線查詢登記資料，請稍後再試。若為政府機關等單位可勾選下方免驗證","bad");return}
     if(!r.found){show("✕ 查無此統編的登記資料，請確認統編是否正確","bad");return}
+    if(normName(r.name)!==normName(nm.value)&&st.lastNo!==no){nm.value=r.name;nm.dispatchEvent(new Event("change",{bubbles:true}))}
+    st.lastNo=no;
     const same=normName(r.name)===normName(nm.value);
-    if(same){show(`✓ 統編相符：${esc(r.name)}${r.status?"（"+esc(r.status)+"）":""}`,"ok");st.ok=true}
+    if(same){show(`✓ 已帶出登記名稱：${esc(r.name)}${r.status?"（"+esc(r.status)+"）":""}`,"ok");st.ok=true}
     else show(`✕ 此統編登記名稱為「${esc(r.name)}」，與輸入的公司名稱不符　<button class="btn small" type="button" data-usename="${P}">改用登記名稱</button>`,"bad");
   };
   form.addEventListener("click",e=>{const b=e.target.closest(`[data-usename="${P}"]`);if(b&&st.info?.name){nm.value=st.info.name;nm.dispatchEvent(new Event("input",{bubbles:true}));check()}});
@@ -793,9 +795,9 @@ function quoteForm(src,copy){
   <datalist id="catList">${cats.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
   <fieldset><legend>客戶資料</legend><div class="grid2">
     <label class="full">選擇既有客戶（自動帶入資料）<select name="customerId"><option value="">— 新客戶 / 手動填寫 —</option>${S.customers.map(k=>opt(k.id,k.name,k.id===x.customerId)).join("")}</select></label>
-    <label class="full">客戶名稱<input name="c_name" value="${esc(c.name||"")}" required></label>
-    <label>統編<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <label class="full">統編（填入後自動帶出公司名稱）<input name="c_taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
     ${taxBlock("q",c.taxExempt)}
+    <label class="full">客戶名稱<input name="c_name" value="${esc(c.name||"")}" required></label>
     <label>公司電話<input name="c_phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
     <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
     <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
