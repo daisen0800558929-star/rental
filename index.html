@@ -223,6 +223,7 @@ html,body{margin:0}
       <button role="tab" data-tab="overview" aria-selected="true">總覽</button>
       <button role="tab" data-tab="contracts" aria-selected="false">租約</button>
       <button role="tab" data-tab="equipment" aria-selected="false">設備</button>
+      <button role="tab" data-tab="calls" aria-selected="false">通聯</button>
       <button role="tab" data-tab="customers" aria-selected="false">客戶</button>
       <button role="tab" data-tab="quotes" aria-selected="false">報價</button>
       <button role="tab" data-tab="accounts" aria-selected="false" id="accTab" hidden>帳號</button>
@@ -247,7 +248,7 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -299,6 +300,7 @@ function render(){
   if(tab==="contracts")h=viewContracts(loading);
   if(tab==="equipment")h=viewEquipment(loading);
   if(tab==="customers")h=viewCustomers(loading);
+  if(tab==="calls")h=viewCalls(loading);
   if(tab==="quotes")h=viewQuotes(loading);
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
@@ -502,7 +504,7 @@ function customerForm(c){
 }
 
 /* ---------- events ---------- */
-document.querySelector("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;tab=b.dataset.tab;q="";render()});
+document.querySelector("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;tab=b.dataset.tab;q="";filter="all";render()});
 $("#newBtn").onclick=()=>contractForm(null);
 function openFrom(el){const id=el.dataset.id;({contract:()=>{const c=S.contracts.find(x=>x.id===id);c&&contractDetail(c)},
   equipment:()=>{const x=equip(id);x&&equipmentForm(x)},customer:()=>{const x=cust(id);x&&customerForm(x)},quote:()=>{const x=S.quotes.find(k=>k.id===id);x&&quoteDetail(x)}})[el.dataset.open]?.()}
@@ -510,6 +512,103 @@ $("#main").addEventListener("click",e=>{const n=e.target.closest("[data-new]");i
   const r=e.target.closest("[data-open]");if(r)openFrom(r)});
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-open]");if(r)openFrom(r)}});
 form.addEventListener("click",e=>{const r=e.target.closest(".row[data-open]");if(r){dlg.close();openFrom(r)}});
+
+/* ---------- 客戶通聯 ---------- */
+const CALL_TYPES=["新客戶詢問","舊客戶詢問","報價追蹤","報修／維修","客訴","帳款／發票","廠商來電","其他"];
+const CALL_NEEDS=["水冷扇銷售","水冷扇出租","工廠通風設備","魚池過濾設備","水冷扇報修","工廠通風設備報修","魚池過濾設備報修","其他"];
+const CALL_SOURCES=["來電","Line@","email","客戶轉介紹","舊客戶加購","陌生拜訪","google廣告影片","fb廣告","其他"];
+const ZIP=(()=>{const o={};"臺北市|100中正區,103大同區,104中山區,105松山區,106大安區,108萬華區,110信義區,111士林區,112北投區,114內湖區,115南港區,116文山區;基隆市|200仁愛區,201信義區,202中正區,203中山區,204安樂區,205暖暖區,206七堵區;新北市|207萬里區,208金山區,220板橋區,221汐止區,222深坑區,223石碇區,224瑞芳區,226平溪區,227雙溪區,228貢寮區,231新店區,232坪林區,233烏來區,234永和區,235中和區,236土城區,237三峽區,238樹林區,239鶯歌區,241三重區,242新莊區,243泰山區,244林口區,247蘆洲區,248五股區,249八里區,251淡水區,252三芝區,253石門區;宜蘭縣|260宜蘭市,261頭城鎮,262礁溪鄉,263壯圍鄉,264員山鄉,265羅東鎮,266三星鄉,267大同鄉,268五結鄉,269冬山鄉,270蘇澳鎮,272南澳鄉;新竹市|300東區,300北區,300香山區;新竹縣|302竹北市,303湖口鄉,304新豐鄉,305新埔鎮,306關西鎮,307芎林鄉,308寶山鄉,310竹東鎮,311五峰鄉,312橫山鄉,313尖石鄉,314北埔鄉,315峨眉鄉;桃園市|320中壢區,324平鎮區,325龍潭區,326楊梅區,327新屋區,328觀音區,330桃園區,333龜山區,334八德區,335大溪區,336復興區,337大園區,338蘆竹區;苗栗縣|350竹南鎮,351頭份市,352三灣鄉,353南庄鄉,354獅潭鄉,356後龍鎮,357通霄鎮,358苑裡鎮,360苗栗市,361造橋鄉,362頭屋鄉,363公館鄉,364大湖鄉,365泰安鄉,366銅鑼鄉,367三義鄉,368西湖鄉,369卓蘭鎮;臺中市|400中區,401東區,402南區,403西區,404北區,406北屯區,407西屯區,408南屯區,411太平區,412大里區,413霧峰區,414烏日區,420豐原區,421后里區,422石岡區,423東勢區,424和平區,426新社區,427潭子區,428大雅區,429神岡區,432大肚區,433沙鹿區,434龍井區,435梧棲區,436清水區,437大甲區,438外埔區,439大安區;彰化縣|500彰化市,502芬園鄉,503花壇鄉,504秀水鄉,505鹿港鎮,506福興鄉,507線西鄉,508和美鎮,509伸港鄉,510員林市,511社頭鄉,512永靖鄉,513埔心鄉,514溪湖鎮,515大村鄉,516埔鹽鄉,520田中鎮,521北斗鎮,522田尾鄉,523埤頭鄉,524溪州鄉,525竹塘鄉,526二林鎮,527大城鄉,528芳苑鄉,530二水鄉;南投縣|540南投市,541中寮鄉,542草屯鎮,544國姓鄉,545埔里鎮,546仁愛鄉,551名間鄉,552集集鎮,553水里鄉,555魚池鄉,556信義鄉,557竹山鎮,558鹿谷鄉;嘉義市|600東區,600西區;嘉義縣|602番路鄉,603梅山鄉,604竹崎鄉,605阿里山鄉,606中埔鄉,607大埔鄉,608水上鄉,611鹿草鄉,612太保市,613朴子市,614東石鄉,615六腳鄉,616新港鄉,621民雄鄉,622大林鎮,623溪口鄉,624義竹鄉,625布袋鎮;雲林縣|630斗南鎮,631大埤鄉,632虎尾鎮,633土庫鎮,634褒忠鄉,635東勢鄉,636臺西鄉,637崙背鄉,638麥寮鄉,640斗六市,643林內鄉,646古坑鄉,647莿桐鄉,648西螺鎮,649二崙鄉,651北港鎮,652水林鄉,653口湖鄉,654四湖鄉,655元長鄉;臺南市|700中西區,701東區,702南區,704北區,708安平區,709安南區,710永康區,711歸仁區,712新化區,713左鎮區,714玉井區,715楠西區,716南化區,717仁德區,718關廟區,719龍崎區,720官田區,721麻豆區,722佳里區,723西港區,724七股區,725將軍區,726學甲區,727北門區,730新營區,731後壁區,732白河區,733東山區,734六甲區,735下營區,736柳營區,737鹽水區,741善化區,742大內區,743山上區,744新市區,745安定區;高雄市|800新興區,801前金區,802苓雅區,803鹽埕區,804鼓山區,805旗津區,806前鎮區,807三民區,811楠梓區,812小港區,813左營區,814仁武區,815大社區,820岡山區,821路竹區,822阿蓮區,823田寮區,824燕巢區,825橋頭區,826梓官區,827彌陀區,828永安區,829湖內區,830鳳山區,831大寮區,832林園區,833鳥松區,840大樹區,842旗山區,843美濃區,844六龜區,845內門區,846杉林區,847甲仙區,848桃源區,849那瑪夏區,851茂林區,852茄萣區;屏東縣|900屏東市,901三地門鄉,902霧臺鄉,903瑪家鄉,904九如鄉,905里港鄉,906高樹鄉,907鹽埔鄉,908長治鄉,909麟洛鄉,911竹田鄉,912內埔鄉,913萬丹鄉,920潮州鎮,921泰武鄉,922來義鄉,923萬巒鄉,924崁頂鄉,925新埤鄉,926南州鄉,927林邊鄉,928東港鎮,929琉球鄉,931佳冬鄉,932新園鄉,940枋寮鄉,941枋山鄉,942春日鄉,943獅子鄉,944車城鄉,945牡丹鄉,946恆春鎮,947滿州鄉;臺東縣|950臺東市,951綠島鄉,952蘭嶼鄉,953延平鄉,954卑南鄉,955鹿野鄉,956關山鎮,957海端鄉,958池上鄉,959東河鄉,961成功鎮,962長濱鄉,963太麻里鄉,964金峰鄉,965大武鄉,966達仁鄉;花蓮縣|970花蓮市,971新城鄉,972秀林鄉,973吉安鄉,974壽豐鄉,975鳳林鎮,976光復鄉,977豐濱鄉,978瑞穗鄉,979萬榮鄉,981玉里鎮,982卓溪鄉,983富里鄉;澎湖縣|880馬公市,881西嶼鄉,882望安鄉,883七美鄉,884白沙鄉,885湖西鄉;金門縣|890金沙鎮,891金湖鎮,892金寧鄉,893金城鎮,894烈嶼鄉,896烏坵鄉;連江縣|209南竿鄉,210北竿鄉,211莒光鄉,212東引鄉".split(";").forEach(l=>{const[c,d]=l.split("|");o[c]=d.split(",").map(x=>({zip:x.slice(0,3),name:x.slice(3)}))});return o})();
+function countBy(list,key,order){const m={};list.forEach(x=>{const k=x[key]||"未填";m[k]=(m[k]||0)+1});
+  const keys=order?[...order,...Object.keys(m).filter(k=>!order.includes(k))]:Object.keys(m).sort((a,b)=>m[b]-m[a]);return keys.map(l=>({l,v:m[l]||0}))}
+function staffLabel(email){const u=S.staff.find(x=>x.id===email);if(!u)return email||"未填";return (u.code?u.code+" ":"")+(u.name||u.id)}
+/* 防呆：市話自動加區碼橫線，手機格式 0912-345-678 */
+function fmtTel(v){
+  let d=String(v).replace(/[^\d#]/g,""),ext="";const h=d.indexOf("#");if(h>=0){ext=d.slice(h).replace(/#+/,"#");d=d.slice(0,h)}
+  d=d.slice(0,10);if(!d)return ext;
+  const ac=/^(0826|0836)/.test(d)?4:/^(037|049|082|089)/.test(d)?3:d[0]==="0"?2:0;
+  return(ac&&d.length>ac?d.slice(0,ac)+"-"+d.slice(ac):d)+ext;
+}
+function telOk(v){if(!v)return true;const d=v.split("#")[0].replace(/\D/g,"");return /^0[2-8]/.test(d)&&!/^09/.test(d)&&d.length>=9&&d.length<=10}
+function fmtMobile(v){const d=String(v).replace(/\D/g,"").slice(0,10);return d.length>7?d.slice(0,4)+"-"+d.slice(4,7)+"-"+d.slice(7):d.length>4?d.slice(0,4)+"-"+d.slice(4):d}
+const mobileOk=v=>!v||/^09\d{2}-\d{3}-\d{3}$/.test(v);
+function nowLocal(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
+const fullAddr=c=>[c.zip,(c.county||"")+(c.district||"")+(c.road||"")+(c.detail||"")].filter(Boolean).join(" ");
+function viewCalls(loading){
+  const qq=q.trim().toLowerCase();
+  const rows=S.calls.filter(c=>(filter==="all"||c.need===filter)&&(!qq||[c.company,c.contact,c.tel,c.mobile,c.content,c.note,fullAddr(c)].join(" ").toLowerCase().includes(qq)))
+    .sort((a,b)=>String(b.at).localeCompare(String(a.at))).map(c=>`<div class="row" data-call="${esc(c.id)}" tabindex="0">
+      <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}${c.mobile?" · "+esc(c.mobile):c.tel?" · "+esc(c.tel):""}</span></div>
+      <div class="m"><span class="mono">${esc(String(c.at||"").replace("T"," "))}</span> · ${esc(c.type||"")} · 接電 ${esc(staffLabel(c.receiver))}${c.content?" · "+esc(c.content.slice(0,40)):""}</div></div>
+      <div class="r"><span class="pill">${esc(c.need||"")}</span><span class="m">${esc(c.source||"")}</span></div></div>`);
+  return `<div class="toolbar"><input id="q" placeholder="搜尋公司、聯絡人、電話、內容"><select id="f" style="flex:0 1 180px"><option value="all">全部需求</option>${CALL_NEEDS.map(n=>opt(n,n)).join("")}</select>${canWrite?'<button class="btn primary" type="button" data-newcall>＋ 新增通聯</button>':""}</div>
+  <div class="list">${emptyOr(rows,loading,S.calls.length?"沒有符合條件的通聯紀錄":"還沒有通聯紀錄。接到客戶來電時，按「新增通聯」記下來。")}</div>`;
+}
+function callForm(src){
+  const isNew=!src,c=src||{at:nowLocal(),receiver:me.email};
+  const staffOpts=S.staff.filter(u=>u.active!==false||u.id===c.receiver).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~")));
+  if(!staffOpts.some(u=>u.id===me.email))staffOpts.unshift({id:me.email,name:me.name,code:""});
+  openDlg(`<h3>${isNew?"新增客戶通聯":"編輯客戶通聯"}</h3>
+  <datalist id="custList">${S.customers.map(k=>`<option value="${esc(k.name)}">`).join("")}</datalist>
+  <div class="grid2">
+    <label class="full">日期時間<input type="datetime-local" name="at" value="${esc(c.at)}" required></label>
+    <label>1. 來電分類<select name="type" required><option value="">請選擇</option>${CALL_TYPES.map(n=>opt(n,n,n===c.type)).join("")}</select></label>
+    <label>2. 客戶需求<select name="need" required><option value="">請選擇</option>${CALL_NEEDS.map(n=>opt(n,n,n===c.need)).join("")}</select></label>
+    <label class="full">3. 來電內容說明<textarea name="content" placeholder="客戶詢問的內容、數量、時間等">${esc(c.content||"")}</textarea></label>
+    <label class="full">4. 公司名稱<input name="company" list="custList" value="${esc(c.company||"")}" placeholder="輸入或選擇既有客戶，會自動帶入資料"></label>
+    <label>5. 聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
+    <label>6. 聯絡市話<input name="tel" value="${esc(c.tel||"")}" inputmode="tel" placeholder="04-7510728" autocomplete="off"><span class="note" id="telHint"></span></label>
+    <label>7. 手機<input name="mobile" value="${esc(c.mobile||"")}" inputmode="numeric" placeholder="0965-585-129" maxlength="12" autocomplete="off"><span class="note" id="mobHint"></span></label>
+    <label>8. 地址：縣市<select name="county"><option value="">請選擇縣市</option>${Object.keys(ZIP).map(n=>opt(n,n,n===c.county)).join("")}</select></label>
+    <label>鄉鎮市區（郵遞區號）<select name="district"></select></label>
+    <label>路／街名<input name="road" value="${esc(c.road||"")}" placeholder="例：自強南路"></label>
+    <label>巷弄號樓<input name="detail" value="${esc(c.detail||"")}" placeholder="例：537號3樓"></label>
+    <div class="full calc" id="addrPrev"></div>
+    <label class="full">9. 備註<textarea name="note">${esc(c.note||"")}</textarea></label>
+    <label>10. 客戶來源<select name="source"><option value="">請選擇</option>${CALL_SOURCES.map(n=>opt(n,n,n===c.source)).join("")}</select></label>
+    <label>11. 接電人<select name="receiver">${staffOpts.map(u=>opt(u.id,(u.code?u.code+"　":"")+(u.name||u.id),u.id===c.receiver)).join("")}</select></label>
+    <label class="full" id="saveCustWrap"><span><input type="checkbox" name="saveCust" style="width:auto" checked> 同時新增到客戶資料</span></label>
+  </div>
+  <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"儲存通聯":"儲存"}</button>`:""}</div>`,
+  async fd=>{
+    const zipOf=(cty,dis)=>(ZIP[cty]||[]).find(z=>z.name===dis)?.zip||"";
+    const d={at:val(fd,"at"),receiver:val(fd,"receiver"),type:val(fd,"type"),need:val(fd,"need"),content:val(fd,"content"),company:val(fd,"company"),contact:val(fd,"contact"),
+      tel:fmtTel(val(fd,"tel")),mobile:fmtMobile(val(fd,"mobile")),county:val(fd,"county"),district:val(fd,"district"),road:val(fd,"road"),detail:val(fd,"detail"),note:val(fd,"note"),source:val(fd,"source")};
+    d.zip=zipOf(d.county,d.district);
+    if(!d.at){showErr({message:"請填寫日期時間。"});return false}
+    if(!d.type||!d.need){showErr({message:"請選擇來電分類與客戶需求。"});return false}
+    if(!d.company&&!d.contact){showErr({message:"請至少填寫公司名稱或聯絡人。"});return false}
+    if(!telOk(d.tel)){showErr({message:"市話格式不正確，請輸入區碼加號碼，例如 04-7510728。"});return false}
+    if(!mobileOk(d.mobile)){showErr({message:"手機格式不正確，請輸入 09 開頭共 10 碼，例如 0965-585-129。"});return false}
+    d.updatedAt=new Date().toISOString();d.updatedBy=me.email;
+    const ex=S.customers.find(k=>k.name===d.company);
+    if(ex)d.customerId=ex.id;
+    else if(d.company&&fd.get("saveCust")){const ref=db.collection("customers").doc();
+      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),taxId:"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
+    if(isNew){d.createdAt=d.updatedAt;d.createdBy=me.email;await db.collection("calls").doc().set(d);toast("已儲存通聯紀錄")}
+    else{await db.doc("calls/"+c.id).update(d);toast("已儲存")}
+  },true);
+  const F=form.elements,dis=F.district;
+  const fillDis=sel=>{const list=ZIP[F.county.value]||[];dis.innerHTML=list.length?list.map(z=>opt(z.name,z.zip+" "+z.name,z.name===sel)).join(""):'<option value="">請先選縣市</option>';dis.disabled=!list.length};
+  const prev=()=>{const z=(ZIP[F.county.value]||[]).find(x=>x.name===dis.value);const a=fullAddr({zip:z?.zip,county:F.county.value,district:F.county.value?dis.value:"",road:F.road.value.trim(),detail:F.detail.value.trim()});
+    $("#addrPrev").textContent=a?"地址："+a:"地址：尚未填寫";
+    const tel=F.tel.value,mob=F.mobile.value;
+    $("#telHint").textContent=tel&&!telOk(tel)?"請輸入完整市話，例如 04-7510728":"";$("#telHint").style.color="var(--bad)";
+    $("#mobHint").textContent=mob&&!mobileOk(mob)?"手機需 09 開頭共 10 碼":"";$("#mobHint").style.color="var(--bad)";
+    const ex=S.customers.find(k=>k.name===F.company.value.trim());$("#saveCustWrap").hidden=!!ex||!F.company.value.trim()};
+  fillDis(c.district);
+  F.county.onchange=()=>{fillDis("");prev()};
+  F.tel.addEventListener("input",()=>{F.tel.value=fmtTel(F.tel.value)});
+  F.mobile.addEventListener("input",()=>{F.mobile.value=fmtMobile(F.mobile.value)});
+  F.company.addEventListener("change",()=>{const k=S.customers.find(x=>x.name===F.company.value.trim());if(!k)return;
+    if(!F.contact.value)F.contact.value=k.contact||"";if(!F.tel.value)F.tel.value=fmtTel(k.phone||"");if(!F.mobile.value)F.mobile.value=fmtMobile(k.mobile||"");
+    const last=S.calls.filter(x=>x.customerId===k.id&&x.county).sort((a,b)=>String(b.at).localeCompare(a.at))[0];
+    if(last&&!F.county.value){F.county.value=last.county;fillDis(last.district);F.road.value=last.road||"";F.detail.value=last.detail||""}prev()});
+  form.oninput=prev;prev();
+  if(!isNew&&canWrite)confirmDelete("#del","通聯紀錄",()=>db.doc("calls/"+c.id).delete());
+}
+$("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){callForm(null);return}
+  const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
+$("#main").addEventListener("keydown",e=>{if(e.key!=="Enter")return;const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 
 /* ---------- 報價 ---------- */
 const QSTATUS={draft:["草稿","mute"],sent:["已報價",""],signed:["已簽回","ok"],lost:["未成交","bad"]};
@@ -692,7 +791,7 @@ function viewAccounts(){
   const rows=[...S.staff].sort((a,b)=>(a.active===false)-(b.active===false)||String(a.id).localeCompare(b.id)).map(u=>{
     const off=u.active===false, role=u.id===OWNER?"admin":(u.role||"staff");
     return `<div class="row" data-acc="${esc(u.id)}" tabindex="0">
-      <div><div class="t">${esc(u.name||u.id)}${u.id===me.email?'　<span class="m">（你）</span>':""}</div><div class="m">${esc(u.id)}</div></div>
+      <div><div class="t">${esc(u.name||u.id)}${u.id===me.email?'　<span class="m">（你）</span>':""}</div><div class="m">${u.code?"代號 "+esc(u.code)+" · ":""}${esc(u.id)}</div></div>
       <div class="r"><span class="pill ${off?"mute":role==="admin"?"warn":role==="viewer"?"mute":"ok"}">${off?"已停用":ROLES[role]}</span></div></div>`});
   if(!S.staff.some(u=>u.id===OWNER))rows.unshift(`<div class="row" style="cursor:default"><div><div class="t">系統擁有者</div><div class="m">${esc(OWNER)}</div></div><div class="r"><span class="pill warn">管理員</span></div></div>`);
   return `<div class="toolbar"><div class="note" style="flex:1 1 240px">管理員：全部功能與帳號管理　員工：可新增、修改資料　檢視：只能查看</div><button class="btn primary" type="button" data-newacc>＋ 新增帳號</button></div>
@@ -706,6 +805,7 @@ function accountForm(u){
   openDlg(`<h3>${isNew?"新增帳號":esc(u.name||u.id)}</h3>
   <div class="grid2">
     <label>姓名<input name="name" value="${esc(u.name||"")}" required></label>
+    <label>員工代號<input name="code" value="${esc(u.code||"")}" placeholder="例：A001" autocomplete="off"></label>
     <label>手機（印在報價單）<input name="mobile" value="${esc(u.mobile||"")}" inputmode="tel"></label>
     <label class="full">Email（登入帳號）<input type="email" name="email" value="${esc(u.id||"")}" ${isNew?"required":"disabled"} autocomplete="off"></label>
     ${isNew?`<label class="full">初始密碼（至少 6 個字）<input type="text" name="pw" minlength="6" autocomplete="new-password" required></label>`:""}
@@ -716,7 +816,7 @@ function accountForm(u){
   ${locked?'<div class="note">'+(owner?"系統擁有者固定為管理員。":"不能變更自己的權限或停用自己。")+'</div>':""}
   <div class="actions">${!isNew?'<button class="btn" type="button" id="resetPw">寄重設密碼信</button>'+(!locked?'<button class="btn danger" type="button" id="del">移除</button>':"")+'<span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立帳號":"儲存"}</button></div>`,
   async fd=>{
-    const d={name:val(fd,"name"),mobile:val(fd,"mobile"),role:locked?(owner?"admin":u.role||"staff"):val(fd,"role"),active:locked?true:fd.get("active")==="1",updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={name:val(fd,"name"),code:val(fd,"code").toUpperCase(),mobile:val(fd,"mobile"),role:locked?(owner?"admin":u.role||"staff"):val(fd,"role"),active:locked?true:fd.get("active")==="1",updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(!d.name){showErr({message:"請填寫姓名。"});return false}
     if(isNew){
       const email=val(fd,"email").toLowerCase(),pw=String(fd.get("pw")||"");
@@ -754,7 +854,7 @@ function hbars(rows,fmt=v=>v.toLocaleString("zh-TW"),color){
 }
 function vbars(rows,fmt){
   const mx=Math.max(...rows.map(r=>r.v),1);
-  return `<div class="vb">${rows.map(r=>`<div class="col" title="${esc(r.l+"："+money(r.v))}"><span class="v">${r.v?fmt(r.v):""}</span><span class="b" style="height:${r.v/mx*100}%"></span></div>`).join("")}</div>
+  return `<div class="vb">${rows.map(r=>`<div class="col" title="${esc(r.l+"："+fmt(r.v))}"><span class="v">${r.v?fmt(r.v):""}</span><span class="b" style="height:${r.v/mx*100}%"></span></div>`).join("")}</div>
   <div class="vb-x">${rows.map(r=>`<span>${esc(r.x)}</span>`).join("")}</div>`;
 }
 function viewAnalysis(loading){
@@ -792,7 +892,7 @@ function viewAnalysis(loading){
     ${kpi("出租中租約",live.length)}
     ${kpi("每月租金估算",short(monthly))}
     ${kpi("設備出租率",S.equipment.length?Math.round(eqRent/S.equipment.length*100)+"%":"—")}
-    ${kpi("設備總數",S.equipment.length)}
+    ${kpi("本月通聯",S.calls.filter(c=>monthKey(c.at)===thisM).length)}
     ${kpi("待處理提醒",rem.length,overdue?"bad":rem.length?"warn":"")}
   </div></section>
   <div class="an-grid">
@@ -805,6 +905,15 @@ function viewAnalysis(loading){
     <div class="card"><h3>各類設備出租率 <small>出租中／總數</small></h3>${hbars(catRows,pct)}</div>
     <div class="card"><h3>主要客戶 <small>已簽回報價＋租金，NT$</small></h3>${hbars(topCust,short)}</div>
   </div>
+  <section><h2>客戶通聯分析 <small>共 ${S.calls.length} 筆通聯紀錄</small></h2></section>
+  ${S.calls.length?`<div class="an-grid">
+    <div class="card"><h3>近 6 個月通聯數 <small>筆</small></h3>${vbars(months.map(m=>({x:Number(m.slice(5))+"月",l:m,v:S.calls.filter(c=>monthKey(c.at)===m).length})),v=>v+" 筆")}</div>
+    <div class="card"><h3>客戶需求 <small>筆數</small></h3>${hbars(countBy(S.calls,"need",CALL_NEEDS))}</div>
+    <div class="card"><h3>客戶來源 <small>筆數</small></h3>${hbars(countBy(S.calls,"source",CALL_SOURCES))}</div>
+    <div class="card"><h3>來電分類 <small>筆數</small></h3>${hbars(countBy(S.calls,"type",CALL_TYPES))}</div>
+    <div class="card"><h3>來電地區 <small>依縣市，前 8 名</small></h3>${hbars(countBy(S.calls,"county").filter(r=>r.v).slice(0,8))}</div>
+    <div class="card"><h3>接電人 <small>筆數</small></h3>${hbars(countBy(S.calls.map(c=>({...c,rv:staffLabel(c.receiver)})),"rv").filter(r=>r.v))}</div>
+  </div>`:'<div class="card"><div class="empty">還沒有通聯紀錄，到「客戶通聯」新增第一筆後就會顯示分析。</div></div>'}
   <section><h2>12 項功能狀態</h2><div class="list modlist">${modRows}</div></section>`;
 }
 $("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.target.closest(".modlist [data-mod]");if(r)openModule(r.dataset.mod)});
@@ -812,7 +921,7 @@ $("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.tar
 /* ---------- 功能選單 ---------- */
 const WHEEL_COLORS=["#c0504d","#9bbb59","#8064a2","#4bacc6","#f79646"];
 const MODULES=[
-  {k:"cust",lb:"客戶|通聯",nm:"客戶通聯",ds:"客戶資料、聯絡人與電話",go:"customers"},
+  {k:"cust",lb:"客戶|通聯",nm:"客戶通聯",ds:"來電紀錄、客戶需求與來源",go:"calls"},
   {k:"quote",lb:"業務|報價",nm:"業務報價",ds:"建立報價單、列印、客戶簽名",go:"quotes"},
   {k:"order",lb:"訂單|管理",nm:"訂單管理",ds:"訂單建立與出貨追蹤"},
   {k:"rental",lb:"設備租賃|管理",nm:"設備租賃管理",ds:"設備、租約、續約與歸還",go:"overview"},
@@ -827,7 +936,7 @@ const MODULES=[
 ];
 function moduleStat(m){
   if(!db)return"";
-  if(m.k==="cust")return S.customers.length+" 位客戶";
+  if(m.k==="cust"){const n=S.calls.filter(c=>String(c.at).slice(0,7)===todayStr().slice(0,7)).length;return "本月 "+n+" 筆通聯"}
   if(m.k==="quote"){const n=S.quotes.filter(x=>x.status==="draft"||x.status==="sent").length;return n?n+" 張報價進行中":S.quotes.length+" 張報價單"}
   if(m.k==="rental")return S.contracts.filter(c=>c.status==="租賃中").length+" 筆出租中";
   if(m.k==="remind"){const n=remindList().length;return n?n+" 筆需要處理":"目前沒有提醒"}
@@ -879,18 +988,18 @@ function startData(){
   db=fsdb; canWrite=me.role!=="viewer"; startData.reminded=false;
   const timer=setTimeout(()=>{$("#sync").textContent="暫時無法取得最新資料，請檢查網路"},10000);
   const fresh={};
-  for(const name of ["equipment","customers","contracts","quotes"]){
+  for(const name of ["equipment","customers","contracts","quotes","calls"]){
     unsubs.push(db.collection(name).onSnapshot(snap=>{
       S[name]=snap.docs.map(d=>({id:d.id,...d.data()}));S.loaded[name]=true;
       if(!snap.metadata.fromCache)fresh[name]=true;
-      if(Object.keys(fresh).length===4){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用";if(!startData.reminded){startData.reminded=true;setTimeout(autoRemind,300)}}
+      if(Object.keys(fresh).length===5){clearTimeout(timer);$("#sync").textContent="已同步 · 多人即時共用";if(!startData.reminded){startData.reminded=true;setTimeout(autoRemind,300)}}
       if(!dlg.open)render();
-    },err=>{clearTimeout(timer);S.loaded[name]=true;$("#sync").textContent=err.code==="permission-denied"?"此帳號沒有存取權限":"資料連線中斷，請重新整理頁面";render()}));
+    },err=>{S.loaded[name]=true;fresh[name]=true;console.warn("讀取失敗",name,err.code);if(Object.keys(fresh).length===5)clearTimeout(timer);$("#sync").textContent=err.code==="permission-denied"?"部分資料沒有存取權限（"+name+"）":"資料連線中斷，請重新整理頁面";render()}));
   }
-  if(me.role==="admin")unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
+  unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
