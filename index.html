@@ -825,7 +825,7 @@ function quoteForm(src,copy){
     {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"公司地址")||(cdSame?"":addrErr(qd,"送貨地址"));if(e){showErr({message:e});return false}}
     if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
     let customerId=val(fd,"customerId");
-    if(!customerId&&fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}
+    if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
     const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:fmtMobile(val(fd,"salesMobile")),taxMode:val(fd,"taxMode"),items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
@@ -1120,7 +1120,9 @@ $("#accBtn").onclick=()=>{$("#menuView").hidden=true;$("#appView").hidden=false;
 })();
 
 /* ---------- data (Firebase) ---------- */
-const wrap=r=>({set:d=>setDoc(r,d),update:d=>updateDoc(r,d),delete:()=>deleteDoc(r)});
+/* 去除 undefined 欄位，Firestore 不接受 undefined */
+const clean=d=>JSON.parse(JSON.stringify(d));
+const wrap=r=>({id:r.id,set:d=>setDoc(r,clean(d)),update:d=>updateDoc(r,clean(d)),delete:()=>deleteDoc(r)});
 const fsdb={
   collection:n=>({
     onSnapshot:(next,err)=>onSnapshot(collection(fs,n),{includeMetadataChanges:true},snap=>next({docs:snap.docs.map(d=>({id:d.id,data:()=>d.data()})),metadata:snap.metadata}),err),
