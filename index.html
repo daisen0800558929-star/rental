@@ -37,6 +37,10 @@ h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em}
 nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:0}
 nav button{flex:0 0 auto;border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer}
 nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.addr{display:grid;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+.addr-t{font-size:13px;color:var(--fg);font-weight:500;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.addr .inl{display:inline-flex;flex-direction:row;align-items:center;gap:6px;font-weight:400;color:var(--muted)}
+.addr .inl input{width:auto}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -504,13 +508,17 @@ function customerForm(c){
   <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
   <label>手機<input name="mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
   <label class="full">Email<input name="email" value="${esc(c.email||"")}" inputmode="email"></label>
-  <label class="full">公司地址<input name="address" value="${esc(c.address||"")}"></label>
-  <label class="full">送貨地址<input name="delivery" value="${esc(c.delivery||"")}" placeholder="與公司地址相同可留空"></label>
+  ${addrFields("a","公司地址",c.addr||parseAddr(c.address))}
+  ${addrFields("d","送貨地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address)}
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
-  async fd=>{const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:val(fd,"phone"),fax:val(fd,"fax"),mobile:val(fd,"mobile"),email:val(fd,"email"),address:val(fd,"address"),delivery:val(fd,"delivery"),note:val(fd,"note")};
+  async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
+    const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email"),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
     if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
+    if(d.taxId&&!/^\d{8}$/.test(d.taxId)){showErr({message:"統編需為 8 位數字。"});return false}
+    {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
+  bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
 }
 
@@ -545,6 +553,52 @@ function fmtMobile(v){const d=String(v).replace(/\D/g,"").slice(0,10);return d.l
 const mobileOk=v=>!v||/^09\d{2}-\d{3}-\d{3}$/.test(v);
 function nowLocal(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
 const fullAddr=c=>[c.zip,(c.county||"")+(c.district||"")+(c.road||"")+(c.detail||"")].filter(Boolean).join(" ");
+/* 地址防呆：縣市 → 鄉鎮市區（郵遞區號）→ 路名 → 巷弄號樓 */
+function parseAddr(str){
+  const o={county:"",district:"",zip:"",road:"",detail:""};let t=String(str||"").trim().replace(/^\d{3,6}\s*/,"").replace(/^台/,"臺");
+  if(!t)return o;
+  const cty=Object.keys(ZIP).find(k=>t.startsWith(k)||t.startsWith(k.replace("臺","台")));
+  if(cty){o.county=cty;t=t.slice(cty.length);const z=ZIP[cty].find(d=>t.startsWith(d.name));if(z){o.district=z.name;o.zip=z.zip;t=t.slice(z.name.length)}}
+  const m=t.match(/^(.*?(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?)(.*)$/);
+  if(m){o.road=m[1];o.detail=m[2]}else o.road=t;
+  return o;
+}
+function addrFields(P,title,a,same){
+  a=a||{};
+  return `<div class="full addr" data-addr="${P}"><div class="addr-t">${title}${same!==undefined?`<label class="inl"><input type="checkbox" name="${P}_same" ${same?"checked":""}> 同公司地址</label>`:""}</div>
+  <div class="grid2 addr-f"${same?" hidden":""}>
+    <label>縣市<select name="${P}_county"><option value="">請選擇縣市</option>${Object.keys(ZIP).map(n=>opt(n,n,n===a.county)).join("")}</select></label>
+    <label>鄉鎮市區（郵遞區號）<select name="${P}_district" data-sel="${esc(a.district||"")}"></select></label>
+    <label>路／街名<input name="${P}_road" value="${esc(a.road||"")}" placeholder="例：自強南路"></label>
+    <label>巷弄號樓<input name="${P}_detail" value="${esc(a.detail||"")}" placeholder="例：537號3樓"></label>
+  </div><div class="note" data-prev></div></div>`;
+}
+function bindAddr(P){
+  const F=form.elements,box=form.querySelector(`[data-addr="${P}"]`),cty=F[P+"_county"],dis=F[P+"_district"],same=F[P+"_same"];
+  const fill=sel=>{const l=ZIP[cty.value]||[];dis.innerHTML=l.length?l.map(z=>opt(z.name,z.zip+" "+z.name,z.name===sel)).join(""):'<option value="">請先選縣市</option>';dis.disabled=!l.length};
+  const prev=()=>{const o=addrRead(P);box.querySelector("[data-prev]").textContent=same?.checked?"送貨地址與公司地址相同":(fullAddr(o)?"完整地址："+fullAddr(o):"尚未填寫地址")};
+  fill(dis.dataset.sel);
+  cty.addEventListener("change",()=>{fill("");prev()});
+  [dis,F[P+"_road"],F[P+"_detail"]].forEach(el=>el.addEventListener("input",prev));dis.addEventListener("change",prev);
+  if(same)same.addEventListener("change",()=>{box.querySelector(".addr-f").hidden=same.checked;prev()});
+  box._set=a=>{a=a||{};cty.value=a.county||"";fill(a.district||"");F[P+"_road"].value=a.road||"";F[P+"_detail"].value=a.detail||"";prev()};
+  prev();
+}
+function addrRead(P){const F=form.elements,c=F[P+"_county"].value,d=c?F[P+"_district"].value:"";
+  return{county:c,district:d,zip:(ZIP[c]||[]).find(z=>z.name===d)?.zip||"",road:F[P+"_road"].value.trim(),detail:F[P+"_detail"].value.trim()}}
+function addrErr(o,label){
+  if(!o.county&&!o.road&&!o.detail)return"";
+  if(!o.county||!o.district)return label+"：請選擇縣市與鄉鎮市區。";
+  if(!o.road)return label+"：請填寫路／街名。";
+  if(!/\d/.test(o.detail)||!/號/.test(o.detail))return label+"：巷弄號樓請填到門牌「號」，例如 537號 或 12巷3號2樓。";
+  return"";
+}
+function bindPhones(map){const F=form.elements;for(const[n,k]of Object.entries(map)){const el=F[n];if(!el)continue;
+  el.setAttribute("autocomplete","off");if(k==="mobile"){el.setAttribute("inputmode","numeric");el.maxLength=12;el.placeholder="0965-585-129"}else{el.setAttribute("inputmode","tel");el.placeholder="04-7510728"}
+  const hint=document.createElement("span");hint.className="note";hint.style.color="var(--bad)";el.after(hint);
+  const chk=()=>{const ok=k==="mobile"?mobileOk(el.value):telOk(el.value);hint.textContent=ok?"":(k==="mobile"?"手機需 09 開頭共 10 碼":"請輸入區碼加號碼，例如 04-7510728")};
+  el.addEventListener("input",()=>{el.value=k==="mobile"?fmtMobile(el.value):fmtTel(el.value);chk()});el.value=k==="mobile"?fmtMobile(el.value):fmtTel(el.value);chk()}}
+function phoneErr(vals){for(const[label,v,k]of vals){if(k==="mobile"?!mobileOk(v):!telOk(v))return label+(k==="mobile"?" 格式不正確，請輸入 09 開頭共 10 碼，例如 0965-585-129。":" 格式不正確，請輸入區碼加號碼，例如 04-7510728。")}return""}
 let callRange="today";
 const addDaysStr=(d,n)=>new Date(dayNum(d)*864e5+n*864e5).toISOString().slice(0,10);
 $("#main").addEventListener("change",e=>{if(e.target.id==="callRange"){callRange=e.target.value;render()}});
@@ -601,7 +655,7 @@ function callForm(src){
     const ex=S.customers.find(k=>k.name===d.company);
     if(ex)d.customerId=ex.id;
     else if(d.company&&fd.get("saveCust")){const ref=db.collection("customers").doc();
-      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),taxId:"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
+      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
     if(isNew){d.createdAt=d.updatedAt;d.createdBy=me.email;await db.collection("calls").doc().set(d);toast("已儲存通聯紀錄")}
     else{await db.doc("calls/"+c.id).update(d);toast("已儲存")}
   },true);
@@ -675,8 +729,8 @@ function quoteForm(src,copy){
     <label>傳真<input name="c_fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
     <label>聯絡人<input name="c_contact" value="${esc(c.contact||"")}"></label>
     <label>手機電話<input name="c_mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
-    <label class="full">公司地址<input name="c_address" value="${esc(c.address||"")}"></label>
-    <label class="full">送貨地址<input name="c_delivery" value="${esc(c.delivery||"")}"></label>
+    ${addrFields("ca","公司地址",c.addr||parseAddr(c.address))}
+    ${addrFields("cd","送貨地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address)}
     <label class="full" id="saveCustWrap"><span><input type="checkbox" name="saveCust" style="width:auto" checked> 同時新增到客戶資料</span></label>
   </div></fieldset>
   <fieldset><legend>報價資訊</legend><div class="grid2">
@@ -698,12 +752,15 @@ function quoteForm(src,copy){
     const g=k=>fd.getAll(k).map(v=>String(v).trim());
     const sp=g("i_spec"),ca=g("i_cat"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
     const items=sp.map((v,i)=>({spec:v,cat:ca[i],unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
-    const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:val(fd,"c_phone"),fax:val(fd,"c_fax"),contact:val(fd,"c_contact"),mobile:val(fd,"c_mobile"),address:val(fd,"c_address"),delivery:val(fd,"c_delivery")};
+    const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
+    const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
     if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
+    if(cust.taxId&&!/^\d{8}$/.test(cust.taxId)){showErr({message:"統編需為 8 位數字。"});return false}
+    {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"公司地址")||(cdSame?"":addrErr(qd,"送貨地址"));if(e){showErr({message:e});return false}}
     if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
     let customerId=val(fd,"customerId");
     if(!customerId&&fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}
-    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:val(fd,"salesMobile"),taxMode:val(fd,"taxMode"),items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:val(fd,"sales"),salesMobile:fmtMobile(val(fd,"salesMobile")),taxMode:val(fd,"taxMode"),items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
       d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
@@ -724,7 +781,10 @@ function quoteForm(src,copy){
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
-  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){const m={c_name:k.name,c_taxId:k.taxId,c_phone:k.phone,c_fax:k.fax,c_contact:k.contact,c_mobile:k.mobile,c_address:k.address,c_delivery:k.delivery||k.address};for(const n in m)form.elements[n].value=m[n]||""}calc()};
+  form.elements.customerId.onchange=e=>{const k=cust(e.target.value);if(k){const m={c_name:k.name,c_taxId:k.taxId,c_phone:fmtTel(k.phone||""),c_fax:fmtTel(k.fax||""),c_contact:k.contact,c_mobile:fmtMobile(k.mobile||""),};for(const n in m)form.elements[n].value=m[n]||"";
+    form.querySelector('[data-addr="ca"]')._set(k.addr||parseAddr(k.address));const same=!k.delivery||k.delivery===k.address;form.elements.cd_same.checked=same;form.elements.cd_same.dispatchEvent(new Event("change"));if(!same)form.querySelector('[data-addr="cd"]')._set(k.dlv||parseAddr(k.delivery));
+    ["c_phone","c_fax","c_mobile"].forEach(n=>form.elements[n].dispatchEvent(new Event("input")))}calc()};
+  bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});
   calc();
 }
 function quoteSheet(x){
