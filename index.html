@@ -131,9 +131,21 @@ html,body{margin:0}
 .login h1{font-size:21px}
 .userbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .userbox .sub{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#splash{position:fixed;inset:0;z-index:50;background:#ffffff;display:grid;place-items:center;cursor:pointer;
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(16px,env(safe-area-inset-left,0px))}
+#splash button{border:0;background:none;padding:0;cursor:pointer;border-radius:12px}
+#splash button:focus-visible{outline:3px solid #1f4fa0;outline-offset:8px}
+#splash img{width:min(520px,82vw);height:auto;display:block}
+#splash.leave{opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:no-preference){
+  #splash{transition:opacity .35s ease}
+  #splash img{animation:breathe 2.6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+}
 </style>
 </head>
 <body>
+<div id="splash"><button type="button" id="enterBtn" aria-label="進入大森租賃管理系統"><img src="logo.png" alt="大森節能"></button></div>
 <div class="login" id="loginView">
   <form id="loginForm" novalidate>
     <img src="logo.png" alt="大森節能" style="height:64px;width:auto;justify-self:start;background:#fff;border-radius:6px"><div><h1>大森租賃管理</h1><div class="sub">請使用公司開通的帳號登入</div></div>
@@ -669,6 +681,14 @@ function accountForm(u){
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newacc]")){accountForm(null);return}
   const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}});
 $("#main").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest("[data-acc]");if(r){const u=S.staff.find(x=>x.id===r.dataset.acc);if(u)accountForm(u)}}});
+
+/* ---------- 進入首頁 ---------- */
+(()=>{const sp=$("#splash");let gone=false;
+  const enter=()=>{if(gone)return;gone=true;sp.classList.add("leave");setTimeout(()=>sp.remove(),400);const f=$("#loginView:not([hidden]) input");if(f)setTimeout(()=>f.focus(),420)};
+  sp.addEventListener("click",enter);
+  document.addEventListener("keydown",e=>{if(!gone&&(e.key==="Enter"||e.key===" ")){e.preventDefault();enter()}});
+  $("#enterBtn").focus();
+})();
 
 /* ---------- data (Firebase) ---------- */
 const wrap=r=>({set:d=>setDoc(r,d),update:d=>updateDoc(r,d),delete:()=>deleteDoc(r)});
