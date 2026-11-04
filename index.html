@@ -46,6 +46,14 @@ nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--a
 .taxchk{display:grid;gap:6px;margin-top:-4px}
 .taxchk .inl{display:inline-flex;flex-direction:row;align-items:center;gap:6px;color:var(--muted)}
 .taxchk .inl input{width:auto}
+.micbox{position:relative;display:block}
+.micbox>input,.micbox>textarea{padding-right:44px}
+.mic{position:absolute;right:5px;top:5px;width:32px;height:32px;border-radius:50%;border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;padding:0}
+.mic:hover{background:var(--accent-soft);color:var(--accent)}
+.mic:focus-visible{outline:2px solid var(--accent)}
+.mic.on{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:no-preference){.mic.on{animation:micpulse 1.1s ease-in-out infinite}@keyframes micpulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 30%,transparent)}}}
+.addr-mic{display:inline-flex;align-items:center;gap:4px}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -524,6 +532,7 @@ function customerForm(c,pre){
     {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
   bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});bindTax("k","name","taxId");
+  addVoice({taxId:"digits",name:"text",phone:"tel",fax:"tel",contact:"text",mobile:"tel",email:"email",note:"append"},["a","d"]);
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
 }
 
@@ -803,6 +812,45 @@ function importDialog(){
   };
 }
 
+
+/* ---------- 語音輸入（使用瀏覽器內建語音辨識，中文台灣） ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const MIC_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+function zhDigits(t){const m={"零":"0","〇":"0","○":"0","洞":"0","一":"1","么":"1","幺":"1","壹":"1","二":"2","兩":"2","貳":"2","三":"3","參":"3","四":"4","肆":"4","五":"5","伍":"5","六":"6","陸":"6","七":"7","拐":"7","柒":"7","八":"8","捌":"8","九":"9","勾":"9","玖":"9"};
+  return String(t).replace(/[零〇○洞一么幺壹二兩貳三參四肆五伍六陸七拐柒八捌九勾玖]/g,c=>m[c])}
+function voiceClean(kind,t){
+  t=String(t).trim().replace(/[。．]$/,"");
+  if(kind==="digits")return zhDigits(t).replace(/\D/g,"").slice(0,8);
+  if(kind==="tel")return zhDigits(t).replace(/(分機|轉|井字?號?)/g,"#").replace(/[^\d#]/g,"");
+  if(kind==="email")return t.replace(/小老鼠|at|艾特/gi,"@").replace(/點|dot/gi,".").replace(/底線/g,"_").replace(/槓|減號/g,"-").replace(/\s+/g,"").toLowerCase();
+  return t.replace(/\s+/g,kind==="append"?" ":"");
+}
+let micActive=null;
+function listen(onText,btn){
+  if(micActive){try{micActive.stop()}catch(e){}if(micActive._btn===btn){micActive=null;return}}
+  const r=new SR();r.lang="zh-TW";r.interimResults=false;r.maxAlternatives=1;r._btn=btn;micActive=r;
+  btn.classList.add("on");btn.setAttribute("aria-label","停止語音輸入");
+  r.onresult=e=>{const t=e.results[0][0].transcript;if(t)onText(t)};
+  r.onerror=e=>{toast(e.error==="not-allowed"||e.error==="service-not-allowed"?"請允許瀏覽器使用麥克風後再試":e.error==="no-speech"?"沒有聽到聲音，請再按一次麥克風說話":"語音辨識失敗，請再試一次")};
+  r.onend=()=>{btn.classList.remove("on");btn.setAttribute("aria-label","語音輸入");if(micActive===r)micActive=null};
+  try{r.start();toast("請說話…")}catch(e){btn.classList.remove("on");toast("語音辨識無法啟動，請再試一次")}
+}
+function addVoice(map,addrs){
+  if(!SR)return;
+  const F=form.elements;
+  for(const[n,kind]of Object.entries(map)){const el=F[n];if(!el||el.disabled)continue;
+    const box=document.createElement("span");box.className="micbox";el.before(box);box.appendChild(el);
+    const b=document.createElement("button");b.type="button";b.className="mic";b.innerHTML=MIC_SVG;b.setAttribute("aria-label","語音輸入");b.title="按一下開始說話";box.appendChild(b);
+    b.onclick=()=>listen(t=>{const v=voiceClean(kind,t);el.value=kind==="append"&&el.value?el.value.trimEnd()+" "+v:v;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}))},b)}
+  for(const P of addrs||[]){const box=form.querySelector(`[data-addr="${P}"]`);if(!box)continue;
+    const b=document.createElement("button");b.type="button";b.className="btn small addr-mic";b.innerHTML=MIC_SVG+"說地址";box.querySelector(".addr-t").appendChild(b);
+    b.onclick=()=>listen(t=>{let a=zhDigits(t).replace(/\s+/g,"").replace(/^台/,"臺");
+      let o=parseAddr(a);
+      if(!o.county){for(const[c,ds]of Object.entries(ZIP)){const d=ds.find(d=>a.startsWith(d.name)&&d.name.length>2);if(d){o=parseAddr(c+a);break}}}
+      if(!o.county){toast("聽到：「"+t+"」，請從縣市開始說，例如：彰化縣彰化市自強南路537號");return}
+      const same=form.elements[P+"_same"];if(same&&same.checked){same.checked=false;same.dispatchEvent(new Event("change"))}
+      box._set(o);toast("已填入地址，請確認")},b)}
+}
 
 /* ---------- 客戶通聯 ---------- */
 const CALL_TYPES=["新客戶詢問","舊客戶詢問","報價追蹤","報修／維修","客訴","帳款／發票","廠商來電","其他"];
