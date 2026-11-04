@@ -543,11 +543,23 @@ function taxChecksum(no){
 }
 const normName=n=>String(n||"").normalize("NFKC").replace(/[\s　]/g,"").replace(/臺/g,"台");
 const taxCache={};
-async function fetchJSON(url){const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),9000);
+async function fetchJSON(url,ms=15000){const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),ms);
   try{const r=await fetch(url,{signal:ctl.signal});if(!r.ok)throw new Error("HTTP "+r.status);const tx=await r.text();return tx.trim()?JSON.parse(tx):null}finally{clearTimeout(t)}}
 /* 依序查詢：經濟部公司登記 → 經濟部商業(行號)登記 → g0v 公司資料 */
-async function lookupTax(no){
-  if(taxCache[no])return taxCache[no];
+/* 已驗證過的統編：本機快取 30 天、系統內已驗證的客戶資料 */
+function knownTax(no){
+  try{const c=JSON.parse(localStorage.getItem("tax:"+no)||"null");if(c&&Date.now()-c.t<30*864e5)return{found:true,name:c.name,status:c.status,kind:c.kind,cached:true}}catch(e){}
+  const k=S.customers.find(x=>x.taxId===no&&x.taxVerified&&!x.taxExempt);
+  return k?{found:true,name:k.name,status:"",kind:"",cached:true,from:"系統客戶資料"}:null;
+}
+async function lookupTax(no,force){
+  if(!force&&taxCache[no])return taxCache[no];
+  const live=await lookupTaxLive(no);
+  if(live.found){try{localStorage.setItem("tax:"+no,JSON.stringify({name:live.name,status:live.status,kind:live.kind,t:Date.now()}))}catch(e){}return live}
+  if(live.error){const k=knownTax(no);if(k)return k}
+  return live;
+}
+async function lookupTaxLive(no){
   const G="https://data.gcis.nat.gov.tw/od/data/api/",q=f=>"?$format=json&$filter="+encodeURIComponent(f)+"&$skip=0&$top=1";
   const src=[
     async()=>{const j=await fetchJSON(G+"5F64D864-61CB-4D0D-8AD9-492047CC1EA6"+q("Business_Accounting_NO eq "+no));const r=Array.isArray(j)?j[0]:null;return r?.Company_Name?{name:r.Company_Name,status:r.Company_Status_Desc||"",kind:"公司"}:null},
@@ -556,6 +568,7 @@ async function lookupTax(no){
   ];
   let reached=false;
   for(const f of src){try{const r=await f();reached=true;if(r){return taxCache[no]={found:true,...r}}}catch(e){console.warn("統編查詢來源失敗",e)}}
+  if(!reached&&!lookupTaxLive.retrying){lookupTaxLive.retrying=true;try{await new Promise(r=>setTimeout(r,1200));return await lookupTaxLive(no)}finally{lookupTaxLive.retrying=false}}
   const res=reached?{found:false}:{error:true};if(reached)taxCache[no]=res;return res;
 }
 /* 綁定表單：nameF 公司名稱欄、taxF 統編欄、P 前綴 */
@@ -577,15 +590,16 @@ function bindTax(P,nameF,taxF){
     const p=st.pending=lookupTax(no);const r=await p;if(st.pending!==p)return;st.pending=null;
     if(tx.value!==no||ex.checked)return check();
     st.info=r;
-    if(r.error){show("✕ 目前無法連線查詢登記資料，請稍後再試。若為政府機關等單位可勾選下方免驗證","bad");return}
+    if(r.error){show(`✕ 經濟部查詢網站暫時沒有回應（政府網站偶爾較慢或維護中）　<button class="btn small" type="button" data-retrytax="${P}">重新查詢</button>`,"bad");return}
     if(!r.found){show("✕ 查無此統編的登記資料，請確認統編是否正確","bad");return}
     if(normName(r.name)!==normName(nm.value)&&st.lastNo!==no){nm.value=r.name;nm.dispatchEvent(new Event("change",{bubbles:true}))}
     st.lastNo=no;
     const same=normName(r.name)===normName(nm.value);
-    if(same){show(`✓ 已帶出登記名稱：${esc(r.name)}${r.status?"（"+esc(r.status)+"）":""}`,"ok");st.ok=true}
+    if(same){show(`✓ ${r.cached?"已驗證過（"+(r.from||"本機紀錄")+"）":"已帶出登記名稱"}：${esc(r.name)}${r.status?"（"+esc(r.status)+"）":""}`,"ok");st.ok=true}
     else show(`✕ 此統編登記名稱為「${esc(r.name)}」，與輸入的公司名稱不符　<button class="btn small" type="button" data-usename="${P}">改用登記名稱</button>`,"bad");
   };
-  form.addEventListener("click",e=>{const b=e.target.closest(`[data-usename="${P}"]`);if(b&&st.info?.name){nm.value=st.info.name;nm.dispatchEvent(new Event("input",{bubbles:true}));check()}});
+  form.addEventListener("click",e=>{const rb=e.target.closest(`[data-retrytax="${P}"]`);if(rb){const no=tx.value;delete taxCache[no];check();return}
+    const b=e.target.closest(`[data-usename="${P}"]`);if(b&&st.info?.name){nm.value=st.info.name;nm.dispatchEvent(new Event("input",{bubbles:true}));check()}});
   let t=null;const later=()=>{clearTimeout(t);t=setTimeout(check,350)};
   tx.addEventListener("input",later);nm.addEventListener("input",later);nm.addEventListener("change",later);
   ex.addEventListener("change",()=>{et.hidden=!ex.checked;check()});et.addEventListener("change",check);
