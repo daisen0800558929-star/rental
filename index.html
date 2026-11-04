@@ -378,7 +378,7 @@ function viewCustomers(loading){
     return `<div class="row" data-open="customer" data-id="${esc(c.id)}" tabindex="0">
       <div><div class="t">${esc(c.name)}</div><div class="m">${esc(c.contact||"")}${c.phone?" · "+esc(c.phone):""}${c.taxId?" · 統編 "+esc(c.taxId):""}</div></div>
       <div class="r">${n?`<span class="pill">租用中 ${n} 件</span>`:`<span class="pill mute">無租用</span>`}</div></div>`});
-  return `<div class="toolbar"><input id="q" placeholder="搜尋名稱、聯絡人、電話">${canWrite?'<button class="btn" type="button" data-new="customer">＋ 新增客戶</button><button class="btn" type="button" data-ocr>拍照辨識新增</button><button class="btn" type="button" data-import>匯入資料</button>':""}</div>
+  return `<div class="toolbar"><input id="q" placeholder="搜尋名稱、聯絡人、電話">${canWrite?'<button class="btn" type="button" data-new="customer">＋ 新增客戶</button><button class="btn" type="button" data-ocr>名片辨識新增</button><button class="btn" type="button" data-import>匯入資料</button>':""}</div>
   <div class="list">${emptyOr(rows,loading,"還沒有客戶資料。")}</div>`;
 }
 
@@ -499,8 +499,11 @@ function equipmentForm(e){
 function customerForm(c,pre){
   const isNew=!c;c=c||pre||{};
   openDlg(`<h3>${isNew?"新增客戶":esc(c.name)}</h3>
-  ${pre?._ocr?`<div class="banner" style="background:var(--accent-soft);color:var(--fg)">已從照片辨識並填入資料，請逐欄確認後再儲存。辨識不到或錯誤的欄位請手動修正。
-    <details style="margin-top:6px"><summary>查看辨識出的文字</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(pre._ocr)}</pre></details></div>`:""}
+  ${pre?._ocr?(()=>{const dup=S.customers.find(k=>(pre.taxId&&k.taxId===pre.taxId)||(pre.name&&normName(k.name)===normName(pre.name)));
+    return `<div class="banner" style="background:var(--accent-soft);color:var(--fg)">${pre._pos?`<b>第 ${pre._pos} 張</b>　`:""}已從${pre._src||"照片"}辨識並填入資料，請對照名片逐欄確認後再儲存。辨識不到或錯誤的欄位請手動修正。${pre._pos&&/\//.test(pre._pos)?"儲存或按取消後會接著處理下一張。":""}
+    ${dup?`<div style="margin-top:6px;color:var(--warn)"><b>注意：客戶資料裡已經有「${esc(dup.name)}」</b>，可能是同一家公司。<button class="btn small" type="button" data-dupopen="${esc(dup.id)}">開啟既有資料</button></div>`:""}
+    ${pre._img?`<img src="${pre._img}" alt="名片" style="display:block;max-width:100%;max-height:220px;margin-top:8px;border:1px solid var(--line);border-radius:6px;background:#fff">`:""}
+    <details style="margin-top:6px"><summary>查看辨識出的文字</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(pre._ocr)}</pre></details></div>`})():""}
   <div class="grid2"><label class="full">統一編號（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
   ${taxBlock("k",c.taxExempt)}
   <label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
@@ -642,31 +645,103 @@ function parseCard(raw){
   // 公司名稱
   const co=lines.filter(l=>/(股份有限公司|有限公司|企業社|工作室|商行|工廠|實業|企業|公司|行)$/.test(strip(l).replace(/\s/g,""))&&!/地址|電話|傳真/.test(l)).map(l=>strip(l).replace(/\s/g,""));
   if(co.length)o.name=co.sort((a,b)=>b.length-a.length)[0];
-  // 聯絡人
-  const title=/(董事長|總經理|副總|經理|協理|主任|課長|廠長|店長|專員|業務|負責人|先生|小姐|女士)/;
-  for(const l of lines){const t=strip(l);if(o.name&&t.includes(o.name))continue;
-    const n=t.match(/^([一-鿿]{2,4}?)\s*(?:(?:董事長|總經理|副總|經理|協理|主任|課長|廠長|店長|專員|業務|負責人|先生|小姐|女士)\s*)*$/);
-    if(n&&(title.test(t)||/聯絡人|姓名/.test(l)||t.length<=4)){o.contact=n[1];break}}
+  // 聯絡人（名片上姓名常以大字距排版，如「李 文 欽」）
+  const TITLES="董事長|總經理|副總經理|副總|執行長|特助|經理|副理|協理|處長|主任|課長|組長|廠長|店長|專員|業務|工程師|技師|助理|負責人|代表|顧問|先生|小姐|女士";
+  const DEPT=/^(工務|業務|行銷|技術|客服|採購|研發|財務|會計|行政|總務|品管|品保|生管|資訊|工程|營業|銷售|管理|人事|設計|製造|生產|物流|倉管|廠務|專案|資深|高級|首席|區域)$/;
+  const SURN="陳林黃張李王吳劉蔡楊許鄭謝郭洪曾邱廖賴周徐蘇葉莊呂江何蕭羅高潘簡朱鍾彭游詹胡施沈余趙盧梁顏柯孫魏翁戴范宋方鄧杜傅侯曹薛丁卓阮馬董温温唐藍石蔣古紀姚連馮歐程湯黃田康姜汪白鄒尤巫鐘黎涂龔嚴韓袁金童陸夏柳邵錢伍倪溫于譚駱熊任甘秦顧毛章史官萬俞雷粘饒張闕凃龍";
+  const collapse=l=>l.replace(/(?<=[一-鿿])\s+(?=[一-鿿])/g,"");
+  const reN=new RegExp("^([一-鿿]{2,4}?)\\s*(?:(?:"+TITLES+")\\s*)*$"),reT=new RegExp("("+TITLES+")");
+  const cands=[],tparts=[];
+  lines.forEach((l,i)=>{const t=collapse(strip(l));if(o.name&&(t.includes(o.name)||o.name.includes(t)))return;if(/[0-9@:]/.test(t))return;
+    const n=t.match(reN);if(!n)return;const nm=n[1];
+    if(DEPT.test(nm)||reT.test(nm)||new RegExp("^("+TITLES+")+$").test(t)){tparts.push([i,t]);return}
+    let sc=0;if(SURN.includes(nm[0]))sc+=3;if(nm.length===3)sc+=2;if(reT.test(t))sc+=2;if(/聯絡人|姓名/.test(l))sc+=4;if(t.length<=4)sc+=1;
+    const prev=collapse(strip(lines[i-1]||""));if(new RegExp("^(?:[一-鿿]{0,4})("+TITLES+")$").test(prev))sc+=2;
+    cands.push([sc,nm,reT.test(t)?t.slice(nm.length):""])});
+  cands.sort((x,y)=>y[0]-x[0]);
+  if(tparts.length){let run=[tparts[0]];for(const x of tparts.slice(1)){if(x[0]===run[run.length-1][0]+1)run.push(x);else break}o.title=run.map(x=>x[1]).join("")}
+  if(cands.length&&cands[0][0]>=3){o.contact=cands[0][1];if(cands[0][2])o.title=cands[0][2]}
+  // 網站、職稱放備註
+  m=flat.match(/(?:https?:\/\/)?www\.[\w-]+(?:\.[\w-]+)+/i);if(m)o.web=m[0].toLowerCase();
+  const notes=[o.title?"職稱："+o.title:"",o.web?"網站："+o.web:""].filter(Boolean);if(notes.length)o.note=notes.join("　");
   return o;
 }
-async function ocrCustomer(file){
-  openDlg(`<h3>拍照辨識客戶資料</h3><div class="note" id="ocrMsg">準備中…</div>
-    <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div id="ocrBar" style="height:100%;width:3%;background:var(--accent);transition:width .2s"></div></div>
-    <img id="ocrImg" alt="上傳的照片" style="max-height:260px;object-fit:contain;border:1px solid var(--line);border-radius:6px">
-    <div class="note">第一次使用需要下載辨識資料（約 10–20 MB），之後會比較快。請盡量拍正、拍清楚、光線充足。</div>
-    <div class="actions"><button class="btn" type="button" data-close>取消</button></div>`,null);
-  const msg=t=>{const e=$("#ocrMsg");if(e)e.textContent=t},bar=p=>{const e=$("#ocrBar");if(e)e.style.width=Math.max(3,Math.round(p*100))+"%"};
-  try{
-    const cv=await shrinkImage(file);const img=$("#ocrImg");if(img)img.src=cv.toDataURL("image/jpeg",.85);
-    msg("載入辨識程式…");await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
-    const worker=await Tesseract.createWorker(["chi_tra","eng"],1,{logger:m=>{if(m.status==="recognizing text"){msg("辨識文字中… "+Math.round(m.progress*100)+"%");bar(.4+m.progress*.6)}else{msg(m.status==="loading language traineddata"?"下載中文辨識資料…":"準備中…");bar((m.progress||0)*.4)}}});
-    const {data}=await worker.recognize(cv);await worker.terminate();
-    if(!dlg.open)return;
-    const o=parseCard(data.text);o._ocr=data.text.trim();
-    dlg.close();customerForm(null,o);
-    if(!o.name&&!o.taxId&&!o.phone&&!o.mobile)toast("照片中沒有辨識到客戶資料，請手動填寫");
-  }catch(err){console.error(err);msg("辨識失敗："+(err.message||err)+"。請檢查網路後再試，或改用手動新增。")}
+/* 名片來源：拍照、圖片／PDF 檔（可多選）、貼上文字。多張時依序辨識，一張存完接著下一張 */
+let ocrQueue=[],ocrTotal=0,ocrWorker=null;
+function ocrMenu(){
+  openDlg(`<h3>名片辨識新增客戶</h3>
+  <div class="note">紙本名片用拍照；LINE、Email 收到的電子名片（圖片或 PDF）用「選擇檔案」，可一次選多張。</div>
+  <div class="sendopts">
+    <button class="btn" type="button" data-ocrsrc="cam"><b>拍照</b><span class="note">直接用相機拍紙本名片</span></button>
+    <button class="btn" type="button" data-ocrsrc="file"><b>選擇檔案（圖片或 PDF）</b><span class="note">相簿、下載資料夾裡的名片，可多選</span></button>
+    <button class="btn" type="button" data-ocrsrc="text"><b>貼上文字</b><span class="note">電子名片或訊息裡的文字，直接貼上</span></button>
+  </div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button></div>`,null);
+  form.querySelectorAll("[data-ocrsrc]").forEach(b=>b.onclick=()=>{const k=b.dataset.ocrsrc;
+    if(k==="text"){ocrPaste();return}
+    const inp=k==="cam"?ocrCam:ocrFile;inp.click()});
 }
+function ocrPaste(){
+  openDlg(`<h3>貼上名片文字</h3>
+  <label>名片文字<textarea name="t" rows="9" placeholder="例：&#10;台灣精銳科技股份有限公司&#10;工務專員 李文欽&#10;電話：04-24650219 分機 6613&#10;統一編號：70647919" required></textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">辨識</button></div>`,
+  fd=>{const t=val(fd,"t");if(!t){showErr({message:"請先貼上文字。"});return false}
+    const o=parseCard(t);o._ocr=t;o._src="文字";setTimeout(()=>customerForm(null,o),0)});
+}
+function ocrStart(files){
+  files=[...files].filter(f=>/^image\//.test(f.type)||f.type==="application/pdf"||/\.(pdf|jpe?g|png|heic|webp)$/i.test(f.name));
+  if(!files.length){toast("請選擇圖片或 PDF 檔");return}
+  ocrQueue=files.slice(1);ocrTotal=files.length;ocrCustomer(files[0]);
+}
+async function getOcrWorker(msg,bar){
+  if(ocrWorker)return ocrWorker;
+  msg("載入辨識程式…");await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+  ocrWorker=await Tesseract.createWorker(["chi_tra","eng"],1,{logger:m=>{const f=getOcrWorker.log;if(f)f(m)}});
+  return ocrWorker;
+}
+/* PDF：有文字的直接讀文字（最準）；沒有文字的（掃描檔）轉成圖片再辨識 */
+async function pdfToCard(file){
+  await loadScript("lib/pdf.js");window.pdfjsLib.GlobalWorkerOptions.workerSrc="lib/pdf.worker.js";
+  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const pg=await pdf.getPage(1),tc=await pg.getTextContent();
+  const rows=[];let y=null;for(const it of tc.items){const yy=Math.round(it.transform[5]);if(y===null||Math.abs(yy-y)>3){rows.push("");y=yy}rows[rows.length-1]+=it.str+(it.hasEOL?"":"")}
+  const text=rows.map(r=>r.trim()).filter(Boolean).join("\n");
+  const vp=pg.getViewport({scale:1}),k=Math.min(3,1800/Math.max(vp.width,vp.height)),v2=pg.getViewport({scale:k});
+  const cv=document.createElement("canvas");cv.width=Math.round(v2.width);cv.height=Math.round(v2.height);const g=cv.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,cv.width,cv.height);
+  await pg.render({canvasContext:g,viewport:v2}).promise;
+  return{text:(text.match(/[一-鿿0-9]/g)||[]).length>=12?text:"",cv};
+}
+async function ocrCustomer(file){
+  const pos=ocrTotal>1?`${ocrTotal-ocrQueue.length} / ${ocrTotal}`:"";
+  openDlg(`<h3>名片辨識${pos?"　<span class=\"note\">第 "+pos+" 張</span>":""}</h3><div class="note" id="ocrMsg">準備中…</div>
+    <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div id="ocrBar" style="height:100%;width:3%;background:var(--accent);transition:width .2s"></div></div>
+    <img id="ocrImg" alt="名片" style="max-height:260px;max-width:100%;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff" hidden>
+    <div class="note">第一次使用需要下載辨識資料（約 10–20 MB），之後會比較快。拍照時請拍正、拍清楚、光線充足。</div>
+    <div class="actions"><button class="btn" type="button" id="ocrStop">${ocrQueue.length?"全部取消":"取消"}</button></div>`,null);
+  const msg=t=>{const e=$("#ocrMsg");if(e)e.textContent=t},bar=p=>{const e=$("#ocrBar");if(e)e.style.width=Math.max(3,Math.round(p*100))+"%"};
+  $("#ocrStop").onclick=()=>{ocrQueue=[];dlg.close()};
+  getOcrWorker.log=m=>{if(m.status==="recognizing text"){msg("辨識文字中… "+Math.round(m.progress*100)+"%");bar(.4+m.progress*.6)}else{msg(m.status==="loading language traineddata"?"下載中文辨識資料…":"準備中…");bar((m.progress||0)*.4)}};
+  try{
+    let cv,text="",src="照片";
+    if(file.type==="application/pdf"||/\.pdf$/i.test(file.name)){msg("讀取 PDF…");const r=await pdfToCard(file);cv=r.cv;text=r.text;src="PDF"}
+    else cv=await shrinkImage(file);
+    const shot=cv.toDataURL("image/jpeg",.8);const img=$("#ocrImg");if(img){img.src=shot;img.hidden=false}
+    if(!text){const w=await getOcrWorker(msg,bar);const {data}=await w.recognize(cv);text=data.text;if(src==="PDF")src="PDF（影像）"}
+    if(!dlg.open)return;
+    const o=parseCard(text);o._ocr=String(text).trim();o._img=shot;o._src=src;if(pos)o._pos=pos;
+    dlg.close();customerForm(null,o);form._ocrNext=true;
+    if(!o.name&&!o.taxId&&!o.phone&&!o.mobile)toast("沒有辨識到客戶資料，請對照名片手動填寫");
+  }catch(err){console.error(err);msg("辨識失敗："+(err.message||err)+"。請檢查網路後再試，或改用手動新增。");
+    if(ocrQueue.length){const b=$("#ocrStop");b.insertAdjacentHTML("afterend",'<button class="btn primary" type="button" id="ocrSkip">跳過，下一張</button>');$("#ocrSkip").onclick=()=>{dlg.close();ocrCustomer(ocrQueue.shift())}}}
+}
+form.addEventListener("click",e=>{const b=e.target.closest("[data-dupopen]");if(!b)return;const k=cust(b.dataset.dupopen);if(!k)return;const nx=form._ocrNext;form._ocrNext=false;dlg.close();customerForm(k);form._ocrNext=nx});
+dlg.addEventListener("close",()=>{if(!form._ocrNext||dlg.open)return;form._ocrNext=false;
+  if(ocrQueue.length)setTimeout(()=>ocrCustomer(ocrQueue.shift()),60);
+  else{ocrTotal=0;if(ocrWorker){const w=ocrWorker;ocrWorker=null;setTimeout(()=>w.terminate().catch(()=>{}),0)}}});
+const mkInput=(accept,cam,multi)=>{const i=document.createElement("input");i.type="file";i.accept=accept;if(cam)i.setAttribute("capture","environment");i.multiple=!!multi;i.hidden=true;document.body.appendChild(i);
+  i.onchange=()=>{const f=[...i.files];i.value="";if(f.length){if(dlg.open)dlg.close();ocrStart(f)}};return i};
+const ocrCam=mkInput("image/*",true,false),ocrFile=mkInput("image/*,application/pdf,.pdf",false,true);
+$("#main").addEventListener("click",e=>{if(e.target.closest("[data-ocr]")){ocrMenu();return}if(e.target.closest("[data-import]"))importDialog()});
 
 /* ---------- 匯入客戶資料（Excel / CSV） ---------- */
 const IMPORT_COLS={name:["客戶名稱","公司名稱","公司","名稱","客戶"],taxId:["統編","統一編號"],phone:["公司電話","電話","市話","聯絡電話"],fax:["傳真"],contact:["聯絡人","窗口","負責人"],
@@ -727,9 +802,7 @@ function importDialog(){
     catch(err){showErr(err);b.disabled=false;b.textContent=`已匯入 ${n} 筆，按此繼續`;rows=rows.filter((r,i)=>!ok.slice(0,n).includes(r))}
   };
 }
-const ocrInput=document.createElement("input");ocrInput.type="file";ocrInput.accept="image/*";ocrInput.setAttribute("capture","environment");ocrInput.hidden=true;document.body.appendChild(ocrInput);
-ocrInput.onchange=()=>{const f=ocrInput.files[0];ocrInput.value="";if(f)ocrCustomer(f)};
-$("#main").addEventListener("click",e=>{if(e.target.closest("[data-ocr]")){ocrInput.click();return}if(e.target.closest("[data-import]"))importDialog()});
+
 
 /* ---------- 客戶通聯 ---------- */
 const CALL_TYPES=["新客戶詢問","舊客戶詢問","報價追蹤","報修／維修","客訴","帳款／發票","廠商來電","其他"];
