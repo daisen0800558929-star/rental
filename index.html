@@ -1046,6 +1046,13 @@ async function ensureSignReq(x){
   await db.doc("quotes/"+x.id).update({signToken:token,signExpires:y.signExpires,status:y.status,sentAt:new Date().toISOString()});
   return y;
 }
+/* 簽名連結建立失敗時的說明（多半是 Firebase 規則還沒設定） */
+function signSetupHelp(e){
+  if(e?.code!=="permission-denied")return `<div class="banner">無法建立簽名連結：${esc(e?.message||"請檢查網路後再試一次")}</div>`;
+  return `<div class="banner"><b>線上簽名功能還沒開通</b><br>需要管理員在 Firebase 加上一段權限設定（只要做一次）。在這之前，可以先用「傳 PDF 檔」或「傳圖片」，請客戶列印簽名後拍照回傳，再用「上傳簽回檔」。
+  <ol style="margin:8px 0 0;padding-left:20px"><li>電腦打開 <a href="https://console.firebase.google.com/project/daisen-rental/firestore/rules" target="_blank" rel="noopener">Firebase 主控台 → Firestore → 規則</a></li>
+  <li>把 GitHub 專案裡 <a href="firestore-sign.rules" target="_blank" rel="noopener">firestore-sign.rules</a> 的內容，貼到最外層 <code>match /databases/{database}/documents {</code> 的下一行</li><li>按「發布」，等 1 分鐘後再試</li></ol></div>`;
+}
 /* 把報價單畫成 A4 圖片或 PDF */
 async function renderSheet(x,kind){
   await loadScript("lib/html2canvas.min.js");
@@ -1077,12 +1084,15 @@ function sendForSign(x){
     const kind=b.dataset.send;form.querySelectorAll("[data-send]").forEach(k=>k.disabled=true);
     out.innerHTML=`<div class="note">${kind==="link"?"建立簽名連結中…":"製作檔案中，約需幾秒…"}</div>`;
     try{
-      const y=await ensureSignReq(x);x=y;const url=signUrl(y);
-      const msg=`${COMPANY.name} 報價單&合約書 ${y.no}\n${y.cust?.name||""} 您好，請確認內容後簽名回覆，謝謝。\n線上簽名：${url}`;
+      let y=x,linkErr=null;
+      try{y=await ensureSignReq(x);x=y}catch(e){linkErr=e;console.warn("建立簽名連結失敗",e.code||e)}
+      const url=linkErr?"":signUrl(y);
+      if(linkErr&&kind==="link"){out.innerHTML=signSetupHelp(linkErr);return}
+      const msg=`${COMPANY.name} 報價單&合約書 ${y.no}\n${y.cust?.name||""} 您好，請確認內容後簽名回覆，謝謝。`+(url?`\n線上簽名：${url}`:`\n請列印簽名後拍照回傳。`);
       const file=kind==="link"?null:await renderSheet(y,kind);
       const data=file?{files:[file],title:file.name,text:msg}:{title:"報價單 "+y.no,text:msg};
       const canShare=!!navigator.share&&(!file||navigator.canShare?.({files:[file]}));
-      out.innerHTML=`${kind==="link"?`<div class="linkbox">${esc(url)}</div>`:`<div class="note">已完成：${esc(file.name)}（${Math.max(1,Math.round(file.size/1024))} KB）</div>`}
+      out.innerHTML=`${kind==="link"?`<div class="linkbox">${esc(url)}</div>`:`<div class="note">已完成：${esc(file.name)}（${Math.max(1,Math.round(file.size/1024))} KB）${linkErr?"。這份沒有線上簽名 QR code，客戶需列印簽名後拍照回傳。":""}</div>`}
         <div class="actions" style="justify-content:flex-start">${canShare?'<button class="btn primary" type="button" id="shareNow">分享（LINE、Email…）</button>':""}
         ${file?`<a class="btn" id="dlNow" download="${esc(file.name)}">下載</a>`:""}<button class="btn" type="button" id="copyNow">複製${file?"訊息與連結":"連結"}</button></div>`;
       if(file)$("#dlNow").href=URL.createObjectURL(file);
@@ -1115,7 +1125,7 @@ function uploadSigned(x){
   async fd=>{
     const f=fd.get("file");if(!f||!f.size){showErr({message:"請先選擇檔案。"});return false}
     const data=await fileToData(f);
-    await db.doc("quoteFiles/"+x.id).set({data,type:data.slice(5,data.indexOf(";")),name:f.name,quoteNo:x.no||"",at:new Date().toISOString(),by:me.email});
+    try{await db.doc("quoteFiles/"+x.id).set({data,type:data.slice(5,data.indexOf(";")),name:f.name,quoteNo:x.no||"",at:new Date().toISOString(),by:me.email});}catch(e){if(e.code==="permission-denied"){form.querySelector(".formerr")?.remove();form.insertAdjacentHTML("afterbegin",signSetupHelp(e).replace("線上簽名功能還沒開通","上傳簽回檔功能還沒開通").replace(/在這之前.*?「上傳簽回檔」。/,""));return false}throw e}
     await db.doc("quotes/"+x.id).update({status:"signed",signMethod:"paper",hasScan:true,signature:null,signerName:val(fd,"signerName"),signedAt:val(fd,"date")+"T12:00:00+08:00"});
     if(x.signToken)try{await deleteDoc(doc(fs,"signReqs",x.signToken))}catch(e){}
     toast("已上傳簽回檔");
