@@ -314,7 +314,7 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -357,7 +357,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",hr_vision:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -370,10 +370,11 @@ function render(){
   if(tab==="customers")h=viewCustomers(loading);
   if(tab==="calls")h=viewCalls(loading);
   if(tab.startsWith("hr_"))h=viewHR(tab);
+  if(tab.startsWith("inv_"))h=viewInv(tab);
   if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」，把你的權限設為 2，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
-  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
+  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
   if(grp&&h)h=`<div class="seg" role="group">${grp.map(([k,v])=>`<button type="button" data-seg="${k}" aria-pressed="${k===tab}">${v}</button>`).join("")}</div>`+h;
   m.innerHTML=h;
@@ -391,6 +392,8 @@ function suggestItems(){
   else if(tab==="contracts")S.contracts.forEach(c=>{const cu=cust(c.customerId),eq=equip(c.equipmentId);add("租約",cu?.name||"",[c.no,eq?.name].filter(Boolean).join(" · "),cu?.name||c.no,[c.no,eq?.name,eq?.code])});
   else if(tab==="equipment")S.equipment.forEach(e=>add("設備",e.name,[e.code,e.category,e.serial].filter(Boolean).join(" · "),e.code||e.name,[e.serial]));
   else if(tab==="hr_emp")S.hrEmp.forEach(e=>add("員工",e.name,[e.code,e.dept,e.title].filter(Boolean).join(" · "),e.name,[e.mobile,e.email]));
+  else if(tab==="inv_prod"||tab==="inv_stock")S.invProd.forEach(p=>add("商品",p.name,[p.code,p.spec,p.cat].filter(Boolean).join(" · "),p.code||p.name,[p.spec]));
+  else if(tab.startsWith("inv_"))S.invDocs.filter(d=>d.type===INV_TAB[tab]).forEach(d=>add(INV_T[d.type].nm,d.party||d.no,[d.no,d.date].filter(Boolean).join(" · "),d.party||d.no,[d.no,...(d.items||[]).map(i=>prodLabel(i.pid))]));
   else if(tab==="hr_con")S.hrCon.forEach(c=>add("契約",empName(c.empId),c.type,empName(c.empId),[c.note]));
   return out;
 }
@@ -977,6 +980,166 @@ function addVoice(map,addrs){
       const same=form.elements[P+"_same"];if(same&&same.checked){same.checked=false;same.dispatchEvent(new Event("change"))}
       box._set(o);toast("已填入地址，請確認")},b)}
 }
+
+/* ---------- 進銷存 ---------- */
+const INV_T={in:{nm:"進貨",pre:"PI",party:"供應商",price:"進貨單價",sign:1},out:{nm:"銷貨",pre:"SO",party:"客戶",price:"銷售單價",sign:-1},lend:{nm:"借出",pre:"LN",party:"借用對象",price:"",sign:-1},scrap:{nm:"報廢",pre:"SC",party:"",price:"",sign:-1},adj:{nm:"盤點調整",pre:"AJ",party:"",price:"",sign:1}};
+const INV_TAB={inv_in:"in",inv_out:"out",inv_lend:"lend",inv_scrap:"scrap"};
+const LEND_KINDS=["借出","試吹","展覽"];
+const prod=id=>S.invProd.find(p=>p.id===id);
+const prodLabel=id=>{const p=prod(id);return p?(p.code?p.code+" ":"")+p.name:"（商品已刪除）"};
+const invTotal=d=>(d.items||[]).reduce((a,i)=>a+(+i.qty||0)*(+i.price||0),0);
+function invStock(exceptId){
+  const st={};const g=id=>st[id]||(st[id]={in:0,out:0,lent:0,scrap:0,adj:0,qty:0});
+  for(const d of S.invDocs){if(d.id===exceptId)continue;for(const i of d.items||[]){const q=+i.qty||0,r=g(i.pid);
+    if(d.type==="in")r.in+=q;else if(d.type==="out")r.out+=q;else if(d.type==="scrap")r.scrap+=q;else if(d.type==="adj")r.adj+=q;
+    else if(d.type==="lend")r.lent+=Math.max(0,q-(+i.ret||0))}}
+  for(const k in st){const r=st[k];r.qty=r.in-r.out-r.scrap+r.adj-r.lent}
+  return st;
+}
+const invLow=()=>{const st=invStock();return S.invProd.filter(p=>p.active!==false&&(+p.safety||0)>0&&(st[p.id]?.qty||0)<(+p.safety||0))};
+function lendState(d){if(d.status==="轉銷貨")return["已轉銷貨","mute"];if(d.status==="已歸還")return["已歸還","mute"];
+  const left=(d.items||[]).reduce((a,i)=>a+Math.max(0,(+i.qty||0)-(+i.ret||0)),0);
+  if(d.due&&d.due<todayStr())return["逾期未還 "+daysBetween(d.due,todayStr())+" 天","bad"];
+  return[(d.status==="部分歸還"?"部分歸還・":"")+"借出中 "+left+" 件","warn"]}
+function viewInv(t){
+  const N=S.hrErr==="permission-denied"?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
+  const qq=nz(q.trim()),st=invStock();
+  if(t==="inv_prod"){
+    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.spec,p.cat].join(" ")).includes(qq)).sort((a,b)=>String(a.code).localeCompare(b.code)).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
+      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="t"><span class="mono m">${esc(p.code)}</span>　${esc(p.name)}　<span class="m">${esc(p.spec||"")}</span></div>
+      <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div>
+      <div class="r"><span class="pill ${p.active===false?"mute":low?"warn":"ok"}">${p.active===false?"停用":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
+    return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${canWrite?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}</div>
+    <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
+  }
+  if(t==="inv_stock"){
+    const list=S.invProd.filter(p=>p.active!==false&&(!qq||nz([p.code,p.name,p.spec].join(" ")).includes(qq))).sort((a,b)=>String(a.code).localeCompare(b.code));
+    const val=list.reduce((a,p)=>a+(st[p.id]?.qty||0)*(+p.cost||0),0),low=invLow().length;
+    return N+`<div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><span class="k">商品項數</span><span class="v">${list.length}</span></div><div class="stat"><span class="k">庫存總值（成本）</span><span class="v">${short(val)}</span></div><div class="stat ${low?"warn":""}"><span class="k">低於安全庫存</span><span class="v">${low}</span></div></div>
+    <div class="toolbar"><input id="q" placeholder="搜尋商品">${canWrite?'<button class="btn" type="button" data-inv="adj">盤點調整</button>':""}</div>
+    ${list.length?`<div class="tablewrap"><table class="grid" style="min-width:720px"><thead><tr><th>商品</th><th class="n">進貨</th><th class="n">銷貨</th><th class="n">借出中</th><th class="n">報廢</th><th class="n">盤點調整</th><th class="n">現有庫存</th><th class="n">安全庫存</th></tr></thead><tbody>
+    ${list.map(p=>{const r=st[p.id]||{in:0,out:0,lent:0,scrap:0,adj:0,qty:0},low=(+p.safety||0)>0&&r.qty<(+p.safety||0);
+      return `<tr><td><span class="mono m">${esc(p.code)}</span> ${esc(p.name)}</td><td class="n">${r.in}</td><td class="n">${r.out}</td><td class="n">${r.lent}</td><td class="n">${r.scrap}</td><td class="n">${r.adj>0?"+":""}${r.adj}</td><td class="n"><b style="color:${r.qty<0?"var(--bad)":low?"var(--warn)":"var(--fg)"}">${r.qty}</b></td><td class="n">${esc(p.safety||"—")}</td></tr>`}).join("")}</tbody></table></div>
+    <div class="note">現有庫存 = 進貨 − 銷貨 − 借出中 − 報廢 ± 盤點調整。借出的商品歸還後會自動加回。</div>`:'<div class="card"><div class="empty">還沒有商品資料。</div></div>'}`;
+  }
+  const type=INV_TAB[t],T=INV_T[type];
+  const docs=S.invDocs.filter(d=>d.type===type&&(!qq||nz([d.no,d.party,d.reason,d.note,...(d.items||[]).map(i=>prodLabel(i.pid))].join(" ")).includes(qq))).sort((a,b)=>String(b.date).localeCompare(a.date)||String(b.no).localeCompare(a.no));
+  const rows=docs.map(d=>{const its=d.items||[],sum=its.reduce((a,i)=>a+(+i.qty||0),0),ls=type==="lend"?lendState(d):null;
+    return `<div class="row" data-invdoc="${esc(d.id)}" tabindex="0"><div><div class="t">${type==="lend"?`<span class="pill" style="margin-right:6px">${esc(d.kind||"借出")}</span>`:""}${esc(d.party||(type==="scrap"?d.reason||"報廢":T.nm))}　<span class="mono m">${esc(d.no)}</span></div>
+    <div class="m">${esc(d.date)}${type==="lend"&&d.due?" → 預計 "+esc(d.due)+" 歸還":""} · ${esc(its.slice(0,3).map(i=>prodLabel(i.pid)+" ×"+i.qty).join("、"))}${its.length>3?" 等 "+its.length+" 項":""}</div></div>
+    <div class="r">${ls?`<span class="pill ${ls[1]}">${esc(ls[0])}</span>`:`<span class="pill">${sum} 件</span>`}${T.price?`<span class="mono m">${money(invTotal(d))}</span>`:""}</div></div>`});
+  const outN=type==="lend"?S.invDocs.filter(d=>d.type==="lend"&&lendState(d)[1]!=="mute").length:0;
+  return N+(type==="lend"&&outN?`<div class="note">目前有 ${outN} 筆借出／試吹／展覽尚未歸還。</div>`:"")+`<div class="toolbar"><input id="q" placeholder="搜尋單號、${T.party||"原因"}、商品">${canWrite?`<button class="btn primary" type="button" data-inv="${type}">＋ 新增${type==="lend"?"借出／試吹／展覽":T.nm}單</button>`:""}</div>
+  <div class="list">${rows.length?rows.join(""):`<div class="empty">還沒有${type==="lend"?"借出／試吹／展覽":T.nm}紀錄。${S.invProd.length?"":"請先到「商品編號」建立商品。"}</div>`}</div>`;
+}
+function prodForm(p){
+  const isNew=!p;p=p||{unit:"台",active:true};
+  const cats=[...new Set(S.invProd.map(x=>x.cat).filter(Boolean))];
+  openDlg(`<h3>${isNew?"新增商品":"商品　"+esc(p.code)}</h3><datalist id="pcats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+  <div class="grid2"><label>商品編號<input name="code" value="${esc(p.code||"")}" placeholder="例：WF-L105" autocomplete="off" required></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label>
+  <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
+  <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
+  <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
+  <label>狀態<select name="active">${opt("1","使用中",p.active!==false)}${opt("0","停用",p.active===false)}</select></label><label>條碼（選填）<input name="barcode" value="${esc(p.barcode||"")}" inputmode="numeric"></label>
+  <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label></div>
+  <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button>${canWrite?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
+  async fd=>{const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),spec:val(fd,"spec"),cat:val(fd,"cat"),unit:val(fd,"unit")||"台",safety:val(fd,"safety")===""?"":Math.max(0,parseInt(val(fd,"safety"),10)||0),
+      cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(!d.code||!d.name){showErr({message:"請填寫商品編號與名稱。"});return false}
+    if(S.invProd.some(x=>x.code===d.code&&x.id!==p.id)){showErr({message:"商品編號 "+d.code+" 已經存在，請換一個編號。"});return false}
+    await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
+  addVoice({name:"text",spec:"text",cat:"text",note:"append"});
+  if(!isNew)confirmDelete("#del","商品",async()=>{if(S.invDocs.some(d=>(d.items||[]).some(i=>i.pid===p.id)))throw{message:"這個商品已經有進銷存紀錄，不能刪除。可以把狀態改成「停用」。"};await deleteDoc(doc(fs,"invProducts",p.id))});
+}
+function invItemRow(it,T){it=it||{};const ps=S.invProd.filter(p=>p.active!==false||p.id===it.pid).sort((a,b)=>String(a.code).localeCompare(b.code));
+  return `<tr><td class="idx"></td><td><select name="r_pid"><option value="">請選擇商品</option>${ps.map(p=>opt(p.id,(p.code?p.code+"　":"")+p.name+(p.spec?"（"+p.spec+"）":""),p.id===it.pid)).join("")}</select></td>
+  <td style="width:90px"><input name="r_qty" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(it.qty??1)}"></td>
+  ${T.price?`<td style="width:120px"><input name="r_price" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(it.price??"")}"></td><td class="num mono" style="width:110px" data-sub></td>`:""}
+  <td class="m" style="width:80px" data-stock></td><td style="width:40px"><button class="btn small" type="button" data-delrow aria-label="刪除此列">✕</button></td></tr>`}
+function invDocForm(type,d,pre){
+  const T=INV_T[type],isNew=!d;d=d||{date:todayStr(),items:[{}],kind:"借出",...(pre||{})};
+  if(!S.invProd.length){toast("請先到「商品編號」建立商品");return}
+  const custs=S.customers.map(k=>`<option value="${esc(k.name)}">`).join("");
+  openDlg(`<h3>${isNew?"新增":"編輯"}${type==="lend"?"借出／試吹／展覽":T.nm}單${d.no?"　"+esc(d.no):""}</h3><datalist id="invParty">${type==="in"?[...new Set(S.invDocs.filter(x=>x.type==="in").map(x=>x.party).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join(""):custs}</datalist>
+  <div class="grid2">
+    ${type==="lend"?`<label>類型<select name="kind">${LEND_KINDS.map(k=>opt(k,k,k===d.kind)).join("")}</select></label>`:""}
+    <label>${type==="lend"?"借出日期":"日期"}<input type="date" name="date" value="${esc(d.date)}" required></label>
+    ${type==="lend"?`<label>預計歸還日<input type="date" name="due" value="${esc(d.due||"")}" required></label>`:""}
+    ${T.party?`<label class="${type==="lend"?"":"full"}">${type==="lend"?"借用對象（客戶或展覽名稱）":T.party}<input name="party" list="invParty" value="${esc(d.party||"")}" required></label>`:""}
+    ${type!=="scrap"&&type!=="adj"?`<label>聯絡人／電話<input name="contact" value="${esc(d.contact||"")}"></label>`:""}
+    ${type==="lend"?`<label class="full">地點（試吹或展覽地點）<input name="place" value="${esc(d.place||"")}"></label>`:""}
+    ${type==="in"?`<label>發票／單據號碼<input name="invNo" value="${esc(d.invNo||"")}"></label>`:""}
+    ${type==="out"?`<label>相關報價單號（選填）<input name="quoteNo" value="${esc(d.quoteNo||"")}" placeholder="例：Q20261104-01"></label>`:""}
+    ${type==="scrap"?`<label class="full">報廢原因<select name="reason">${["損壞無法修復","老舊淘汰","遺失","瑕疵品","其他"].map(r=>opt(r,r,r===d.reason)).join("")}</select></label><label class="full">核准人<input name="approver" value="${esc(d.approver||"")}"></label>`:""}
+  </div>
+  <fieldset><legend>商品明細</legend><div class="tablewrap"><table class="items" style="min-width:${T.price?640:460}px"><thead><tr><th>項次</th><th>商品</th><th class="num">${type==="adj"?"調整數量（可負數）":"數量"}</th>${T.price?`<th class="num">${T.price}</th><th class="num">小計</th>`:""}<th>庫存</th><th></th></tr></thead>
+  <tbody id="invBody">${(d.items?.length?d.items:[{}]).map(i=>invItemRow(i,T)).join("")}</tbody></table></div>
+  <div class="toolbar" style="margin-top:8px"><button class="btn small" type="button" id="invAdd">＋ 新增一列</button><span style="flex:1"></span>${T.price?'<b id="invSum" class="mono"></b>':""}</div></fieldset>
+  <label>備註<textarea name="note">${esc(d.note||"")}</textarea></label>
+  <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button>'+(type==="lend"&&lendState(d)[1]!=="mute"?'<button class="btn" type="button" id="ret">辦理歸還</button><button class="btn" type="button" id="toSale">轉為銷貨</button>':"")+'<span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button>${canWrite?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
+  async fd=>{
+    const g=k=>fd.getAll(k).map(v=>String(v).trim());const pids=g("r_pid"),qs=g("r_qty"),prs=g("r_price");
+    const items=pids.map((pid,i)=>({pid,qty:+qs[i]||0,price:T.price?(+prs[i]||0):undefined,ret:d.items?.[i]?.pid===pid?d.items[i].ret:undefined})).filter(i=>i.pid&&i.qty);
+    if(!items.length){showErr({message:"請至少選擇一項商品並填寫數量。"});return false}
+    if(type!=="adj"&&items.some(i=>i.qty<0)){showErr({message:"數量不能是負數。"});return false}
+    if(new Set(items.map(i=>i.pid)).size!==items.length){showErr({message:"同一個商品請合併成一列。"});return false}
+    const o={type,date:val(fd,"date"),party:val(fd,"party"),contact:val(fd,"contact"),note:val(fd,"note"),items,updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(type==="lend"){o.kind=val(fd,"kind");o.due=val(fd,"due");o.place=val(fd,"place");o.status=d.status||"借出中";if(o.due<o.date){showErr({message:"預計歸還日不能早於借出日期。"});return false}}
+    if(type==="in")o.invNo=val(fd,"invNo");if(type==="out"){o.quoteNo=val(fd,"quoteNo");o.customerId=S.customers.find(k=>k.name===o.party)?.id||""}
+    if(type==="scrap"){o.reason=val(fd,"reason");o.approver=val(fd,"approver")}
+    if(T.party&&!o.party){showErr({message:"請填寫"+(type==="lend"?"借用對象":T.party)+"。"});return false}
+    if(T.sign<0){const st=invStock(isNew?null:d.id);for(const i of items){const have=st[i.pid]?.qty||0;if(i.qty>have){showErr({message:`「${prodLabel(i.pid)}」庫存只有 ${have}，不夠${T.nm} ${i.qty}。請先確認庫存或辦理進貨。`});return false}}}
+    if(isNew){const base=T.pre+o.date.replace(/-/g,""),n=S.invDocs.filter(x=>String(x.no).startsWith(base)).length+1;o.no=base+"-"+String(n).padStart(2,"0");o.createdAt=o.updatedAt;o.createdBy=me.email}
+    const id=isNew?doc(collection(fs,"invDocs")).id:d.id;await setDoc(doc(fs,"invDocs",id),clean(isNew?o:{...d,...o,id:undefined}));
+    if(pre?.fromLend){const L=S.invDocs.find(x=>x.id===pre.fromLend);if(L)await updateDoc(doc(fs,"invDocs",L.id),{status:"轉銷貨",items:clean(L.items.map(i=>({...i,ret:+i.qty||0}))),soldNo:o.no})}
+    toast((isNew?"已建立 ":"已儲存 ")+(o.no||d.no));
+  },true);
+  const body=$("#invBody");
+  const calc=()=>{const st=invStock(isNew?null:d.id);let sum=0;body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;const pid=tr.querySelector("[name=r_pid]").value,qn=+tr.querySelector("[name=r_qty]").value||0;
+    const sc=tr.querySelector("[data-stock]");sc.textContent=pid?"現有 "+(st[pid]?.qty||0):"";sc.style.color=pid&&T.sign<0&&qn>(st[pid]?.qty||0)?"var(--bad)":"";
+    if(T.price){const pr=+tr.querySelector("[name=r_price]").value||0;tr.querySelector("[data-sub]").textContent=Math.round(qn*pr).toLocaleString("zh-TW");sum+=qn*pr}});
+    const se=$("#invSum");if(se)se.textContent="合計 "+money(sum)};
+  body.addEventListener("change",e=>{if(e.target.name==="r_pid"){const p=prod(e.target.value),pr=e.target.closest("tr").querySelector("[name=r_price]");if(p&&pr&&!pr.value)pr.value=type==="in"?(p.cost??""):(p.price??"")}calc()});
+  form.oninput=calc;
+  $("#invAdd").onclick=()=>{body.insertAdjacentHTML("beforeend",invItemRow({},T));calc()};
+  body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();calc()});
+  calc();addVoice({party:"text",contact:"text",place:"text",approver:"text",note:"append"});
+  const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
+  on("#ret",()=>{dlg.close();lendReturn(d)});
+  on("#toSale",()=>{dlg.close();const left=(d.items||[]).map(i=>({pid:i.pid,qty:Math.max(0,(+i.qty||0)-(+i.ret||0)),price:prod(i.pid)?.price??""})).filter(i=>i.qty);
+    invDocForm("out",null,{party:d.party,contact:d.contact,items:left,note:"由"+(d.kind||"借出")+"單 "+d.no+" 轉銷貨",fromLend:d.id})});
+  if(!isNew)confirmDelete("#del",T.nm+"單",async()=>{if(T.sign>0){const st=invStock(d.id);for(const i of d.items||[]){if((st[i.pid]?.qty||0)<0)throw{message:"刪除這張單後「"+prodLabel(i.pid)+"」庫存會變成負數，請先處理相關的銷貨或借出單。"}}}await deleteDoc(doc(fs,"invDocs",d.id))});
+}
+function lendReturn(d){
+  openDlg(`<h3>辦理歸還　${esc(d.no)}</h3><div class="note">${esc(d.kind||"借出")}對象：${esc(d.party||"")}　借出日 ${esc(d.date)}</div>
+  <label>歸還日期<input type="date" name="retDate" value="${todayStr()}" required></label>
+  <div class="tablewrap"><table class="items" style="min-width:420px"><thead><tr><th>商品</th><th class="num">借出</th><th class="num">已歸還</th><th class="num">本次歸還</th></tr></thead><tbody>
+  ${(d.items||[]).map((i,k)=>{const left=Math.max(0,(+i.qty||0)-(+i.ret||0));return `<tr><td>${esc(prodLabel(i.pid))}</td><td class="num">${i.qty}</td><td class="num">${+i.ret||0}</td><td style="width:100px"><input type="number" name="rt${k}" min="0" max="${left}" step="1" class="num" value="${left}"></td></tr>`}).join("")}</tbody></table></div>
+  <label>歸還檢查紀錄<textarea name="retNote" placeholder="外觀、功能是否正常，損壞請另開報廢單"></textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認歸還</button></div>`,
+  async fd=>{const items=(d.items||[]).map((i,k)=>{const left=Math.max(0,(+i.qty||0)-(+i.ret||0)),r=Math.min(left,Math.max(0,parseInt(fd.get("rt"+k),10)||0));return{...i,ret:(+i.ret||0)+r}});
+    const all=items.every(i=>(+i.ret||0)>=(+i.qty||0));
+    await updateDoc(doc(fs,"invDocs",d.id),{items:clean(items),status:all?"已歸還":"部分歸還",retDate:val(fd,"retDate"),retNote:[d.retNote,val(fd,"retNote")].filter(Boolean).join("\n"),updatedAt:new Date().toISOString()});
+    toast(all?"已全部歸還":"已登記部分歸還")});
+  addVoice({retNote:"append"});
+}
+function adjForm(){
+  const st=invStock(),ps=S.invProd.filter(p=>p.active!==false).sort((a,b)=>String(a.code).localeCompare(b.code));
+  openDlg(`<h3>盤點調整</h3><div class="note">輸入實際盤點的數量，系統會自動算出差異並建立盤點調整單。沒有差異的商品不用填。</div>
+  <label>盤點日期<input type="date" name="date" value="${todayStr()}"></label>
+  <div class="tablewrap"><table class="items" style="min-width:420px"><thead><tr><th>商品</th><th class="num">系統庫存</th><th class="num">實際盤點</th></tr></thead><tbody>
+  ${ps.map(p=>`<tr><td>${esc(prodLabel(p.id))}</td><td class="num">${st[p.id]?.qty||0}</td><td style="width:110px"><input type="number" name="ac_${esc(p.id)}" min="0" step="1" class="num" placeholder="${st[p.id]?.qty||0}"></td></tr>`).join("")}</tbody></table></div>
+  <label>備註<textarea name="note" placeholder="例：年底盤點"></textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">建立盤點調整</button></div>`,
+  async fd=>{const items=ps.map(p=>{const v=fd.get("ac_"+p.id);if(v===null||String(v).trim()==="")return null;const diff=(parseInt(v,10)||0)-(st[p.id]?.qty||0);return diff?{pid:p.id,qty:diff}:null}).filter(Boolean);
+    if(!items.length){showErr({message:"沒有需要調整的商品（實際數量與系統庫存相同）。"});return false}
+    const date=val(fd,"date")||todayStr(),base="AJ"+date.replace(/-/g,""),n=S.invDocs.filter(x=>String(x.no).startsWith(base)).length+1;
+    await setDoc(doc(collection(fs,"invDocs")),{type:"adj",date,no:base+"-"+String(n).padStart(2,"0"),items,note:val(fd,"note"),createdAt:new Date().toISOString(),createdBy:me.email});toast("已建立盤點調整，共 "+items.length+" 項")});
+}
+$("#main").addEventListener("click",ev=>{const t=ev.target;
+  const a=t.closest("[data-inv]");if(a){const k=a.dataset.inv;if(k==="prod")prodForm(null);else if(k==="adj")adjForm();else invDocForm(k,null);return}
+  const p=t.closest("[data-prod]");if(p){const x=prod(p.dataset.prod);if(x)prodForm(x);return}
+  const d=t.closest("[data-invdoc]");if(d){const x=S.invDocs.find(k=>k.id===d.dataset.invdoc);if(x)invDocForm(x.type,x)}});
 
 /* ---------- 人事管理 ---------- */
 const HR_STATUS=["在職","試用期","留職停薪","離職"];
@@ -2010,6 +2173,11 @@ function viewAnalysis(loading){
     <div class="card"><h3>來電地區 <small>依縣市，前 8 名</small></h3>${hbars(countBy(S.calls,"county").filter(r=>r.v).slice(0,8))}</div>
     <div class="card"><h3>接電人 <small>筆數</small></h3>${hbars(countBy(S.calls.map(c=>({...c,rv:staffLabel(c.receiver)})),"rv").filter(r=>r.v))}</div>
   </div>`:'<div class="card"><div class="empty">還沒有通聯紀錄，到「客戶通聯」新增第一筆後就會顯示分析。</div></div>'}
+  <section><h2>進銷存分析 <small>${S.invProd.length} 項商品</small></h2></section>
+  ${S.invProd.length?(()=>{const st=invStock(),val=S.invProd.reduce((a,p)=>a+(st[p.id]?.qty||0)*(+p.cost||0),0),low=invLow(),lent=S.invDocs.filter(d=>d.type==="lend"&&d.status!=="已歸還"&&d.status!=="轉銷貨");
+    const mIn=months.map(m=>({x:Number(m.slice(5))+"月",l:m,v:S.invDocs.filter(d=>d.type==="out"&&monthKey(d.date)===m).reduce((a,d)=>a+invTotal(d),0)}));
+    return `<div class="stats"><div class="stat"><span class="k">庫存總值（成本）</span><span class="v">${short(val)}</span></div><div class="stat ${low.length?"warn":""}"><span class="k">低於安全庫存</span><span class="v">${low.length}</span></div><div class="stat"><span class="k">借出／試吹／展覽中</span><span class="v">${lent.length}</span></div><div class="stat"><span class="k">本月銷貨金額</span><span class="v">${short(S.invDocs.filter(d=>d.type==="out"&&monthKey(d.date)===thisM).reduce((a,d)=>a+invTotal(d),0))}</span></div></div>
+    <div class="an-grid"><div class="card"><h3>近 6 個月銷貨金額 <small>NT$</small></h3>${vbars(mIn,short)}</div><div class="card"><h3>低庫存商品 <small>現有／安全庫存</small></h3>${low.length?hbars(low.map(p=>({l:p.name+"（"+(st[p.id]?.qty||0)+"／"+p.safety+"）",v:st[p.id]?.qty||0,c:"var(--warn)"}))):'<div class="empty">沒有低於安全庫存的商品</div>'}</div></div>`})():'<div class="card"><div class="empty">還沒有商品資料，到「進銷存 → 商品編號」新增後就會顯示。</div></div>'}
   <section><h2>人事分析 <small>在職 ${S.hrEmp.filter(hrActive).length} 人</small></h2></section>
   ${S.hrEmp.length?`<div class="an-grid">
     <div class="card"><h3>各部門在職人數 <small>人</small></h3>${hbars(countBy(S.hrEmp.filter(hrActive),"dept").map(r=>({...r,l:r.l==="未填"?"未分部門":r.l})))}</div>
@@ -2026,7 +2194,7 @@ const MODULES=[
   {k:"order",lb:"訂單|管理",nm:"訂單管理",ds:"訂單建立與出貨追蹤"},
   {k:"rental",lb:"設備租賃|管理",nm:"設備租賃管理",ds:"設備、租約、續約與歸還",go:"overview"},
   {k:"po",lb:"採購|申購",nm:"採購／申購",ds:"申購單、採購單與簽核"},
-  {k:"inv",lb:"進銷存",nm:"進銷存",ds:"庫存、進貨與銷貨"},
+  {k:"inv",lb:"進銷存",nm:"進銷存",ds:"商品、進貨、銷貨、庫存、借出與報廢",go:"inv_prod"},
   {k:"acct",lb:"財會|稅務",nm:"財會稅務",ds:"應收應付、發票與稅務"},
   {k:"hr",lb:"人事|管理",nm:"人事管理",ds:"企業願景、組織圖、員工資料、編制與契約",go:"hr_vision"},
   {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"公司行程與後勤排程"},
@@ -2039,6 +2207,7 @@ function moduleStat(m){
   if(m.k==="cust"){const n=S.calls.filter(c=>String(c.at).slice(0,7)===todayStr().slice(0,7)).length;return "本月 "+n+" 筆通聯"}
   if(m.k==="quote"){const n=S.quotes.filter(x=>x.status==="draft"||x.status==="sent").length;return n?n+" 張報價進行中":S.quotes.length+" 張報價單"}
   if(m.k==="rental")return S.contracts.filter(c=>c.status==="租賃中").length+" 筆出租中";
+  if(m.k==="inv"){const low=invLow().length;return S.invProd.length+" 項商品"+(low?"・"+low+" 項低庫存":"")}
   if(m.k==="hr")return "在職 "+S.hrEmp.filter(hrActive).length+" 人";
   if(m.k==="remind"){const n=remindList().length;return n?n+" 筆需要處理":"目前沒有提醒"}
   return"";
@@ -2103,6 +2272,8 @@ function startData(){
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
+   hrSub("invProducts",d=>S.invProd=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
@@ -2114,7 +2285,7 @@ function startData(){
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.chArt=[];S.chNotes=[];S.chAcks=[];S.charter=null;S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.invProd=[];S.invDocs=[];S.hrEmp=[];S.hrPos=[];S.chArt=[];S.chNotes=[];S.chAcks=[];S.charter=null;S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
