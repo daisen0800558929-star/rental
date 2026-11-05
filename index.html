@@ -611,19 +611,27 @@ function customerForm(c,pre){
   <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
   <label>聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
   <label>手機<input name="mobile" value="${esc(c.mobile||"")}" inputmode="tel"></label>
-  <label class="full">Email<input name="email" value="${esc(c.email||"")}" inputmode="email"></label>
+  <label>Email<input name="email" value="${esc(c.email||"")}" inputmode="email" placeholder="例：service@daisencool.com.tw" autocomplete="off"><span class="note" id="emailHint"></span></label>
+  <label>公司網站<input name="website" value="${esc(c.website||"")}" inputmode="url" placeholder="例：www.daisencool.com.tw" autocomplete="off"></label>
   ${addrFields("a","公司地址",c.addr||parseAddr(c.address))}
   ${addrFields("d","送貨地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address)}
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
   async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
-    const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email"),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
+    const d={name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email").toLowerCase(),website:normUrl(val(fd,"website")),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
     if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
     {const e=await taxGate("k");if(e){showErr({message:e});return false}}
     d.taxExempt=fd.get("k_exempt")?val(fd,"k_exemptType"):"";d.taxVerified=d.taxId&&!d.taxExempt?new Date().toISOString():"";
+    if(!emailOk(d.email)){showErr({message:looksUrl(d.email)?"Email 欄位填的是網址，請改填到「公司網站」。":"Email 格式不正確，例如 service@daisencool.com.tw。"});return false}
+    if(d.website&&!/^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(d.website)){showErr({message:"公司網站格式不正確，例如 www.daisencool.com.tw。"});return false}
     {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
   bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});bindTax("k","name","taxId");
+  {const F=form.elements,em=F.email,ws=F.website,hint=$("#emailHint");
+   const fix=()=>{const v=em.value.trim();if(v&&looksUrl(v)){if(!ws.value.trim())ws.value=normUrl(v);em.value="";hint.textContent="已把網址移到「公司網站」";hint.style.color="var(--ok)";return}
+     hint.textContent=v&&!emailOk(v)?"Email 格式不正確，需要有 @，例如 name@company.com.tw":"";hint.style.color="var(--bad)"};
+   em.addEventListener("blur",fix);em.addEventListener("input",()=>{if(emailOk(em.value.trim())||!em.value.trim())hint.textContent=""});
+   ws.addEventListener("blur",()=>{ws.value=normUrl(ws.value)});fix()}
   {const F=form.elements,up=()=>{$("#dealBadge").innerHTML=dealBadge(custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value}))};F.name.addEventListener("input",up);F.name.addEventListener("change",up);F.taxId.addEventListener("input",up);up()}
   addVoice({taxId:"digits",name:"text",phone:"tel",fax:"tel",contact:"text",mobile:"tel",email:"email",note:"append"},["a","d"]);
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
@@ -730,6 +738,7 @@ function parseCard(raw){
   if(m)o.taxId=m[1];else{const all=flat.match(/(?<!\d)\d{8}(?!\d)/g)||[];o.taxId=all.find(taxChecksum)||""}
   // Email
   m=flat.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/);if(m)o.email=m[0];
+  m=flat.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g,"").match(/(?:https?:\/\/)?www\.[\w-]+(?:\.[\w-]+)+/i);if(m)o.website=normUrl(m[0]);
   // 手機
   m=flat.replace(/[\s-]/g,"").match(/09\d{8}/);if(m)o.mobile=fmtMobile(m[0]);
   // 傳真、電話
@@ -847,16 +856,16 @@ $("#main").addEventListener("click",e=>{if(e.target.closest("[data-ocr]")){ocrMe
 
 /* ---------- 匯入客戶資料（Excel / CSV） ---------- */
 const IMPORT_COLS={name:["客戶名稱","公司名稱","公司","名稱","客戶"],taxId:["統編","統一編號"],phone:["公司電話","電話","市話","聯絡電話"],fax:["傳真"],contact:["聯絡人","窗口","負責人"],
-  mobile:["手機","手機電話","行動電話"],email:["email","e-mail","電子郵件","信箱"],address:["公司地址","地址"],delivery:["送貨地址","送貨"],note:["備註"]};
+  mobile:["手機","手機電話","行動電話"],email:["email","e-mail","電子郵件","信箱"],website:["網站","公司網站","網址"],address:["公司地址","地址"],delivery:["送貨地址","送貨"],note:["備註"]};
 function downloadTemplate(){
-  const head="客戶名稱,統編,公司電話,傳真,聯絡人,手機,Email,公司地址,送貨地址,備註";
-  const ex="大森節能事業有限公司,42950678,04-7510728,04-7510738,林先生,0965-585-129,service@example.com,彰化縣彰化市自強南路537號,,範例請刪除";
+  const head="客戶名稱,統編,公司電話,傳真,聯絡人,手機,Email,公司網站,公司地址,送貨地址,備註";
+  const ex="大森節能事業有限公司,42950678,04-7510728,04-7510738,林先生,0965-585-129,service@example.com,www.daisencool.com.tw,彰化縣彰化市自強南路537號,,範例請刪除";
   const blob=new Blob(["﻿"+head+"\n"+ex+"\n"],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="客戶資料匯入範本.csv";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
 }
 function importDialog(){
   openDlg(`<h3>匯入客戶資料</h3>
-  <div class="note">支援 Excel（.xlsx、.xls）與 CSV 檔。第一列需為欄位名稱，可用：客戶名稱、統編、公司電話、傳真、聯絡人、手機、Email、公司地址、送貨地址、備註（順序不限）。</div>
+  <div class="note">支援 Excel（.xlsx、.xls）與 CSV 檔。第一列需為欄位名稱，可用：客戶名稱、統編、公司電話、傳真、聯絡人、手機、Email、公司網站、公司地址、送貨地址、備註（順序不限）。</div>
   <div class="toolbar"><button class="btn" type="button" id="tplBtn">下載範本</button><label class="btn primary" style="display:inline-flex;align-items:center;cursor:pointer">選擇檔案<input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></label></div>
   <div id="impOut"></div>
   <div class="actions"><button class="btn" type="button" data-close>關閉</button><button class="btn primary" type="button" id="impGo" hidden>開始匯入</button></div>`,null,true);
@@ -876,7 +885,7 @@ function importDialog(){
       rows=raw.slice(1).filter(r=>r.some(v=>String(v).trim())).map((r,n)=>{
         const g=k=>idx[k]===undefined?"":String(r[idx[k]]??"").trim();
         const a=parseAddr(g("address")),dv=parseAddr(g("delivery"));
-        const d={name:g("name"),taxId:g("taxId").replace(/\D/g,""),phone:fmtTel(g("phone")),fax:fmtTel(g("fax")),contact:g("contact"),mobile:fmtMobile(g("mobile")),email:g("email"),
+        const d={name:g("name"),taxId:g("taxId").replace(/\D/g,""),phone:fmtTel(g("phone")),fax:fmtTel(g("fax")),contact:g("contact"),mobile:fmtMobile(g("mobile")),email:looksUrl(g("email"))?"":g("email").toLowerCase(),website:normUrl(g("website")||(looksUrl(g("email"))?g("email"):"")),
           address:g("address")?fullAddr(a)||g("address"):"",addr:a,delivery:g("delivery")?fullAddr(dv)||g("delivery"):"",dlv:g("delivery")?dv:null,note:g("note"),taxExempt:"",taxVerified:""};
         const err=[];
         if(!d.name)err.push("缺客戶名稱");
@@ -884,6 +893,7 @@ function importDialog(){
         if(!telOk(d.phone))err.push("電話格式");
         if(!telOk(d.fax))err.push("傳真格式");
         if(!mobileOk(d.mobile))err.push("手機格式");
+        if(!emailOk(d.email))err.push("Email 格式");
         const dup=(d.taxId&&seenTax.has(d.taxId))||seenName.has(normName(d.name));
         if(!err.length&&!dup){if(d.taxId)seenTax.add(d.taxId);seenName.add(normName(d.name))}
         return{n:n+2,d,err,dup};
@@ -980,6 +990,10 @@ function dealBadge(d){
   if(d.won)return `<div class="deal ok"><b>已成交舊客戶</b><span>${[d.signed?"簽回報價 "+d.signed+" 張":"",d.contracts?"租約 "+d.contracts+" 筆":""].filter(Boolean).join("、")}${d.last?"，最近一次 "+esc(d.last):""}</span></div>`;
   return `<div class="deal warn"><b>未成交潛在客戶</b><span>${d.quotes?"已報價 "+d.quotes+" 次，尚未簽回":"尚無成交紀錄"}</span></div>`;
 }
+/* Email／網站檢查 */
+const emailOk=v=>!v||/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+const looksUrl=v=>!/@/.test(v)&&(/^(https?:\/\/|www\.)/i.test(v)||/^[\w-]+(\.[\w-]+)*\.(com|net|org|tw|cn|jp|hk|io|biz|info)(\.[a-z]{2})?(\/.*)?$/i.test(v));
+const normUrl=v=>String(v||"").trim().replace(/\s+/g,"").replace(/^https?:\/\//i,"").replace(/\/$/,"").toLowerCase();
 function empMissing(e){
   const m=[],need=(v,l)=>{if(!String(v??"").trim())m.push(l)};
   need(e.code,"員工編號");need(e.name,"姓名");need(e.dept,"部門");need(e.title,"職稱");need(e.hireDate,"到職日");need(e.mobile,"手機");
