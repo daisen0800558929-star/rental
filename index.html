@@ -1038,29 +1038,29 @@ function viewInv(t){
   return N+(type==="lend"&&outN?`<div class="note">目前有 ${outN} 筆借出／試吹／展覽尚未歸還。</div>`:"")+`<div class="toolbar"><input id="q" placeholder="搜尋單號、${T.party||"原因"}、商品">${invCan("add")?`<button class="btn primary" type="button" data-inv="${type}">＋ 新增${type==="lend"?"借出／試吹／展覽":T.nm}單</button>`:""}</div>
   <div class="list">${rows.length?rows.join(""):`<div class="empty">還沒有${type==="lend"?"借出／試吹／展覽":T.nm}紀錄。${S.invProd.length?"":"請先到「商品編號」建立商品。"}</div>`}</div>`;
 }
-const INV_RULE_DEFAULT=`品編總共 20 碼。
-類別碼（第 1 碼）：1 水冷扇／2 魚池過濾／3 工廠通風／4 其他
-用途碼（類別碼後）：
-1-01 水冷扇總成
-1-02 水冷扇出租
-1-R2 水冷扇出租拉回（沖銷 1-02）
-1-03 水冷扇零件
-1-04 水冷扇借出／試用
-1-R4 水冷扇歸還（沖銷 1-04）
-1-05 水冷扇報修，現場檢修
-1-Z 水冷扇拉回檢修
-1-RZ 水冷扇檢修歸還`;
+const INV_RULE_DEFAULT=`品編總共 20 碼，英文大小寫都會自動轉成大寫。
+格式：類別碼－用途碼－電壓－其餘編碼
+類別碼：1 水冷扇／2 魚池過濾／3 工廠通風／4 其他
+1-01-110 水冷扇 110V（總成）　1-01-220 水冷扇 220V（總成）
+1-02-110 水冷扇 110V 出租　　1-02-220 水冷扇 220V 出租
+1-R2-110 出租拉回（沖銷 1-02-110）　1-R2-220 出租拉回（沖銷 1-02-220）
+1-03 水冷扇零件（不分電壓）
+1-04-110 借出／試用　　1-R4-110 歸還（沖銷 1-04-110）
+1-05-110、1-05-220 報修，現場檢修
+1-Z-110 拉回檢修　　1-RZ-110、1-RZ-220 檢修歸還`;
 const INV_MAIN={"1":"水冷扇","2":"魚池過濾","3":"工廠通風","4":"其他"};
 const INV_SUB=[["01","總成"],["02","出租"],["R2","出租拉回（沖銷 -02）"],["03","零件"],["04","借出／試用"],["R4","歸還（沖銷 -04）"],["05","報修，現場檢修"],["Z","拉回檢修"],["RZ","檢修歸還"]];
 const INV_CODE_LEN=20;
-const codePrefix=code=>{const m=String(code||"").toUpperCase().match(/^([1-4])-(RZ|R2|R4|Z|0[1-5])/);return m?m[1]+"-"+m[2]:""};
+const codeParts=code=>{const m=String(code||"").toUpperCase().match(/^([1-4])-(RZ|R2|R4|Z|0[1-5])(?:-(110|220)(?=-|$))?/);return m?{sub:m[1]+"-"+m[2],volt:m[3]||"",len:m[0].length}:null};
+const codePrefix=code=>codeParts(code)?.sub||"";
 function prodForm(p){
   const isNew=!p;p=p||{unit:"台",active:true};
   const cats=[...new Set(S.invProd.map(x=>x.cat).filter(Boolean))];
   openDlg(`<h3>${isNew?"新增商品":"商品　"+esc(p.code)}</h3><datalist id="pcats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
   <div class="coderule"><div class="addr-t">品編說明${isAdm()?'<button class="btn small" type="button" id="editRule">編輯說明</button>':""}</div><div style="white-space:pre-wrap">${esc(S.invRule||INV_RULE_DEFAULT)}</div>
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
-  <div class="grid2"><label class="full">類別碼／用途碼（選了會自動帶入編號開頭）<select name="prefix"><option value="">請選擇</option>${Object.entries(INV_MAIN).map(([m,n])=>`<optgroup label="${m}　${n}">${INV_SUB.map(([k,t])=>opt(m+"-"+k,m+"-"+k+"　"+n+t,codePrefix(p.code)===m+"-"+k)).join("")}</optgroup>`).join("")}</select></label>
+  <div class="grid2"><label>類別碼／用途碼（自動帶入編號開頭）<select name="prefix"><option value="">請選擇</option>${Object.entries(INV_MAIN).map(([m,n])=>`<optgroup label="${m}　${n}">${INV_SUB.map(([k,t])=>opt(m+"-"+k,m+"-"+k+"　"+n+t,codePrefix(p.code)===m+"-"+k)).join("")}</optgroup>`).join("")}</select></label>
+  <label>電壓<select name="volt"><option value="">— 不分電壓（如零件）—</option>${["110","220"].map(v=>opt(v,v+"V",codeParts(p.code)?.volt===v)).join("")}</select></label>
   <label class="full">商品編號（共 ${INV_CODE_LEN} 碼）<input name="code" value="${esc(p.code||"")}" placeholder="例：1-01-…" maxlength="${INV_CODE_LEN}" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.04em"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label>
   <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
   <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
@@ -1079,9 +1079,12 @@ function prodForm(p){
     await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
   addVoice({name:"text",spec:"text",cat:"text",note:"append"});
   {const F=form.elements,cnt=()=>{const n=F.code.value.length;$("#codeCnt").textContent=`已輸入 ${n}／${INV_CODE_LEN} 碼`;$("#codeCnt").style.color=n&&n!==INV_CODE_LEN?"var(--warn)":"var(--ok)"};
-   F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/\s/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}cnt();const pf=codePrefix(F.code.value);if(pf)F.prefix.value=pf});
-   F.prefix.addEventListener("change",()=>{const v=F.prefix.value;if(!v)return;const old=codePrefix(F.code.value);F.code.value=old?v+F.code.value.slice(old.length):v+"-"+F.code.value.replace(/^[1-4]-?/,"");F.code.value=F.code.value.replace(/--+/g,"-").slice(0,INV_CODE_LEN);
-     if(!F.cat.value)F.cat.value=INV_MAIN[v[0]];cnt();F.code.focus()});cnt()}
+   F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/\s/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}cnt();const cp=codeParts(F.code.value);if(cp){F.prefix.value=cp.sub;F.volt.value=cp.volt;F.volt.disabled=cp.sub.endsWith("-03")}});
+   const build=()=>{const v=F.prefix.value;if(!v)return;const old=codeParts(F.code.value),rest=old?F.code.value.slice(old.len).replace(/^-/,""):F.code.value.replace(/^[1-4]-?/,"");
+     const head=v+(F.volt.value&&!v.endsWith("-03")?"-"+F.volt.value:"");F.code.value=(head+"-"+rest).replace(/--+/g,"-").slice(0,INV_CODE_LEN);
+     if(!F.cat.value)F.cat.value=INV_MAIN[v[0]];cnt();F.code.focus()};
+   F.prefix.addEventListener("change",()=>{F.volt.disabled=F.prefix.value.endsWith("-03");if(F.volt.disabled)F.volt.value="";build()});
+   F.volt.addEventListener("change",build);F.volt.disabled=F.prefix.value.endsWith("-03");cnt()}
   {const b=$("#editRule");if(b)b.onclick=()=>{const keep=p.id?p:null;dlg.close();openDlg(`<h3>編輯品編說明</h3><div class="note">這段說明會顯示在新增商品的「商品編號」上方，讓同仁照同一套規則編號。</div>
     <label>品編說明<textarea name="text" style="min-height:200px">${esc(S.invRule||INV_RULE_DEFAULT)}</textarea></label>
     <div class="actions"><button class="btn" type="button" id="ruleReset">恢復預設</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
