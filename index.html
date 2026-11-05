@@ -104,6 +104,9 @@ fieldset.adm{border-color:var(--warn)}
 .deal.ok{background:var(--ok-soft);color:var(--ok)}
 .deal.warn{background:var(--warn-soft);color:var(--warn)}
 .deal span{color:var(--fg);opacity:.85}
+.permbox{display:grid;gap:6px;border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+.perm-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px}
+.permbox .inl{display:inline-flex;flex-direction:row;align-items:center;gap:6px;color:var(--fg)}.permbox .inl input{width:auto}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -371,7 +374,7 @@ function render(){
   if(tab==="calls")h=viewCalls(loading);
   if(tab.startsWith("hr_"))h=viewHR(tab);
   if(tab.startsWith("inv_"))h=viewInv(tab);
-  if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」，把你的權限設為 2，並連結你的登入帳號。</div></div>';
+  if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」勾選「報價系統」，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
@@ -1002,7 +1005,7 @@ function lendState(d){if(d.status==="轉銷貨")return["已轉銷貨","mute"];if
   if(d.due&&d.due<todayStr())return["逾期未還 "+daysBetween(d.due,todayStr())+" 天","bad"];
   return[(d.status==="部分歸還"?"部分歸還・":"")+"借出中 "+left+" 件","warn"]}
 function viewInv(t){
-  if(!invCan("view"))return '<div class="card"><div class="empty">進銷存需要權限 3 以上才能查看。請管理員到「人事管理 → 員工資料」設定你的權限並連結登入帳號。</div></div>';
+  if(!invCan("view"))return '<div class="card"><div class="empty">你沒有進銷存的查看權限。請管理員到「人事管理 → 員工資料」勾選「進銷存：查看」並連結你的登入帳號。</div></div>';
   const N=S.hrErr==="permission-denied"?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
@@ -1043,7 +1046,7 @@ function prodForm(p){
   <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
   <label>狀態<select name="active">${opt("1","使用中",p.active!==false)}${opt("0","停用",p.active===false)}</select></label><label>條碼（選填）<input name="barcode" value="${esc(p.barcode||"")}" inputmode="numeric"></label>
   <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label></div>
-  ${!isNew&&!invCan("edit")?'<div class="note">你的權限只能查看與新增，無法修改既有商品（修改需權限 4）。</div>':""}
+  ${!isNew&&!invCan("edit")?'<div class="note">你沒有「進銷存：修改」權限，只能查看這個商品。</div>':""}
   <div class="actions">${!isNew&&invCan("del")?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${(isNew?invCan("add"):invCan("edit"))?"取消":"關閉"}</button>${(isNew?invCan("add"):invCan("edit"))?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
   async fd=>{if(!(isNew?invCan("add"):invCan("edit"))){showErr({message:"你沒有修改權限。"});return false}
     const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),spec:val(fd,"spec"),cat:val(fd,"cat"),unit:val(fd,"unit")||"台",safety:val(fd,"safety")===""?"":Math.max(0,parseInt(val(fd,"safety"),10)||0),
@@ -1080,7 +1083,7 @@ function invDocForm(type,d,pre){
   <tbody id="invBody">${(d.items?.length?d.items:[{}]).map(i=>invItemRow(i,T)).join("")}</tbody></table></div>
   <div class="toolbar" style="margin-top:8px"><button class="btn small" type="button" id="invAdd">＋ 新增一列</button><span style="flex:1"></span>${T.price?'<b id="invSum" class="mono"></b>':""}</div></fieldset>
   <label>備註<textarea name="note">${esc(d.note||"")}</textarea></label>
-  ${!isNew&&!invCan("edit")?'<div class="note">你的權限只能查看與新增，無法修改這張單（修改需權限 4）。</div>':""}
+  ${!isNew&&!invCan("edit")?'<div class="note">你沒有「進銷存：修改」權限，只能查看這張單。</div>':""}
   <div class="actions">${!isNew?(invCan("del")?'<button class="btn danger" type="button" id="del">刪除</button>':"")+(invCan("edit")&&type==="lend"&&lendState(d)[1]!=="mute"?'<button class="btn" type="button" id="ret">辦理歸還</button><button class="btn" type="button" id="toSale">轉為銷貨</button>':"")+'<span class="spacer"></span>':""}<button class="btn" type="button" data-close>${(isNew?invCan("add"):invCan("edit"))?"取消":"關閉"}</button>${(isNew?invCan("add"):invCan("edit"))?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
   async fd=>{if(!(isNew?invCan("add"):invCan("edit"))){showErr({message:"你沒有修改權限。"});return false}
     const g=k=>fd.getAll(k).map(v=>String(v).trim());const pids=g("r_pid"),qs=g("r_qty"),prs=g("r_price");
@@ -1160,13 +1163,18 @@ function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">�
 /* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
 /* 報價權限：管理員，或員工資料權限為 2 且已連結登入帳號的在職員工 */
 /* 權限等級：1 一般職員／2 報價／3 進銷存查看與新增／4 加修改／5 加刪除；系統管理員視為 5 */
-const PERM_LV=[["1","一般職員"],["2","報價系統"],["3","報價＋進銷存：查看、新增"],["4","報價＋進銷存：查看、新增、修改"],["5","報價＋進銷存：查看、新增、修改、刪除"]];
-const permOf=e=>Math.max(1,Math.min(5,parseInt(e?.perm,10)||1));
-const myPerm=()=>{if(isAdm())return 5;const e=myEmp();if(e&&hrActive(e))return permOf(e);return Math.max(1,Math.min(5,parseInt(S.staff.find(u=>u.id===me?.email)?.perm,10)||1))};
-const invCan=act=>myPerm()>=({view:3,add:3,edit:4,del:5})[act];
-const salesReps=()=>S.hrEmp.filter(e=>permOf(e)>=2&&hrActive(e)).sort((a,b)=>String(a.code).localeCompare(b.code));
+const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"]];
+const PERM_ALL=PERMS.map(p=>p[0]);
+/* 權限可複選；舊資料的等級 1～5 自動換算 */
+const permsOf=e=>{if(Array.isArray(e?.perms))return e.perms.filter(p=>PERM_ALL.includes(p));const n=parseInt(e?.perm,10)||1;
+  return [n>=2&&"quote",n>=3&&"inv_view",n>=3&&"inv_add",n>=4&&"inv_edit",n>=5&&"inv_del"].filter(Boolean)};
+const permLabel=ps=>{const inv=["view","add","edit","del"].filter(a=>ps.includes("inv_"+a)).map(a=>({view:"查",add:"增",edit:"改",del:"刪"})[a]);
+  return [ps.includes("quote")?"報價":"",inv.length?"進銷存（"+inv.join("")+"）":""].filter(Boolean).join("・")};
+const myPerms=()=>{if(isAdm())return PERM_ALL;const e=myEmp();if(e&&hrActive(e))return permsOf(e);const u=S.staff.find(u=>u.id===me?.email);return u?permsOf(u):[]};
+const invCan=act=>myPerms().includes("inv_"+act);
+const salesReps=()=>S.hrEmp.filter(e=>permsOf(e).includes("quote")&&hrActive(e)).sort((a,b)=>String(a.code).localeCompare(b.code));
 const myEmp=()=>S.hrEmp.find(e=>e.account===me?.email);
-const canQuote=()=>myPerm()>=2;
+const canQuote=()=>myPerms().includes("quote");
 /* 客戶成交狀態：有簽回報價或有租約（非取消）即為已成交舊客戶 */
 function custQuotes(k){const nm=normName(k.name||""),tx=String(k.taxId||"").trim();
   return S.quotes.filter(x=>(k.id&&x.customerId===k.id)||(tx&&x.cust?.taxId===tx)||(nm&&normName(x.cust?.name)===nm))}
@@ -1226,7 +1234,7 @@ function viewHR(t){
       .sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(e=>{const sc=(e.status||"在職");return `<div class="row" data-emp="${esc(e.id)}" tabindex="0">
       <div><div class="t"><span class="mono m">${esc(e.code||"")}</span>　${esc(e.name)}　<span class="m">${esc([e.dept,e.title].filter(Boolean).join("・"))}</span></div>
       <div class="m">${e.mobile?esc(e.mobile)+" · ":""}${e.ext?"分機 "+esc(e.ext)+" · ":""}到職 ${esc(e.hireDate||"—")}${e.hireDate&&sc!=="離職"?"（"+seniority(e.hireDate)+"）":""}</div></div>
-      <div class="r"><span class="pill ${sc==="在職"?"ok":sc==="試用期"?"":sc==="留職停薪"?"warn":"mute"}">${esc(sc)}</span>${permOf(e)>=2?`<span class="m">權限 ${permOf(e)}</span>`:""}${(()=>{const miss=empMissing(e);return miss.length&&sc!=="離職"?`<span class="miss" title="缺少：${esc(miss.join("、"))}">人事資料有缺（${miss.length}）</span>`:""})()}</div></div>`});
+      <div class="r"><span class="pill ${sc==="在職"?"ok":sc==="試用期"?"":sc==="留職停薪"?"warn":"mute"}">${esc(sc)}</span>${permsOf(e).length?`<span class="m">${esc(permLabel(permsOf(e)))}</span>`:""}${(()=>{const miss=empMissing(e);return miss.length&&sc!=="離職"?`<span class="miss" title="缺少：${esc(miss.join("、"))}">人事資料有缺（${miss.length}）</span>`:""})()}</div></div>`});
     return N+`<div class="toolbar"><input id="q" placeholder="搜尋編號、姓名、部門、職稱、電話"><select id="f" style="flex:0 1 150px">${[["all","在職（含試用、留停）"],...HR_STATUS.map(x=>[x,x]),["every","全部"]].map(([k,v])=>opt(k,v,k===(filter||"all"))).join("")}</select>${adm?'<button class="btn primary" type="button" data-hr="emp">＋ 新增員工</button>':""}</div>
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.hrEmp.length?"沒有符合條件的員工":"還沒有員工資料。"+(adm?"按「新增員工」建立第一位。":"")}</div>`}</div>
     ${adm?'<div class="note">身分證字號、生日、地址、緊急聯絡人等個資只有管理員看得到。</div>':""}`;
@@ -1380,8 +1388,9 @@ function empForm(e){
     <label>姓名<input name="name" value="${esc(e.name||"")}" required></label>
     <label>部門<input name="dept" list="deptList" value="${esc(e.dept||"")}" placeholder="例：業務部"></label>
     <label>職稱<input name="title" list="titleList" value="${esc(e.title||"")}" placeholder="例：業務專員"></label>
-    <label>權限（管理員設定）<select name="perm">${PERM_LV.map(([k,v])=>opt(k,k+"　"+v,String(permOf(e))===k)).join("")}</select></label>
-    <label>系統登入帳號（權限 2 必選）<select name="account"><option value="">— 未連結 —</option>${(()=>{const list=S.staff.filter(u=>u.active!==false).map(u=>({id:u.id,label:(u.code?u.code+" ":"")+(u.name||u.id)+"（"+u.id+"）"}));
+    <div class="full permbox"><div class="addr-t">權限（管理員設定，可複選）</div><div class="perm-g">${PERMS.map(([k,v])=>`<label class="inl"><input type="checkbox" name="perms" value="${k}"${permsOf(e).includes(k)?" checked":""}> ${v}</label>`).join("")}</div>
+      <div class="note">都不勾就是一般職員。勾選進銷存的新增、修改或刪除時，會自動一併勾選查看。</div></div>
+    <label>系統登入帳號（有勾權限必選）<select name="account"><option value="">— 未連結 —</option>${(()=>{const list=S.staff.filter(u=>u.active!==false).map(u=>({id:u.id,label:(u.code?u.code+" ":"")+(u.name||u.id)+"（"+u.id+"）"}));
       if(!list.some(u=>u.id===OWNER))list.unshift({id:OWNER,label:"系統擁有者（"+OWNER+"）"});
       const used=new Set(S.hrEmp.filter(x=>x.id!==e.id&&x.account).map(x=>x.account));
       return list.map(u=>`<option value="${esc(u.id)}"${u.id===e.account?" selected":""}${used.has(u.id)?" disabled":""}>${esc(u.label)}${used.has(u.id)?"　已連結其他員工":""}</option>`).join("")})()}</select>
@@ -1407,7 +1416,7 @@ function empForm(e){
   </div></fieldset>
   <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"新增員工":"儲存"}</button></div>`,
   async fd=>{
-    const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),dept:val(fd,"dept"),title:val(fd,"title"),perm:String(Math.max(1,Math.min(5,parseInt(val(fd,"perm"),10)||1))),managerId:val(fd,"managerId"),status:val(fd,"status"),hireDate:val(fd,"hireDate"),leaveDate:val(fd,"leaveDate"),
+    const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),dept:val(fd,"dept"),title:val(fd,"title"),perms:PERM_ALL.filter(p=>fd.getAll("perms").includes(p)),managerId:val(fd,"managerId"),status:val(fd,"status"),hireDate:val(fd,"hireDate"),leaveDate:val(fd,"leaveDate"),
       ext:val(fd,"ext").replace(/\D/g,""),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email"),account:val(fd,"account"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     const a=addrRead("e");
     const pv={idNo:val(fd,"idNo").toUpperCase(),gender:val(fd,"gender"),birthday:val(fd,"birthday"),education:val(fd,"education"),address:fullAddr(a),addr:a,emName:val(fd,"emName"),emRel:val(fd,"emRel"),emPhone:val(fd,"emPhone"),note:val(fd,"note")};
@@ -1415,17 +1424,20 @@ function empForm(e){
     if(S.hrEmp.some(x=>x.code===d.code&&x.id!==e.id)){showErr({message:"員工編號 "+d.code+" 已經有人使用。"});return false}
     if(!twIdOk(pv.idNo)){showErr({message:"身分證／居留證號格式或檢查碼不正確，請再確認。"});return false}
     if(d.status==="離職"&&!d.leaveDate){showErr({message:"狀態為離職時，請填寫離職日。"});return false}
-    if(+d.perm>=2&&!d.account){showErr({message:"權限 2 以上需要連結登入帳號：請在「權限」下方的「系統登入帳號」選擇這位員工登入用的 Email。還沒有帳號的話，請先到功能選單頁右上角「帳號管理」建立。"});return false}
+    if(d.perms.length&&!d.account){showErr({message:"有勾選權限的員工需要連結登入帳號：請在「權限」下方的「系統登入帳號」選擇這位員工登入用的 Email。還沒有帳號的話，請先到功能選單頁右上角「帳號管理」建立。"});return false}
     if(d.leaveDate&&d.hireDate&&d.leaveDate<d.hireDate){showErr({message:"離職日不能早於到職日。"});return false}
     {const er=phoneErr([["手機",d.mobile,"mobile"]])||addrErr(a,"通訊地址");if(er){showErr({message:er});return false}}
     if(d.managerId){let m=d.managerId,n=0;while(m&&n++<50){if(m===e.id){showErr({message:"直屬主管不能設定成自己的下屬。"});return false}m=S.hrEmp.find(x=>x.id===m)?.managerId}}
     const id=isNew?doc(collection(fs,"hrEmployees")).id:e.id;
     await setDoc(doc(fs,"hrEmployees",id),clean(d));
     /* 同步權限到登入帳號，資料庫規則依此判斷 */
-    try{if(e.account&&e.account!==d.account)await setDoc(doc(fs,"staff",e.account),{perm:1},{merge:true});
-      if(d.account)await setDoc(doc(fs,"staff",d.account),{perm:+d.perm},{merge:true})}catch(er){console.warn("權限同步失敗",er)}await setDoc(doc(fs,"hrPrivate",id),clean(pv));toast(isNew?"已新增員工 "+d.name:"已儲存");
+    try{if(e.account&&e.account!==d.account)await setDoc(doc(fs,"staff",e.account),{perms:[]},{merge:true});
+      if(d.account)await setDoc(doc(fs,"staff",d.account),{perms:d.perms},{merge:true})}catch(er){console.warn("權限同步失敗",er)}await setDoc(doc(fs,"hrPrivate",id),clean(pv));toast(isNew?"已新增員工 "+d.name:"已儲存");
   },true);
   bindAddr("e");bindPhones({mobile:"mobile"});
+  {const box=form.querySelector(".permbox"),cb=v=>box.querySelector(`[value="${v}"]`);box.addEventListener("change",ev=>{const v=ev.target.value;
+    if(["inv_add","inv_edit","inv_del"].includes(v)&&ev.target.checked)cb("inv_view").checked=true;
+    if(v==="inv_view"&&!ev.target.checked)["inv_add","inv_edit","inv_del"].forEach(x=>cb(x).checked=false)})}
   addVoice({code:"text",name:"text",dept:"text",title:"text",mobile:"tel",education:"text",emName:"text",emRel:"text",emPhone:"tel",note:"append"},["e"]);
   if(!isNew)confirmDelete("#del","員工",async()=>{if(S.hrEmp.some(x=>x.managerId===e.id&&hrActive(x)))throw{message:"還有員工的直屬主管是這位，請先調整後再刪除。也可以把狀態改成「離職」保留紀錄。"};await deleteDoc(doc(fs,"hrEmployees",e.id));await deleteDoc(doc(fs,"hrPrivate",e.id))});
 }
@@ -1710,7 +1722,7 @@ function quoteForm(src,copy){
     <label>報價日期<input type="date" name="date" value="${esc(x.date)}" required></label>
     <label>狀態<select name="status">${Object.entries(QSTATUS).map(([k,v])=>opt(k,v[0],k===x.status)).join("")}</select></label>
     <label>業務人員<select name="sales">${(()=>{const reps=salesReps();const cur=x.sales||myEmp()?.name||"";
-      return (reps.length?"":'<option value="">（尚未設定權限 2 的員工）</option>')+reps.map(r=>`<option value="${esc(r.name)}" data-mobile="${esc(r.mobile||"")}"${r.name===cur?" selected":""}>${esc((r.code?r.code+"　":"")+r.name)}</option>`).join("")
+      return (reps.length?"":'<option value="">（尚未有勾選報價系統權限的員工）</option>')+reps.map(r=>`<option value="${esc(r.name)}" data-mobile="${esc(r.mobile||"")}"${r.name===cur?" selected":""}>${esc((r.code?r.code+"　":"")+r.name)}</option>`).join("")
       +(cur&&!reps.some(r=>r.name===cur)?`<option value="${esc(cur)}" selected>${esc(cur)}（非報價人員）</option>`:"")})()}</select></label>
     <label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>
     <label>報價效期<select name="validDays">${[30,15,7].map(n=>opt(n,n+"日",+(x.validDays??30)===n)).join("")}${x.validDays&&![30,15,7].includes(+x.validDays)?opt(x.validDays,x.validDays+"日（舊設定）",true):""}</select></label>
@@ -2240,8 +2252,8 @@ function showMenu(){$("#appView").hidden=true;$("#menuView").hidden=false;if(dlg
 function openModule(k){
   const m=MODULES.find(x=>x.k===k);if(!m)return;
   if(!m.go){toast("「"+m.nm+"」功能建置中，敬請期待");return}
-  if(m.k==="inv"&&!invCan("view")){toast("進銷存需要權限 3 以上，請管理員在「人事管理 → 員工資料」設定");return}
-  if(m.go==="quotes"&&!canQuote()){toast("你沒有報價系統的權限，請管理員在「人事管理 → 員工資料」把你的權限設為 2");return}
+  if(m.k==="inv"&&!invCan("view")){toast("你沒有進銷存的查看權限，請管理員在「人事管理 → 員工資料」勾選");return}
+  if(m.go==="quotes"&&!canQuote()){toast("你沒有報價系統的權限，請管理員在「人事管理 → 員工資料」勾選「報價系統」");return}
   $("#menuView").hidden=true;$("#appView").hidden=false;
   if(m.go==="remind"){tab="overview";q="";render();if(remindList().length)showReminders();else toast("目前沒有需要處理的提醒")}
   else{tab=m.go;q="";filter="all";render()}
