@@ -946,6 +946,8 @@ function callForm(src){
     <label>1. 來電分類<select name="type" required><option value="">請選擇</option>${CALL_TYPES.map(n=>opt(n,n,n===c.type)).join("")}</select></label>
     <label>2. 客戶需求<select name="need" required><option value="">請選擇</option>${CALL_NEEDS.map(n=>opt(n,n,n===c.need)).join("")}</select></label>
     <label class="full">3. 來電內容說明<textarea name="content" placeholder="客戶詢問的內容、數量、時間等">${esc(c.content||"")}</textarea></label>
+    <label class="full">統編（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字，沒有可留空"></label>
+    ${taxBlock("c",c.taxExempt)}
     <label class="full">4. 公司名稱<input name="company" list="custList" value="${esc(c.company||"")}" placeholder="輸入或選擇既有客戶，會自動帶入資料"></label>
     <label>5. 聯絡人<input name="contact" value="${esc(c.contact||"")}"></label>
     <label>6. 聯絡市話<input name="tel" value="${esc(c.tel||"")}" inputmode="tel" placeholder="04-7510728" autocomplete="off"><span class="note" id="telHint"></span></label>
@@ -963,7 +965,7 @@ function callForm(src){
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"儲存通聯":"儲存"}</button>`:""}</div>`,
   async fd=>{
     const zipOf=(cty,dis)=>(ZIP[cty]||[]).find(z=>z.name===dis)?.zip||"";
-    const d={at:val(fd,"at"),receiver:val(fd,"receiver"),type:val(fd,"type"),need:val(fd,"need"),content:val(fd,"content"),company:val(fd,"company"),contact:val(fd,"contact"),
+    const d={taxId:val(fd,"taxId"),taxExempt:fd.get("c_exempt")?val(fd,"c_exemptType"):"",at:val(fd,"at"),receiver:val(fd,"receiver"),type:val(fd,"type"),need:val(fd,"need"),content:val(fd,"content"),company:val(fd,"company"),contact:val(fd,"contact"),
       tel:fmtTel(val(fd,"tel")),mobile:fmtMobile(val(fd,"mobile")),county:val(fd,"county"),district:val(fd,"district"),road:val(fd,"road"),detail:val(fd,"detail"),note:val(fd,"note"),source:val(fd,"source")};
     d.zip=zipOf(d.county,d.district);
     if(!d.at){showErr({message:"請填寫日期時間。"});return false}
@@ -971,11 +973,12 @@ function callForm(src){
     if(!d.company&&!d.contact){showErr({message:"請至少填寫公司名稱或聯絡人。"});return false}
     if(!telOk(d.tel)){showErr({message:"市話格式不正確，請輸入區碼加號碼，例如 04-7510728。"});return false}
     if(!mobileOk(d.mobile)){showErr({message:"手機格式不正確，請輸入 09 開頭共 10 碼，例如 0965-585-129。"});return false}
+    {const e=await taxGate("c");if(e){showErr({message:e});return false}}
     d.updatedAt=new Date().toISOString();d.updatedBy=me.email;
     const ex=S.customers.find(k=>k.name===d.company);
     if(ex)d.customerId=ex.id;
     else if(d.company&&fd.get("saveCust")){const ref=db.collection("customers").doc();
-      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
+      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:d.taxId,taxExempt:d.taxExempt,taxVerified:d.taxId&&!d.taxExempt?new Date().toISOString():"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
     if(isNew){d.createdAt=d.updatedAt;d.createdBy=me.email;await db.collection("calls").doc().set(d);toast("已儲存通聯紀錄")}
     else{await db.doc("calls/"+c.id).update(d);toast("已儲存")}
   },true);
@@ -992,10 +995,20 @@ function callForm(src){
   F.tel.addEventListener("input",()=>{F.tel.value=fmtTel(F.tel.value)});
   F.mobile.addEventListener("input",()=>{F.mobile.value=fmtMobile(F.mobile.value)});
   F.company.addEventListener("change",()=>{const k=S.customers.find(x=>x.name===F.company.value.trim());if(!k)return;
+    if(!F.taxId.value&&k.taxId){F.taxId.value=k.taxId;F.taxId.dispatchEvent(new Event("input"))}
     if(!F.contact.value)F.contact.value=k.contact||"";if(!F.tel.value)F.tel.value=fmtTel(k.phone||"");if(!F.mobile.value)F.mobile.value=fmtMobile(k.mobile||"");
     const last=S.calls.filter(x=>x.customerId===k.id&&x.county).sort((a,b)=>String(b.at).localeCompare(a.at))[0];
-    if(last&&!F.county.value){F.county.value=last.county;fillDis(last.district);F.road.value=last.road||"";F.detail.value=last.detail||""}prev()});
+    const src2=last||(k.addr?.county?k.addr:k.address?parseAddr(k.address):null);
+    if(src2&&src2.county&&!F.county.value){F.county.value=src2.county;fillDis(src2.district);F.road.value=src2.road||"";F.detail.value=src2.detail||""}prev()});
   form.oninput=prev;prev();
+  bindTax("c","company","taxId");
+  addVoice({taxId:"digits",content:"append",company:"text",contact:"text",tel:"tel",mobile:"tel",road:"text",detail:"text",note:"append"});
+  if(SR){const lab=F.county.closest("label"),b=document.createElement("button");b.type="button";b.className="btn small addr-mic";b.style.marginLeft="8px";b.innerHTML=MIC_SVG+"說地址";
+    lab.firstChild.after(b);
+    b.onclick=e=>{e.preventDefault();listen(t=>{let a=zhDigits(t).replace(/\s+/g,"").replace(/^台/,"臺");let o=parseAddr(a);
+      if(!o.county){for(const[cc,ds]of Object.entries(ZIP)){const dd=ds.find(x=>a.startsWith(x.name)&&x.name.length>2);if(dd){o=parseAddr(cc+a);break}}}
+      if(!o.county){toast("聽到：「"+t+"」，請從縣市開始說，例如：彰化縣彰化市自強南路537號");return}
+      F.county.value=o.county;fillDis(o.district);F.road.value=o.road||"";F.detail.value=o.detail||"";prev();toast("已填入地址，請確認")},b)}}
   if(!isNew&&canWrite)confirmDelete("#del","通聯紀錄",()=>db.doc("calls/"+c.id).delete());
 }
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){callForm(null);return}
