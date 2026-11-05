@@ -634,7 +634,7 @@ function customerForm(c,pre){
    em.addEventListener("blur",fix);em.addEventListener("input",()=>{if(emailOk(em.value.trim())||!em.value.trim())hint.textContent=""});
    ws.addEventListener("blur",()=>{ws.value=normUrl(ws.value)});fix()}
   {const F=form.elements,up=()=>{const dl=custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value});$("#dealBadge").innerHTML=dealBadge(dl);
-    $("#dealActs").innerHTML=(canQuote()?'<button class="btn primary" type="button" data-quotecust>業務報價：帶入此客戶建立報價單</button>':"")+(dl.quotes&&canQuote()?`<button class="btn" type="button" data-quotelist>查看報價紀錄（${dl.quotes}）</button>`:"")};
+    $("#dealActs").innerHTML=(canQuote()?'<button class="btn primary" type="button" data-quotecust>業務報價：帶入此客戶建立報價單</button>':"")+(dl.quotes&&canQuote()?`<button class="btn" type="button" data-quotecopy>複製報價單</button><button class="btn" type="button" data-quotelist>查看報價紀錄（${dl.quotes}）</button>`:"")};
    form.addEventListener("click",ev=>{
      if(ev.target.closest("[data-quotecust]")){if(!F.name.value.trim()){showErr({message:"請先填寫客戶名稱或統編，再建立報價單。"});return}
        const a=addrRead("a"),dSame=!!F.d_same?.checked,dv=dSame?a:addrRead("d");
@@ -642,6 +642,14 @@ function customerForm(c,pre){
          address:fullAddr(a),addr:a,delivery:dSame?fullAddr(a):fullAddr(dv),dlv:dv,taxExempt:F.k_exempt?.checked?F.k_exemptType.value:""};
        const me2=myEmp();dlg.close();
        quoteForm({date:todayStr(),sales:me2?.perm==="2"?me2.name:(me.name||""),salesMobile:(me2?.perm==="2"&&me2.mobile)||me.mobile||"",taxMode:"excl",status:"draft",validDays:30,items:[{}],customerId:c.id||"",cust:cu},"prefill");return}
+     if(ev.target.closest("[data-quotecopy]")){
+       const qs=custQuotes({id:c.id,name:F.name.value,taxId:F.taxId.value}).sort((a,b)=>String(b.date).localeCompare(a.date)||String(b.no).localeCompare(a.no));
+       const go=x=>{dlg.close();quoteForm(x,true)};
+       if(qs.length===1){go(qs[0]);return}
+       dlg.close();openDlg(`<h3>選擇要複製的報價單</h3><div class="note">複製後會產生新的報價單（今天日期、草稿），內容可以再修改。</div>
+         <div class="list">${qs.map((x,i)=>{const st=QSTATUS[x.status]||QSTATUS.draft;return `<div class="row" data-pick="${i}" tabindex="0"><div><div class="t mono">${esc(x.no||"")}</div><div class="m">${esc(x.date||"")}　${(x.items||[]).length} 項${x.sales?"　業務 "+esc(x.sales):""}</div></div><div class="r"><span class="pill ${st[1]}">${st[0]}</span><span class="mono m">${money(quoteCalc(x).total)}</span></div></div>`}).join("")}</div>
+         <div class="actions"><button class="btn" type="button" data-close>取消</button></div>`,null);
+       form.querySelectorAll("[data-pick]").forEach(r=>r.onclick=()=>go(qs[+r.dataset.pick]));return}
      if(ev.target.closest("[data-quotelist]")){const nm=F.name.value.trim();dlg.close();$("#menuView").hidden=true;$("#appView").hidden=false;tab="quotes";q=nm;filter="all";render();window.scrollTo(0,0)}});F.name.addEventListener("input",up);F.name.addEventListener("change",up);F.taxId.addEventListener("input",up);up()}
   addVoice({taxId:"digits",name:"text",phone:"tel",fax:"tel",contact:"text",mobile:"tel",email:"email",note:"append"},["a","d"]);
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
@@ -987,6 +995,8 @@ const salesReps=()=>S.hrEmp.filter(e=>e.perm==="2"&&hrActive(e)).sort((a,b)=>Str
 const myEmp=()=>S.hrEmp.find(e=>e.account===me?.email);
 const canQuote=()=>isAdm()||salesReps().some(e=>e.account===me?.email);
 /* 客戶成交狀態：有簽回報價或有租約（非取消）即為已成交舊客戶 */
+function custQuotes(k){const nm=normName(k.name||""),tx=String(k.taxId||"").trim();
+  return S.quotes.filter(x=>(k.id&&x.customerId===k.id)||(tx&&x.cust?.taxId===tx)||(nm&&normName(x.cust?.name)===nm))}
 function custDeal(k){
   const nm=normName(k.name||""),tx=String(k.taxId||"").trim();
   const mine=x=>(k.id&&x.customerId===k.id)||(tx&&x.cust?.taxId===tx)||(nm&&normName(x.cust?.name)===nm);
