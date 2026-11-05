@@ -1105,6 +1105,11 @@ function empForm(e){
     <label>部門<input name="dept" list="deptList" value="${esc(e.dept||"")}" placeholder="例：業務部"></label>
     <label>職稱<input name="title" list="titleList" value="${esc(e.title||"")}" placeholder="例：業務專員"></label>
     <label>權限（管理員設定）<select name="perm">${opt("1","1　一般職員",(e.perm||"1")==="1")}${opt("2","2　可使用報價系統",e.perm==="2")}</select></label>
+    <label>系統登入帳號（權限 2 必選）<select name="account"><option value="">— 未連結 —</option>${(()=>{const list=S.staff.filter(u=>u.active!==false).map(u=>({id:u.id,label:(u.code?u.code+" ":"")+(u.name||u.id)+"（"+u.id+"）"}));
+      if(!list.some(u=>u.id===OWNER))list.unshift({id:OWNER,label:"系統擁有者（"+OWNER+"）"});
+      const used=new Set(S.hrEmp.filter(x=>x.id!==e.id&&x.account).map(x=>x.account));
+      return list.map(u=>`<option value="${esc(u.id)}"${u.id===e.account?" selected":""}${used.has(u.id)?" disabled":""}>${esc(u.label)}${used.has(u.id)?"　已連結其他員工":""}</option>`).join("")})()}</select>
+      <span class="note">選這位員工登入系統用的 Email。還沒有帳號的話，請到功能選單頁右上角「帳號管理」先建立。</span></label>
     <label>直屬主管<select name="managerId"><option value="">— 無（最上層）—</option>${mgrs.map(x=>opt(x.id,(x.code?x.code+" ":"")+x.name+(x.title?"・"+x.title:""),x.id===e.managerId)).join("")}</select></label>
     <label>在職狀態<select name="status">${HR_STATUS.map(x=>opt(x,x,x===(e.status||"在職"))).join("")}</select></label>
     <label>到職日<input type="date" name="hireDate" value="${esc(e.hireDate||"")}"></label>
@@ -1112,7 +1117,6 @@ function empForm(e){
     <label>公司分機<input name="ext" value="${esc(e.ext||"")}" inputmode="numeric"></label>
     <label>手機<input name="mobile" value="${esc(e.mobile||"")}"></label>
     <label>Email<input name="email" value="${esc(e.email||"")}" inputmode="email"></label>
-    <label>系統登入帳號<select name="account"><option value="">— 未連結 —</option>${S.staff.map(u=>opt(u.id,(u.code?u.code+" ":"")+(u.name||u.id),u.id===e.account)).join("")}</select></label>
   </div></fieldset>
   <fieldset class="adm"><legend>個人資料（僅管理員可查看）</legend><div class="grid2">
     <label>身分證／居留證號<input name="idNo" value="${esc(p.idNo||"")}" maxlength="10" autocomplete="off" style="text-transform:uppercase"></label>
@@ -1135,7 +1139,7 @@ function empForm(e){
     if(S.hrEmp.some(x=>x.code===d.code&&x.id!==e.id)){showErr({message:"員工編號 "+d.code+" 已經有人使用。"});return false}
     if(!twIdOk(pv.idNo)){showErr({message:"身分證／居留證號格式或檢查碼不正確，請再確認。"});return false}
     if(d.status==="離職"&&!d.leaveDate){showErr({message:"狀態為離職時，請填寫離職日。"});return false}
-    if(d.perm==="2"&&!d.account){showErr({message:"權限 2（可使用報價系統）需要先在「系統登入帳號」選擇這位員工的登入帳號，系統才認得是誰。"});return false}
+    if(d.perm==="2"&&!d.account){showErr({message:"權限 2 需要連結登入帳號：請在「權限」下方的「系統登入帳號」選擇這位員工登入用的 Email。還沒有帳號的話，請先到功能選單頁右上角「帳號管理」建立。"});return false}
     if(d.leaveDate&&d.hireDate&&d.leaveDate<d.hireDate){showErr({message:"離職日不能早於到職日。"});return false}
     {const er=phoneErr([["手機",d.mobile,"mobile"]])||addrErr(a,"通訊地址");if(er){showErr({message:er});return false}}
     if(d.managerId){let m=d.managerId,n=0;while(m&&n++<50){if(m===e.id){showErr({message:"直屬主管不能設定成自己的下屬。"});return false}m=S.hrEmp.find(x=>x.id===m)?.managerId}}
