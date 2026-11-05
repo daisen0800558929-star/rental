@@ -79,6 +79,16 @@ table.grid td.n,table.grid th.n{text-align:right;font-variant-numeric:tabular-nu
 table.grid tr.dept td{background:var(--bg);font-weight:700;color:var(--fg);font-size:14px}
 table.grid tr[data-pos]{cursor:pointer}table.grid tr[data-pos]:hover td{background:var(--accent-soft)}
 fieldset.adm{border-color:var(--warn)}
+.tl{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.tl li{display:grid;grid-template-columns:88px 18px minmax(0,1fr);gap:0 10px}
+.tl .yr{font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:right;padding-top:14px}
+.tl .ax{position:relative}.tl .ax::before{content:"";position:absolute;left:8px;top:0;bottom:0;border-left:2px solid var(--line)}
+.tl .ax::after{content:"";position:absolute;left:3px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--c,var(--accent));box-shadow:0 0 0 3px var(--bg)}
+.tl li:first-child .ax::before{top:16px}.tl li:last-child .ax::before{bottom:calc(100% - 22px)}
+.tl .hc{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:6px 0;display:grid;gap:4px;cursor:pointer;text-align:left;font:inherit;color:var(--fg)}
+.tl .hc:hover{border-color:var(--accent)}
+.tl .hc b{font-size:15px}.tl .hc img{max-height:140px;max-width:100%;border-radius:4px;justify-self:start;background:#fff}
+@media (max-width:520px){.tl li{grid-template-columns:72px 16px minmax(0,1fr);gap:0 6px}.tl .yr{font-size:11px;white-space:nowrap}}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -289,7 +299,7 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],hrHonor:[],hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -332,7 +342,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",hr_vision:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",hr_vision:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -348,7 +358,7 @@ function render(){
   if(tab==="quotes")h=viewQuotes(loading);
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
-  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["hr_vision","企業願景"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
+  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
   if(grp&&h)h=`<div class="seg" role="group">${grp.map(([k,v])=>`<button type="button" data-seg="${k}" aria-pressed="${k===tab}">${v}</button>`).join("")}</div>`+h;
   m.innerHTML=h;
@@ -907,6 +917,17 @@ function viewHR(t){
       ${v.updatedAt?`<div class="note">最後更新：${esc(v.updatedAt.slice(0,10))}${v.updatedBy?"　"+esc(staffLabel(v.updatedBy)):""}</div>`:""}</div>`
     :`<div class="card"><div class="empty">尚未填寫企業願景。${adm?"按右上角「編輯企業願景」填寫願景、使命、核心價值與經營理念，全體同仁都看得到。":"請管理員填寫。"}</div></div>`}`;
   }
+  if(t==="hr_honor"){
+    const fl=filter==="all"?"":filter;
+    const list=S.hrHonor.filter(h=>!fl||h.cat===fl).sort((a,b)=>String(b.date).localeCompare(a.date));
+    const col={"公司榮譽":"var(--warn)","認證與證照":"var(--accent)","員工表揚":"var(--ok)","公司典章":"var(--muted)"};
+    return N+`<div class="toolbar"><select id="f" style="flex:0 1 180px"><option value="all">全部類別</option>${HONOR_CATS.map(c=>opt(c,c,c===fl)).join("")}</select><span style="flex:1"></span>${adm?'<button class="btn primary" type="button" data-hr="honor">＋ 新增榮譽典章</button>':""}</div>
+    ${list.length?`<div class="card"><ul class="tl">${list.map(h=>`<li style="--c:${col[h.cat]||"var(--accent)"}"><span class="yr">${esc(String(h.date||"").replace(/-/g,"."))}</span><span class="ax"></span>
+      <button class="hc" type="button" data-honor="${esc(h.id)}"><span><span class="pill" style="margin-right:6px">${esc(h.cat||"")}</span><b>${esc(h.title)}</b></span>
+      ${h.issuer||h.people?`<span class="m">${esc([h.issuer?"頒發："+h.issuer:"",h.people?"獲獎人員："+h.people:""].filter(Boolean).join("　"))}</span>`:""}
+      ${h.desc?`<span style="white-space:pre-wrap">${esc(h.desc)}</span>`:""}${h.fileName?`<span class="m">📎 ${esc(h.fileName)}</span>`:""}</button></li>`).join("")}</ul></div>`
+    :`<div class="card"><div class="empty">${S.hrHonor.length?"這個類別還沒有資料。":"還沒有榮譽典章。"+(adm?"按「新增榮譽典章」記錄公司獲獎、認證、員工表揚與公司規章。":"")}</div></div>`}`;
+  }
   if(t==="hr_org"){
     const act=S.hrEmp.filter(hrActive),ids=new Set(act.map(e=>e.id));
     const kids=id=>act.filter(e=>(e.managerId||"")===id).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
@@ -961,6 +982,31 @@ function viewHR(t){
     <div class="list">${rows.length?rows.join(""):'<div class="empty">還沒有契約資料。按「新增契約」記錄員工的勞動契約、保密協議等。</div>'}</div>`;
   }
   return"";
+}
+const HONOR_CATS=["公司榮譽","認證與證照","員工表揚","公司典章"];
+function honorForm(h){
+  const adm=isAdm(),isNew=!h;h=h||{cat:"公司榮譽",date:todayStr()};
+  if(!adm){openDlg(`<h3>${esc(h.title)}</h3><dl class="kv"><dt>類別</dt><dd>${esc(h.cat)}</dd><dt>日期</dt><dd>${esc(h.date)}</dd>${h.issuer?`<dt>頒發單位</dt><dd>${esc(h.issuer)}</dd>`:""}${h.people?`<dt>獲獎人員</dt><dd>${esc(h.people)}</dd>`:""}${h.desc?`<dt>說明</dt><dd style="white-space:pre-wrap">${esc(h.desc)}</dd>`:""}</dl>
+    ${h.fileName?'<div><button class="btn" type="button" id="openHF">查看附件 '+esc(h.fileName)+'</button></div>':""}<div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null)}
+  else openDlg(`<h3>${isNew?"新增榮譽典章":"編輯榮譽典章"}</h3>
+  <div class="grid2"><label>類別<select name="cat">${HONOR_CATS.map(c=>opt(c,c,c===h.cat)).join("")}</select></label><label>日期<input type="date" name="date" value="${esc(h.date||"")}" required></label>
+  <label class="full">標題<input name="title" value="${esc(h.title||"")}" placeholder="例：榮獲經濟部節能標竿獎、ISO 9001 認證、員工服務守則" required></label>
+  <label>頒發單位<input name="issuer" value="${esc(h.issuer||"")}" placeholder="例：經濟部能源署"></label><label>獲獎人員<input name="people" value="${esc(h.people||"")}" placeholder="員工表揚時填寫"></label>
+  <label class="full">說明／內容<textarea name="desc" style="min-height:96px" placeholder="得獎事蹟、認證範圍，或典章條文內容">${esc(h.desc||"")}</textarea></label>
+  <label class="full">附件（獎狀、證書照片或 PDF，1 MB 以內）<input type="file" name="file" accept="image/*,application/pdf"></label>
+  ${h.fileName?`<div class="full note">目前附件：<a href="#" id="openHF">${esc(h.fileName)}</a></div>`:""}</div>
+  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{const d={cat:val(fd,"cat"),date:val(fd,"date"),title:val(fd,"title"),issuer:val(fd,"issuer"),people:val(fd,"people"),desc:val(fd,"desc"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(!d.title||!d.date){showErr({message:"請填寫日期與標題。"});return false}
+    const id=isNew?doc(collection(fs,"hrHonors")).id:h.id,f=fd.get("file");
+    if(f&&f.size){if(f.size>1024*1024){showErr({message:"附件超過 1 MB，請壓縮後再上傳。"});return false}
+      let data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)});
+      if(f.type.startsWith("image/")){try{const cv=await shrinkImage(f,1400);data=cv.toDataURL("image/jpeg",.82)}catch(e){}}
+      await setDoc(doc(fs,"hrHonorFiles",id),{data,name:f.name,type:f.type});d.fileName=f.name;d.thumb=f.type.startsWith("image/")}
+    else if(h.fileName){d.fileName=h.fileName;d.thumb=!!h.thumb}
+    await setDoc(doc(fs,"hrHonors",id),d);toast("已儲存")},adm);
+  const of=$("#openHF");if(of)of.onclick=async ev=>{ev.preventDefault();try{const snap=await getDoc(doc(fs,"hrHonorFiles",h.id));if(!snap.exists())throw 0;const b=await (await fetch(snap.data().data)).blob();window.open(URL.createObjectURL(b),"_blank")}catch(e){toast("附件無法開啟")}};
+  if(adm){addVoice({title:"text",issuer:"text",people:"text",desc:"append"});if(!isNew)confirmDelete("#del","這筆資料",async()=>{await deleteDoc(doc(fs,"hrHonors",h.id));if(h.fileName)await deleteDoc(doc(fs,"hrHonorFiles",h.id)).catch(()=>{})})}
 }
 function visionForm(){
   const v=S.vision||{};
@@ -1069,7 +1115,8 @@ function hrConForm(c){
   if(!isNew)confirmDelete("#del","契約",async()=>{await deleteDoc(doc(fs,"hrContracts",c.id));if(c.fileName)await deleteDoc(doc(fs,"hrFiles",c.id)).catch(()=>{})});
 }
 $("#main").addEventListener("click",ev=>{const t=ev.target;
-  const h=t.closest("[data-hr]");if(h){({vision:visionForm,emp:()=>empForm(null),pos:()=>posForm(null),con:()=>hrConForm(null)})[h.dataset.hr]?.();return}
+  const h=t.closest("[data-hr]");if(h){({vision:visionForm,honor:()=>honorForm(null),emp:()=>empForm(null),pos:()=>posForm(null),con:()=>hrConForm(null)})[h.dataset.hr]?.();return}
+  const hn=t.closest("[data-honor]");if(hn){const x=S.hrHonor.find(k=>k.id===hn.dataset.honor);if(x)honorForm(x);return}
   const e=t.closest("[data-emp]");if(e){const x=S.hrEmp.find(k=>k.id===e.dataset.emp);if(x)empForm(x);return}
   const p=t.closest("[data-pos]");if(p&&isAdm()){const x=S.hrPos.find(k=>k.id===p.dataset.pos);if(x)posForm(x);return}
   const c=t.closest("[data-hrcon]");if(c){const x=S.hrCon.find(k=>k.id===c.dataset.hrcon);if(x)hrConForm(x)}});
@@ -1876,13 +1923,14 @@ function startData(){
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
    hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrHonors",d=>S.hrHonor=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.hrHonor=[];S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
