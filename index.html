@@ -291,7 +291,7 @@ html,body{margin:0}
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc,query,where,Timestamp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc,query,where,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail,createUserWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 const firebaseConfig={apiKey:"AIzaSyA-lXRTR38AeFMgSwYCD91Akywgxgb5ZB4",authDomain:"daisen-rental.firebaseapp.com",projectId:"daisen-rental",storageBucket:"daisen-rental.firebasestorage.app",messagingSenderId:"687274188760",appId:"1:687274188760:web:41035f0278d21ebd99dcad"};
 const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fbApp);
@@ -299,7 +299,7 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],hrHonor:[],hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -917,17 +917,7 @@ function viewHR(t){
       ${v.updatedAt?`<div class="note">最後更新：${esc(v.updatedAt.slice(0,10))}${v.updatedBy?"　"+esc(staffLabel(v.updatedBy)):""}</div>`:""}</div>`
     :`<div class="card"><div class="empty">尚未填寫企業願景。${adm?"按右上角「編輯企業願景」填寫願景、使命、核心價值與經營理念，全體同仁都看得到。":"請管理員填寫。"}</div></div>`}`;
   }
-  if(t==="hr_honor"){
-    const fl=filter==="all"?"":filter;
-    const list=S.hrHonor.filter(h=>!fl||h.cat===fl).sort((a,b)=>String(b.date).localeCompare(a.date));
-    const col={"公司榮譽":"var(--warn)","認證與證照":"var(--accent)","員工表揚":"var(--ok)","公司典章":"var(--muted)"};
-    return N+`<div class="toolbar"><select id="f" style="flex:0 1 180px"><option value="all">全部類別</option>${HONOR_CATS.map(c=>opt(c,c,c===fl)).join("")}</select><span style="flex:1"></span>${adm?'<button class="btn primary" type="button" data-hr="honor">＋ 新增榮譽典章</button>':""}</div>
-    ${list.length?`<div class="card"><ul class="tl">${list.map(h=>`<li style="--c:${col[h.cat]||"var(--accent)"}"><span class="yr">${esc(String(h.date||"").replace(/-/g,"."))}</span><span class="ax"></span>
-      <button class="hc" type="button" data-honor="${esc(h.id)}"><span><span class="pill" style="margin-right:6px">${esc(h.cat||"")}</span><b>${esc(h.title)}</b></span>
-      ${h.issuer||h.people?`<span class="m">${esc([h.issuer?"頒發："+h.issuer:"",h.people?"獲獎人員："+h.people:""].filter(Boolean).join("　"))}</span>`:""}
-      ${h.desc?`<span style="white-space:pre-wrap">${esc(h.desc)}</span>`:""}${h.fileName?`<span class="m">📎 ${esc(h.fileName)}</span>`:""}</button></li>`).join("")}</ul></div>`
-    :`<div class="card"><div class="empty">${S.hrHonor.length?"這個類別還沒有資料。":"還沒有榮譽典章。"+(adm?"按「新增榮譽典章」記錄公司獲獎、認證、員工表揚與公司規章。":"")}</div></div>`}`;
-  }
+  if(t==="hr_honor")return N+viewCharter();
   if(t==="hr_org"){
     const act=S.hrEmp.filter(hrActive),ids=new Set(act.map(e=>e.id));
     const kids=id=>act.filter(e=>(e.managerId||"")===id).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
@@ -983,31 +973,96 @@ function viewHR(t){
   }
   return"";
 }
-const HONOR_CATS=["公司榮譽","認證與證照","員工表揚","公司典章"];
-function honorForm(h){
-  const adm=isAdm(),isNew=!h;h=h||{cat:"公司榮譽",date:todayStr()};
-  if(!adm){openDlg(`<h3>${esc(h.title)}</h3><dl class="kv"><dt>類別</dt><dd>${esc(h.cat)}</dd><dt>日期</dt><dd>${esc(h.date)}</dd>${h.issuer?`<dt>頒發單位</dt><dd>${esc(h.issuer)}</dd>`:""}${h.people?`<dt>獲獎人員</dt><dd>${esc(h.people)}</dd>`:""}${h.desc?`<dt>說明</dt><dd style="white-space:pre-wrap">${esc(h.desc)}</dd>`:""}</dl>
-    ${h.fileName?'<div><button class="btn" type="button" id="openHF">查看附件 '+esc(h.fileName)+'</button></div>':""}<div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null)}
-  else openDlg(`<h3>${isNew?"新增榮譽典章":"編輯榮譽典章"}</h3>
-  <div class="grid2"><label>類別<select name="cat">${HONOR_CATS.map(c=>opt(c,c,c===h.cat)).join("")}</select></label><label>日期<input type="date" name="date" value="${esc(h.date||"")}" required></label>
-  <label class="full">標題<input name="title" value="${esc(h.title||"")}" placeholder="例：榮獲經濟部節能標竿獎、ISO 9001 認證、員工服務守則" required></label>
-  <label>頒發單位<input name="issuer" value="${esc(h.issuer||"")}" placeholder="例：經濟部能源署"></label><label>獲獎人員<input name="people" value="${esc(h.people||"")}" placeholder="員工表揚時填寫"></label>
-  <label class="full">說明／內容<textarea name="desc" style="min-height:96px" placeholder="得獎事蹟、認證範圍，或典章條文內容">${esc(h.desc||"")}</textarea></label>
-  <label class="full">附件（獎狀、證書照片或 PDF，1 MB 以內）<input type="file" name="file" accept="image/*,application/pdf"></label>
-  ${h.fileName?`<div class="full note">目前附件：<a href="#" id="openHF">${esc(h.fileName)}</a></div>`:""}</div>
-  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
-  async fd=>{const d={cat:val(fd,"cat"),date:val(fd,"date"),title:val(fd,"title"),issuer:val(fd,"issuer"),people:val(fd,"people"),desc:val(fd,"desc"),updatedAt:new Date().toISOString(),updatedBy:me.email};
-    if(!d.title||!d.date){showErr({message:"請填寫日期與標題。"});return false}
-    const id=isNew?doc(collection(fs,"hrHonors")).id:h.id,f=fd.get("file");
-    if(f&&f.size){if(f.size>1024*1024){showErr({message:"附件超過 1 MB，請壓縮後再上傳。"});return false}
-      let data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)});
-      if(f.type.startsWith("image/")){try{const cv=await shrinkImage(f,1400);data=cv.toDataURL("image/jpeg",.82)}catch(e){}}
-      await setDoc(doc(fs,"hrHonorFiles",id),{data,name:f.name,type:f.type});d.fileName=f.name;d.thumb=f.type.startsWith("image/")}
-    else if(h.fileName){d.fileName=h.fileName;d.thumb=!!h.thumb}
-    await setDoc(doc(fs,"hrHonors",id),d);toast("已儲存")},adm);
-  const of=$("#openHF");if(of)of.onclick=async ev=>{ev.preventDefault();try{const snap=await getDoc(doc(fs,"hrHonorFiles",h.id));if(!snap.exists())throw 0;const b=await (await fetch(snap.data().data)).blob();window.open(URL.createObjectURL(b),"_blank")}catch(e){toast("附件無法開啟")}};
-  if(adm){addVoice({title:"text",issuer:"text",people:"text",desc:"append"});if(!isNew)confirmDelete("#del","這筆資料",async()=>{await deleteDoc(doc(fs,"hrHonors",h.id));if(h.fileName)await deleteDoc(doc(fs,"hrHonorFiles",h.id)).catch(()=>{})})}
+/* ---------- 榮譽典章：同仁共同提案、表決、公布、確認遵守 ---------- */
+const CH_IDEAS=[["誠信待客","對客戶誠實報價、據實說明產品與服務，不誇大、不隱瞞。"],["準時守約","與客戶、同事約定的時間與承諾，必定準時做到；無法做到時提早告知。"],["安全第一","施工、搬運與維修時遵守安全規範，確實穿戴防護裝備，不冒險作業。"],
+  ["團隊合作","主動協助同事、分享經驗，遇到問題一起解決，不推諉責任。"],["愛惜公物","妥善使用與保養公司設備、車輛與工具，用後歸位，損壞立即回報。"],["保守機密","不對外洩漏客戶資料、報價與公司內部資訊。"],["持續學習","主動學習產品與技術知識，提升專業能力。"],["節能環保","落實節能減碳，從自身做起，也為客戶提供更省電的方案。"]];
+const NUM="一二三四五六七八九十";
+const zhNum=n=>n<=10?NUM[n-1]:n<20?"十"+(n%10?NUM[n%10-1]:""):NUM[Math.floor(n/10)-1]+"十"+(n%10?NUM[n%10-1]:"");
+const myVote=a=>(a.votes||{})[me.uid]||"";
+const voteN=(a,v)=>Object.values(a.votes||{}).filter(x=>x===v).length;
+function viewCharter(){
+  const adm=isAdm(),ch=S.charter||{},ver=+ch.version||0;
+  const arts=S.chArt.filter(a=>a.status==="adopted").sort((a,b)=>(+a.order||999)-(+b.order||999)||String(a.adoptedAt).localeCompare(b.adoptedAt));
+  const props=S.chArt.filter(a=>a.status==="proposal").sort((a,b)=>(voteN(b,"up")-voteN(b,"down"))-(voteN(a,"up")-voteN(a,"down"))||String(b.createdAt).localeCompare(a.createdAt));
+  const notesOf=id=>S.chNotes.filter(n=>n.artId===id).length;
+  const myAck=S.chAcks.find(k=>k.id===me.uid),acked=myAck&&+myAck.version===ver;
+  const members=S.staff.filter(u=>u.active!==false),ackN=S.chAcks.filter(k=>+k.version===ver).length;
+  const dirty=ver&&arts.some(a=>String(a.updatedAt||a.adoptedAt)>String(ch.publishedAt||""));
+  const step=(n,t,on)=>`<span class="pill ${on?"ok":"mute"}">${n}. ${t}</span>`;
+  return `<div class="card vis">
+    <div><h3>大森節能　榮譽典章</h3><p class="lead">${ver?"第 "+ver+" 版　"+esc(String(ch.publishedAt||"").slice(0,10))+" 公布":arts.length?"條文整理中，尚未公布":"制定中，歡迎每位同仁提出條文"}</p></div>
+    ${ch.intro?`<p>${esc(ch.intro)}</p>`:'<p class="m">由全體同仁共同提案、討論、表決，經公司公布後，大家一起遵守。</p>'}
+    <div class="chips" style="gap:6px">${step(1,"同仁提案",props.length||arts.length)}${step(2,"討論表決",S.chNotes.length||props.some(a=>Object.keys(a.votes||{}).length))}${step(3,"採納條文",arts.length)}${step(4,"公布",ver)}${step(5,"全員確認",ver&&ackN>=members.length&&members.length)}</div>
+    <div class="toolbar"><button class="btn primary" type="button" data-ch="propose">＋ 我要提案</button>${adm?`<button class="btn" type="button" data-ch="intro">編輯前言</button>${arts.length?`<button class="btn" type="button" data-ch="publish">${ver?"公布新版本":"公布榮譽典章"}</button>`:""}`:""}</div>
+    ${dirty&&adm?'<div class="banner">條文在公布後有修改，按「公布新版本」後，同仁需要重新確認。</div>':""}
+  </div>
+  <section><h2>條文 <small>${arts.length?"共 "+arts.length+" 條":""}</small></h2>
+  ${arts.length?`<div class="list">${arts.map((a,i)=>`<div class="row" data-art="${esc(a.id)}" tabindex="0"><div><div class="t">第${zhNum(i+1)}條　${esc(a.title)}</div><div class="m" style="white-space:pre-wrap;color:var(--fg)">${esc(a.content)}</div></div><div class="r">${notesOf(a.id)?`<span class="m">留言 ${notesOf(a.id)}</span>`:""}</div></div>`).join("")}</div>`
+    :'<div class="card"><div class="empty">還沒有條文。同仁的提案經討論後，由管理員採納為正式條文。</div></div>'}</section>
+  <section><h2>提案討論中 <small>${props.length?"依贊成票排序，點進去可以留言":""}</small></h2>
+  ${props.length?`<div class="list">${props.map(a=>{const v=myVote(a);return `<div class="row" data-art="${esc(a.id)}" tabindex="0"><div><div class="t">${esc(a.title)}</div>
+    <div class="m" style="white-space:pre-wrap;color:var(--fg)">${esc(a.content)}</div><div class="m">提案：${esc(a.byName||"")}　${esc(String(a.createdAt||"").slice(0,10))}${notesOf(a.id)?"　留言 "+notesOf(a.id):""}</div></div>
+    <div class="r"><button class="btn small${v==="up"?" primary":""}" type="button" data-vote="up" data-id="${esc(a.id)}" aria-pressed="${v==="up"}">贊成 ${voteN(a,"up")}</button><button class="btn small${v==="down"?" danger":""}" type="button" data-vote="down" data-id="${esc(a.id)}" aria-pressed="${v==="down"}">反對 ${voteN(a,"down")}</button></div></div>`}).join("")}</div>`
+    :'<div class="card"><div class="empty">目前沒有提案。按上方「我要提案」提出你認為大家應該共同遵守的事項，也可以從範例開始改。</div></div>'}</section>
+  ${ver?`<section><h2>同仁確認 <small>已確認 ${ackN}／${members.length} 人</small></h2><div class="card">
+    ${acked?`<div style="color:var(--ok);font-weight:500">✓ 你已在 ${esc(String(myAck.at).slice(0,10))} 確認閱讀並承諾遵守第 ${ver} 版榮譽典章。</div>`
+      :`<div>請詳細閱讀以上條文，確認後按下按鈕。</div><div><button class="btn primary" type="button" data-ch="ack">我已閱讀並承諾遵守第 ${ver} 版榮譽典章</button></div>`}
+    ${adm?`<details><summary>查看每位同仁確認狀況</summary><div class="list" style="margin-top:8px">${members.map(u=>{const k=S.chAcks.find(x=>x.email===u.id);const ok=k&&+k.version===ver;
+      return `<div class="row" style="cursor:default"><div><div class="t">${esc(staffLabel(u.id))}</div></div><div class="r"><span class="pill ${ok?"ok":"warn"}">${ok?"已確認 "+esc(String(k.at).slice(0,10)):"尚未確認"}</span></div></div>`}).join("")}</div></details>`:""}
+  </div></section>`:""}`;
 }
+function charterPropose(a){
+  const isNew=!a,adm=isAdm();a=a||{};
+  openDlg(`<h3>${isNew?"我要提案":a.status==="adopted"?"編輯條文":"編輯提案"}</h3>
+  ${isNew?`<div class="note">可以點範例快速帶入再修改：</div><div class="chips" style="gap:6px">${CH_IDEAS.map(([t],i)=>`<button class="btn small" type="button" data-idea="${i}">${esc(t)}</button>`).join("")}</div>`:""}
+  <label>條文標題<input name="title" value="${esc(a.title||"")}" placeholder="例：準時守約" required></label>
+  <label>條文內容<textarea name="content" style="min-height:96px" placeholder="具體寫出大家要做到什麼">${esc(a.content||"")}</textarea></label>
+  ${a.status!=="adopted"?`<label>提案理由（選填）<textarea name="reason" placeholder="為什麼需要這一條">${esc(a.reason||"")}</textarea></label>`:`<label>排序（數字小的排前面）<input type="number" name="order" value="${esc(a.order??"")}" inputmode="numeric"></label>`}
+  <div class="actions">${!isNew&&(adm||a.byUid===me.uid)?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"送出提案":"儲存"}</button></div>`,
+  async fd=>{const d={title:val(fd,"title"),content:val(fd,"content")};
+    if(!d.title||!d.content){showErr({message:"請填寫條文標題與內容。"});return false}
+    if(isNew){await setDoc(doc(collection(fs,"hrCharter")),{...d,reason:val(fd,"reason"),status:"proposal",byUid:me.uid,byEmail:me.email,byName:me.name||me.email,createdAt:new Date().toISOString(),votes:{}});toast("已送出提案，請同仁一起表決")}
+    else{const u={...d,updatedAt:new Date().toISOString()};if(a.status==="adopted")u.order=val(fd,"order")===""?"":+val(fd,"order");else u.reason=val(fd,"reason");
+      await updateDoc(doc(fs,"hrCharter",a.id),u);toast("已儲存")}});
+  form.querySelectorAll("[data-idea]").forEach(b=>b.onclick=()=>{const[t,c]=CH_IDEAS[+b.dataset.idea];form.elements.title.value=t;form.elements.content.value=c});
+  addVoice({title:"text",content:"append",reason:"append"});
+  if(!isNew)confirmDelete("#del",a.status==="adopted"?"條文":"提案",async()=>{await deleteDoc(doc(fs,"hrCharter",a.id))});
+}
+function charterDetail(a){
+  const adm=isAdm(),notes=S.chNotes.filter(n=>n.artId===a.id).sort((x,y)=>String(x.at).localeCompare(y.at)),prop=a.status==="proposal";
+  openDlg(`<h3>${esc(a.title)}　<span class="pill ${prop?"":"ok"}">${prop?"提案討論中":"正式條文"}</span></h3>
+  <p style="white-space:pre-wrap;margin:0">${esc(a.content)}</p>
+  ${a.reason?`<div class="note">提案理由：${esc(a.reason)}</div>`:""}
+  <div class="note">提案人：${esc(a.byName||"")}　${esc(String(a.createdAt||"").slice(0,10))}${prop?"　贊成 "+voteN(a,"up")+"、反對 "+voteN(a,"down"):""}</div>
+  <div><div class="note" style="margin-bottom:6px">同仁留言（${notes.length}）</div><div class="list">${notes.length?notes.map(n=>`<div class="row" style="cursor:default"><div><div class="t">${esc(n.byName||"")}　<span class="m">${esc(String(n.at).slice(0,16).replace("T"," "))}</span></div><div style="white-space:pre-wrap">${esc(n.text)}</div></div>
+    <div class="r">${adm||n.byUid===me.uid?`<button class="btn small" type="button" data-delnote="${esc(n.id)}">刪除</button>`:""}</div></div>`).join(""):'<div class="empty">還沒有留言</div>'}</div></div>
+  <label>我的意見<textarea name="note" placeholder="贊成、反對或修改建議都可以寫"></textarea></label>
+  <div class="actions">${adm?(prop?'<button class="btn" type="button" id="adopt">採納為正式條文</button><button class="btn danger" type="button" id="reject">不採納</button>':'<button class="btn" type="button" id="unadopt">退回討論</button>'):""}${adm||(prop&&a.byUid===me.uid)?'<button class="btn" type="button" id="editA">編輯</button>':""}<span class="spacer"></span><button class="btn" type="button" data-close>關閉</button><button class="btn primary" type="submit">送出留言</button></div>`,
+  async fd=>{const t=val(fd,"note");if(!t){showErr({message:"請先輸入留言內容。"});return false}
+    await setDoc(doc(collection(fs,"hrCharterNotes")),{artId:a.id,text:t,byUid:me.uid,byName:me.name||me.email,at:new Date().toISOString()});toast("已送出留言")});
+  addVoice({note:"append"});
+  const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
+  on("#editA",()=>{dlg.close();charterPropose(a)});
+  on("#adopt",async()=>{const n=S.chArt.filter(x=>x.status==="adopted").length+1;await updateDoc(doc(fs,"hrCharter",a.id),{status:"adopted",order:n,adoptedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});dlg.close();toast("已採納為第"+zhNum(n)+"條")});
+  on("#reject",async()=>{await updateDoc(doc(fs,"hrCharter",a.id),{status:"rejected",updatedAt:new Date().toISOString()});dlg.close();toast("已標記為不採納")});
+  on("#unadopt",async()=>{await updateDoc(doc(fs,"hrCharter",a.id),{status:"proposal",updatedAt:new Date().toISOString()});dlg.close();toast("已退回討論")});
+  form.querySelectorAll("[data-delnote]").forEach(b=>b.onclick=async()=>{await deleteDoc(doc(fs,"hrCharterNotes",b.dataset.delnote));dlg.close();charterDetail(a)});
+}
+function charterIntro(){const ch=S.charter||{};
+  openDlg(`<h3>編輯前言</h3><label>前言<textarea name="intro" style="min-height:120px" placeholder="例：為了讓大森的每一位夥伴都以專業與誠信服務客戶，全體同仁共同訂定本典章，彼此提醒、共同遵守。">${esc(ch.intro||"")}</textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{await setDoc(doc(fs,"hrSettings","charter"),{...ch,intro:val(fd,"intro")});toast("已儲存前言")});addVoice({intro:"append"})}
+function charterPublish(){const ch=S.charter||{},ver=(+ch.version||0)+1,n=S.chArt.filter(a=>a.status==="adopted").length;
+  openDlg(`<h3>公布第 ${ver} 版榮譽典章</h3><p style="margin:0">將公布目前的 ${n} 條正式條文。公布後，每位同仁都需要按「我已閱讀並承諾遵守」${ver>1?"，之前確認過舊版的同仁也要重新確認":""}。</p>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">確認公布</button></div>`,
+  async()=>{await setDoc(doc(fs,"hrSettings","charter"),{...ch,version:ver,publishedAt:new Date().toISOString(),publishedBy:me.email,count:n});toast("已公布第 "+ver+" 版")})}
+async function charterVote(id,v){const a=S.chArt.find(x=>x.id===id);if(!a)return;const cur=myVote(a);
+  try{await updateDoc(doc(fs,"hrCharter",id),{["votes."+me.uid]:cur===v?deleteField():v})}catch(e){toast("投票失敗，請稍後再試")}}
+$("#main").addEventListener("click",ev=>{const t=ev.target;
+  const vb=t.closest("[data-vote]");if(vb){ev.stopPropagation();charterVote(vb.dataset.id,vb.dataset.vote);return}
+  const c=t.closest("[data-ch]");if(c){({propose:()=>charterPropose(null),intro:charterIntro,publish:charterPublish,ack:async()=>{const ver=+(S.charter?.version||0);
+    await setDoc(doc(fs,"hrCharterAcks",me.uid),{email:me.email,name:me.name||"",version:ver,at:new Date().toISOString()});toast("感謝你！已確認遵守第 "+ver+" 版")}})[c.dataset.ch]?.();return}
+  const r=t.closest("[data-art]");if(r){const a=S.chArt.find(x=>x.id===r.dataset.art);if(a)charterDetail(a)}});
 function visionForm(){
   const v=S.vision||{};
   openDlg(`<h3>編輯企業願景</h3>
@@ -1115,8 +1170,7 @@ function hrConForm(c){
   if(!isNew)confirmDelete("#del","契約",async()=>{await deleteDoc(doc(fs,"hrContracts",c.id));if(c.fileName)await deleteDoc(doc(fs,"hrFiles",c.id)).catch(()=>{})});
 }
 $("#main").addEventListener("click",ev=>{const t=ev.target;
-  const h=t.closest("[data-hr]");if(h){({vision:visionForm,honor:()=>honorForm(null),emp:()=>empForm(null),pos:()=>posForm(null),con:()=>hrConForm(null)})[h.dataset.hr]?.();return}
-  const hn=t.closest("[data-honor]");if(hn){const x=S.hrHonor.find(k=>k.id===hn.dataset.honor);if(x)honorForm(x);return}
+  const h=t.closest("[data-hr]");if(h){({vision:visionForm,emp:()=>empForm(null),pos:()=>posForm(null),con:()=>hrConForm(null)})[h.dataset.hr]?.();return}
   const e=t.closest("[data-emp]");if(e){const x=S.hrEmp.find(k=>k.id===e.dataset.emp);if(x)empForm(x);return}
   const p=t.closest("[data-pos]");if(p&&isAdm()){const x=S.hrPos.find(k=>k.id===p.dataset.pos);if(x)posForm(x);return}
   const c=t.closest("[data-hrcon]");if(c){const x=S.hrCon.find(k=>k.id===c.dataset.hrcon);if(x)hrConForm(x)}});
@@ -1923,14 +1977,16 @@ function startData(){
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
    hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrHonors",d=>S.hrHonor=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null});
+   hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.hrHonor=[];S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.chArt=[];S.chNotes=[];S.chAcks=[];S.charter=null;S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
@@ -1947,7 +2003,7 @@ onAuthStateChanged(auth,async u=>{
   try{const snap=await getDoc(doc(fs,"staff",email));if(snap.exists())info=snap.data()}catch(err){}
   if(email===OWNER)info={...(info||{}),role:"admin",active:true};
   if(!info||info.active===false){await signOut(auth);loginErr(info?"此帳號已停用，請聯絡管理員。":"此帳號尚未開通，請聯絡管理員。");return}
-  me={email,name:info.name||"",mobile:info.mobile||"",role:ROLES[info.role]?info.role:"staff"};
+  me={email,uid:u.uid,name:info.name||"",mobile:info.mobile||"",role:ROLES[info.role]?info.role:"staff"};
   $("#whoami").textContent=$("#whoami2").textContent=(me.name||email)+" · "+ROLES[me.role];$("#loginView").hidden=true;$("#appView").hidden=true;$("#menuView").hidden=false;startData();
 });
 </script>
