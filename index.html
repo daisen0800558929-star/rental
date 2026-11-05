@@ -99,6 +99,11 @@ fieldset.adm{border-color:var(--warn)}
 .sugg small{color:var(--muted);font-size:12px}
 .sugg mark{background:none;color:var(--accent);font-weight:700}
 .sugg .kind{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
+.deal{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;border-radius:8px;padding:9px 12px;font-size:13.5px}
+.deal b{font-size:14.5px}
+.deal.ok{background:var(--ok-soft);color:var(--ok)}
+.deal.warn{background:var(--warn-soft);color:var(--warn)}
+.deal span{color:var(--fg);opacity:.85}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -471,7 +476,7 @@ function viewCustomers(loading){
     const n=S.contracts.filter(k=>k.customerId===c.id&&k.status==="租賃中").length;
     return `<div class="row" data-open="customer" data-id="${esc(c.id)}" tabindex="0">
       <div><div class="t">${esc(c.name)}</div><div class="m">${esc(c.contact||"")}${c.phone?" · "+esc(c.phone):""}${c.taxId?" · 統編 "+esc(c.taxId):""}</div></div>
-      <div class="r">${n?`<span class="pill">租用中 ${n} 件</span>`:`<span class="pill mute">無租用</span>`}</div></div>`});
+      <div class="r">${(()=>{const dl=custDeal(c);return dl.won?'<span class="pill ok">已成交舊客戶</span>':'<span class="pill warn">潛在客戶</span>'})()}${n?`<span class="pill">租用中 ${n} 件</span>`:""}</div></div>`});
   return `<div class="toolbar"><input id="q" placeholder="搜尋名稱、聯絡人、電話">${canWrite?'<button class="btn" type="button" data-new="customer">＋ 新增客戶</button><button class="btn" type="button" data-ocr>名片辨識新增</button><button class="btn" type="button" data-import>匯入資料</button>':""}</div>
   <div class="list">${emptyOr(rows,loading,"還沒有客戶資料。")}</div>`;
 }
@@ -600,6 +605,7 @@ function customerForm(c,pre){
     <details style="margin-top:6px"><summary>查看辨識出的文字</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(pre._ocr)}</pre></details></div>`})():""}
   <div class="grid2"><label class="full">統一編號（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
   ${taxBlock("k",c.taxExempt)}
+  <div class="full" id="dealBadge"></div>
   <label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
   <label>公司電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
   <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
@@ -618,6 +624,7 @@ function customerForm(c,pre){
     {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
   bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});bindTax("k","name","taxId");
+  {const F=form.elements,up=()=>{$("#dealBadge").innerHTML=dealBadge(custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value}))};F.name.addEventListener("input",up);F.name.addEventListener("change",up);F.taxId.addEventListener("input",up);up()}
   addVoice({taxId:"digits",name:"text",phone:"tel",fax:"tel",contact:"text",mobile:"tel",email:"email",note:"append"},["a","d"]);
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
 }
@@ -959,6 +966,20 @@ function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">�
 const salesReps=()=>S.hrEmp.filter(e=>e.perm==="2"&&hrActive(e)).sort((a,b)=>String(a.code).localeCompare(b.code));
 const myEmp=()=>S.hrEmp.find(e=>e.account===me?.email);
 const canQuote=()=>isAdm()||salesReps().some(e=>e.account===me?.email);
+/* 客戶成交狀態：有簽回報價或有租約（非取消）即為已成交舊客戶 */
+function custDeal(k){
+  const nm=normName(k.name||""),tx=String(k.taxId||"").trim();
+  const mine=x=>(k.id&&x.customerId===k.id)||(tx&&x.cust?.taxId===tx)||(nm&&normName(x.cust?.name)===nm);
+  const qs=S.quotes.filter(mine),signed=qs.filter(x=>x.status==="signed");
+  const ids=new Set(S.customers.filter(c=>c.id===k.id||(tx&&c.taxId===tx)||(nm&&normName(c.name)===nm)).map(c=>c.id));
+  const cons=S.contracts.filter(c=>ids.has(c.customerId)&&c.status!=="已取消");
+  const dates=[...signed.map(x=>x.date),...cons.map(c=>c.start)].filter(Boolean).sort();
+  return{won:!!(signed.length||cons.length),signed:signed.length,quotes:qs.length,contracts:cons.length,first:dates[0]||"",last:dates[dates.length-1]||""};
+}
+function dealBadge(d){
+  if(d.won)return `<div class="deal ok"><b>已成交舊客戶</b><span>${[d.signed?"簽回報價 "+d.signed+" 張":"",d.contracts?"租約 "+d.contracts+" 筆":""].filter(Boolean).join("、")}${d.last?"，最近一次 "+esc(d.last):""}</span></div>`;
+  return `<div class="deal warn"><b>未成交潛在客戶</b><span>${d.quotes?"已報價 "+d.quotes+" 次，尚未簽回":"尚無成交紀錄"}</span></div>`;
+}
 function empMissing(e){
   const m=[],need=(v,l)=>{if(!String(v??"").trim())m.push(l)};
   need(e.code,"員工編號");need(e.name,"姓名");need(e.dept,"部門");need(e.title,"職稱");need(e.hireDate,"到職日");need(e.mobile,"手機");
