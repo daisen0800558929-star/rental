@@ -2005,7 +2005,7 @@ function viewAnalysis(loading){
     <div class="card"><h3>各部門在職人數 <small>人</small></h3>${hbars(countBy(S.hrEmp.filter(hrActive),"dept").map(r=>({...r,l:r.l==="未填"?"未分部門":r.l})))}</div>
     <div class="card"><h3>在職狀態 <small>人</small></h3>${hbars(countBy(S.hrEmp,"status",HR_STATUS))}</div>
   </div>`:'<div class="card"><div class="empty">還沒有員工資料，到「人事管理 → 員工基本資料」新增後就會顯示。</div></div>'}
-  <section><h2>12 項功能狀態</h2><div class="list modlist">${modRows}</div></section>`;
+  <section><h2>${MODULES.length} 項功能狀態</h2><div class="list modlist">${modRows}</div></section>`;
 }
 $("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.target.closest(".modlist [data-mod]");if(r)openModule(r.dataset.mod)});
 
@@ -2013,7 +2013,6 @@ $("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.tar
 const WHEEL_COLORS=["#c0504d","#9bbb59","#8064a2","#4bacc6","#f79646"];
 const MODULES=[
   {k:"cust",lb:"客戶|通聯",nm:"客戶通聯",ds:"來電紀錄、客戶需求與來源",go:"calls"},
-  {k:"quote",lb:"業務|報價",nm:"業務報價",ds:"建立報價單、列印、客戶簽名",go:"quotes"},
   {k:"order",lb:"訂單|管理",nm:"訂單管理",ds:"訂單建立與出貨追蹤"},
   {k:"rental",lb:"設備租賃|管理",nm:"設備租賃管理",ds:"設備、租約、續約與歸還",go:"overview"},
   {k:"po",lb:"採購|申購",nm:"採購／申購",ds:"申購單、採購單與簽核"},
