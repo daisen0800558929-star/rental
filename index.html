@@ -91,6 +91,14 @@ fieldset.adm{border-color:var(--warn)}
 @media (max-width:520px){.tl li{grid-template-columns:72px 16px minmax(0,1fr);gap:0 6px}.tl .yr{font-size:11px;white-space:nowrap}}
 .miss{color:var(--bad);font-size:12.5px;font-weight:500;white-space:nowrap}
 .misslist{color:var(--bad);background:var(--bad-soft);border-radius:8px;padding:10px 14px;font-size:13.5px}
+.qwrap{position:relative;flex:1 1 180px;min-width:0;display:block}
+.qwrap>input{width:100%}
+.sugg{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:8;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-height:min(60vh,360px);overflow:auto;padding:4px}
+.sugg button{display:grid;gap:1px;width:100%;text-align:left;border:0;background:none;color:var(--fg);font:inherit;padding:8px 10px;border-radius:6px;cursor:pointer}
+.sugg button:hover,.sugg button.on{background:var(--accent-soft)}
+.sugg small{color:var(--muted);font-size:12px}
+.sugg mark{background:none;color:var(--accent);font-weight:700}
+.sugg .kind{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -364,8 +372,48 @@ function render(){
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
   if(grp&&h)h=`<div class="seg" role="group">${grp.map(([k,v])=>`<button type="button" data-seg="${k}" aria-pressed="${k===tab}">${v}</button>`).join("")}</div>`+h;
   m.innerHTML=h;
-  const si=$("#q");if(si){si.value=q;si.oninput=e=>{q=e.target.value;renderKeepFocus()}}
+  const si=$("#q");if(si){si.value=q;attachSuggest(si)}
   const sf=$("#f");if(sf){sf.value=filter;sf.onchange=e=>{filter=e.target.value;render()}}
+}
+/* ---------- 搜尋即時建議：輸入一個字就列出可能的資料 ---------- */
+const nz=t=>String(t??"").normalize("NFKC").toLowerCase().replace(/臺/g,"台");
+function suggestItems(){
+  const out=[],add=(kind,title,sub,val,keys)=>out.push({kind,title,sub,val,keys:nz([title,sub,...(keys||[])].join(" "))});
+  const custs=()=>S.customers.forEach(k=>add("客戶",k.name,[k.contact,k.phone||k.mobile,k.taxId?"統編 "+k.taxId:""].filter(Boolean).join(" · "),k.name,[k.mobile,k.address]));
+  if(tab==="calls"){S.calls.forEach(c=>add("通聯",c.company||c.contact||"（未填）",[String(c.at||"").slice(0,10),c.need,c.contact].filter(Boolean).join(" · "),c.company||c.contact,[c.tel,c.mobile,c.content,c.note]));custs()}
+  else if(tab==="customers")custs();
+  else if(tab==="quotes"){S.quotes.forEach(x=>add("報價",x.cust?.name||"",[x.no,x.date,x.sales].filter(Boolean).join(" · "),x.cust?.name||x.no,[x.no,x.cust?.contact]));custs()}
+  else if(tab==="contracts")S.contracts.forEach(c=>{const cu=cust(c.customerId),eq=equip(c.equipmentId);add("租約",cu?.name||"",[c.no,eq?.name].filter(Boolean).join(" · "),cu?.name||c.no,[c.no,eq?.name,eq?.code])});
+  else if(tab==="equipment")S.equipment.forEach(e=>add("設備",e.name,[e.code,e.category,e.serial].filter(Boolean).join(" · "),e.code||e.name,[e.serial]));
+  else if(tab==="hr_emp")S.hrEmp.forEach(e=>add("員工",e.name,[e.code,e.dept,e.title].filter(Boolean).join(" · "),e.name,[e.mobile,e.email]));
+  else if(tab==="hr_con")S.hrCon.forEach(c=>add("契約",empName(c.empId),c.type,empName(c.empId),[c.note]));
+  return out;
+}
+function hl(t,qq){t=String(t||"");const i=nz(t).indexOf(qq);return i<0||!qq?esc(t):esc(t.slice(0,i))+"<mark>"+esc(t.slice(i,i+qq.length))+"</mark>"+esc(t.slice(i+qq.length))}
+function attachSuggest(si){
+  const wrap=document.createElement("span");wrap.className="qwrap";si.before(wrap);wrap.appendChild(si);
+  si.setAttribute("autocomplete","off");si.setAttribute("enterkeyhint","search");
+  const box=document.createElement("div");box.className="sugg";box.hidden=true;box.setAttribute("role","listbox");wrap.appendChild(box);
+  let items=[],sel=-1,composing=false,timer=null;
+  const show=()=>{const qq=nz(si.value.trim());if(!qq){box.hidden=true;return}
+    const seen=new Set();items=suggestItems().filter(it=>it.keys.includes(qq)).filter(it=>{const k=it.kind+"|"+it.title+"|"+it.sub;if(seen.has(k))return false;seen.add(k);return true})
+      .sort((a,b)=>(nz(a.title).startsWith(qq)?0:1)-(nz(b.title).startsWith(qq)?0:1)).slice(0,8);
+    sel=-1;
+    box.innerHTML=items.length?items.map((it,i)=>`<button type="button" role="option" data-i="${i}"><span><span class="kind">${esc(it.kind)}</span>${hl(it.title,qq)}</span>${it.sub?`<small>${hl(it.sub,qq)}</small>`:""}</button>`).join(""):'<div class="note" style="padding:8px 10px">找不到符合「'+esc(si.value.trim())+'」的資料</div>';
+    box.hidden=false};
+  const apply=()=>{q=si.value;clearTimeout(timer);timer=setTimeout(()=>{const pos=si.selectionStart;render();const el=$("#q");if(el){el.focus();try{el.setSelectionRange(pos,pos)}catch(e){}}},250)};
+  const pick=i=>{const it=items[i];if(!it)return;si.value=it.val;q=it.val;box.hidden=true;render();const el=$("#q");if(el)el.blur()};
+  si.addEventListener("compositionstart",()=>composing=true);
+  si.addEventListener("compositionend",()=>{composing=false;show();apply()});
+  si.addEventListener("input",e=>{show();if(composing||e.isComposing)return;apply()});
+  si.addEventListener("focus",()=>{if(si.value.trim())show()});
+  si.addEventListener("blur",()=>setTimeout(()=>box.hidden=true,180));
+  si.addEventListener("keydown",e=>{if(box.hidden||!items.length)return;
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();sel=(sel+(e.key==="ArrowDown"?1:-1)+items.length)%items.length;box.querySelectorAll("button").forEach((b,i)=>b.classList.toggle("on",i===sel))}
+    else if(e.key==="Enter"&&sel>=0){e.preventDefault();pick(sel)}else if(e.key==="Escape")box.hidden=true});
+  box.addEventListener("mousedown",e=>e.preventDefault());
+  box.addEventListener("click",e=>{const b=e.target.closest("[data-i]");if(b)pick(+b.dataset.i)});
+  if(document.activeElement===si&&si.value.trim())show();
 }
 function renderKeepFocus(){const pos=$("#q")?.selectionStart;render();const el=$("#q");if(el){el.focus();try{el.setSelectionRange(pos,pos)}catch(e){}}}
 function contractRow(c){
@@ -1271,7 +1319,7 @@ function viewCalls(loading){
   const qq=q.trim().toLowerCase();
   const t=todayStr(),wk=addDaysStr(t,-6),inRange=c=>{const d=String(c.at||"").slice(0,10);return callRange==="all"||(callRange==="today"&&d===t)||(callRange==="week"&&d>=wk&&d<=t)||(callRange==="month"&&d.slice(0,7)===t.slice(0,7))};
   const todayN=S.calls.filter(c=>String(c.at||"").slice(0,10)===t).length;
-  const rows=S.calls.filter(c=>inRange(c)&&(filter==="all"||c.need===filter)&&(!qq||[c.company,c.contact,c.tel,c.mobile,c.content,c.note,fullAddr(c)].join(" ").toLowerCase().includes(qq)))
+  const rows=S.calls.filter(c=>(qq||inRange(c))&&(filter==="all"||c.need===filter)&&(!qq||[c.company,c.contact,c.tel,c.mobile,c.content,c.note,fullAddr(c)].join(" ").toLowerCase().includes(qq)))
     .sort((a,b)=>String(b.at).localeCompare(String(a.at))).map(c=>`<div class="row" data-call="${esc(c.id)}" tabindex="0">
       <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}${c.mobile?" · "+esc(c.mobile):c.tel?" · "+esc(c.tel):""}</span></div>
       <div class="m"><span class="mono">${esc(String(c.at||"").replace("T"," "))}</span> · ${esc(c.type||"")} · 接電 ${esc(staffLabel(c.receiver))}${c.content?" · "+esc(c.content.slice(0,40)):""}</div></div>
