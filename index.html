@@ -54,6 +54,31 @@ nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--a
 .mic.on{background:var(--bad);color:#fff}
 @media (prefers-reduced-motion:no-preference){.mic.on{animation:micpulse 1.1s ease-in-out infinite}@keyframes micpulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 30%,transparent)}}}
 .addr-mic{display:inline-flex;align-items:center;gap:4px}
+/* 人事管理 */
+.vis{display:grid;gap:16px}
+.vis .lead{font-size:clamp(20px,4.2vw,28px);font-weight:700;line-height:1.4;text-wrap:balance;margin:0}
+.vis h3{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.08em}
+.vis p{margin:0;white-space:pre-wrap;max-width:65ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips span{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 12px;font-weight:500}
+.org{overflow-x:auto;padding:4px 2px 12px}
+.org ul{list-style:none;margin:0;padding:0 0 0 22px;position:relative}
+.org>ul{padding-left:0}
+.org li{position:relative;padding:6px 0 6px 18px}
+.org>ul>li{padding-left:0}
+.org ul ul li::before{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--line)}
+.org ul ul li:last-child::before{bottom:auto;height:26px}
+.org ul ul li::after{content:"";position:absolute;left:0;top:26px;width:16px;border-top:1px solid var(--line)}
+.ocard{display:inline-grid;gap:1px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:7px 12px;min-width:150px;cursor:pointer;text-align:left;font:inherit;color:var(--fg)}
+.ocard:hover{background:var(--accent-soft)}
+.ocard b{font-size:14.5px}.ocard small{color:var(--muted);font-size:12px}
+table.grid{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+table.grid th,table.grid td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left}
+table.grid th{color:var(--muted);font-weight:500;font-size:12.5px;background:var(--bg)}
+table.grid td.n,table.grid th.n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
+table.grid tr.dept td{background:var(--bg);font-weight:700;color:var(--fg);font-size:14px}
+table.grid tr[data-pos]{cursor:pointer}table.grid tr[data-pos]:hover td{background:var(--accent-soft)}
+fieldset.adm{border-color:var(--warn)}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -264,7 +289,7 @@ const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fb
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],hrEmp:[],hrPos:[],hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -307,7 +332,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",hr_vision:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -319,10 +344,11 @@ function render(){
   if(tab==="equipment")h=viewEquipment(loading);
   if(tab==="customers")h=viewCustomers(loading);
   if(tab==="calls")h=viewCalls(loading);
+  if(tab.startsWith("hr_"))h=viewHR(tab);
   if(tab==="quotes")h=viewQuotes(loading);
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
-  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]]];
+  const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["hr_vision","企業願景"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
   if(grp&&h)h=`<div class="seg" role="group">${grp.map(([k,v])=>`<button type="button" data-seg="${k}" aria-pressed="${k===tab}">${v}</button>`).join("")}</div>`+h;
   m.innerHTML=h;
@@ -856,6 +882,197 @@ function addVoice(map,addrs){
       const same=form.elements[P+"_same"];if(same&&same.checked){same.checked=false;same.dispatchEvent(new Event("change"))}
       box._set(o);toast("已填入地址，請確認")},b)}
 }
+
+/* ---------- 人事管理 ---------- */
+const HR_STATUS=["在職","試用期","留職停薪","離職"];
+const HR_CON_TYPES=["不定期勞動契約","定期勞動契約","試用期約定","保密協議","競業禁止約定","其他"];
+const hrActive=e=>(e.status||"在職")!=="離職";
+const isAdm=()=>me?.role==="admin";
+const empName=id=>{const e=S.hrEmp.find(x=>x.id===id);return e?e.name:""};
+function seniority(from,to){if(!from)return"";const a=new Date(from),b=to?new Date(to):new Date();let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth();if(b.getDate()<a.getDate())m--;if(m<0)return"";return(m>=12?Math.floor(m/12)+" 年 ":"")+(m%12)+" 個月"}
+/* 身分證／居留證號檢查 */
+function twIdOk(v){if(!v)return true;v=v.toUpperCase();if(!/^[A-Z][1289]\d{8}$/.test(v))return/^[A-Z][A-D]\d{8}$/.test(v);
+  const L="ABCDEFGHJKLMNPQRSTUVXYWZIO",n=L.indexOf(v[0])+10,w=[8,7,6,5,4,3,2,1,1];let s=Math.floor(n/10)+(n%10)*9;for(let i=1;i<10;i++)s+=+v[i]*w[i-1];return s%10===0}
+function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">人事資料的資料庫權限還沒開通，資料暫時無法讀取或儲存。請管理員設定 Firestore 規則後再使用。</div>':""}
+function viewHR(t){
+  const adm=isAdm(),N=hrNotice();
+  if(t==="hr_vision"){
+    const v=S.vision;const vals=(v?.values||"").split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    return N+`<div class="toolbar"><span style="flex:1"></span>${adm?'<button class="btn primary" type="button" data-hr="vision">編輯企業願景</button>':""}</div>
+    ${v&&(v.vision||v.mission||vals.length||v.philosophy)?`<div class="card vis">
+      ${v.vision?`<div><h3>企業願景</h3><p class="lead">${esc(v.vision)}</p></div>`:""}
+      ${v.mission?`<div><h3>企業使命</h3><p>${esc(v.mission)}</p></div>`:""}
+      ${vals.length?`<div><h3>核心價值</h3><div class="chips">${vals.map(x=>`<span>${esc(x)}</span>`).join("")}</div></div>`:""}
+      ${v.philosophy?`<div><h3>經營理念</h3><p>${esc(v.philosophy)}</p></div>`:""}
+      ${v.updatedAt?`<div class="note">最後更新：${esc(v.updatedAt.slice(0,10))}${v.updatedBy?"　"+esc(staffLabel(v.updatedBy)):""}</div>`:""}</div>`
+    :`<div class="card"><div class="empty">尚未填寫企業願景。${adm?"按右上角「編輯企業願景」填寫願景、使命、核心價值與經營理念，全體同仁都看得到。":"請管理員填寫。"}</div></div>`}`;
+  }
+  if(t==="hr_org"){
+    const act=S.hrEmp.filter(hrActive),ids=new Set(act.map(e=>e.id));
+    const kids=id=>act.filter(e=>(e.managerId||"")===id).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+    const roots=act.filter(e=>!e.managerId||!ids.has(e.managerId)).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+    const seen=new Set();
+    const node=e=>{if(seen.has(e.id))return"";seen.add(e.id);const k=kids(e.id);return `<li><button class="ocard" type="button" data-emp="${esc(e.id)}"><b>${esc(e.name)}</b><small>${esc([e.dept,e.title].filter(Boolean).join("・")||"未設定職稱")}</small></button>${k.length?`<ul>${k.map(node).join("")}</ul>`:""}</li>`};
+    const depts=[...new Set(act.map(e=>e.dept||"未分部門"))];
+    return N+`<div class="note">依「直屬主管」自動排出組織圖，點人名可查看或編輯。在職 ${act.length} 人，${depts.length} 個部門。</div>
+    ${act.length?`<div class="card org"><ul>${roots.map(node).join("")}</ul></div>
+    <section><h2>各部門人數</h2><div class="card">${hbars(countBy(act,"dept").map(r=>({...r,l:r.l==="未填"?"未分部門":r.l})))}</div></section>`
+    :`<div class="card"><div class="empty">還沒有員工資料。到「員工基本資料」新增員工並設定部門、職稱與直屬主管後，組織圖就會自動產生。</div></div>`}`;
+  }
+  if(t==="hr_emp"){
+    const qq=q.trim().toLowerCase(),st=filter==="all"?"active":filter;
+    const rows=S.hrEmp.filter(e=>(st==="active"?hrActive(e):st==="every"?true:(e.status||"在職")===st)&&(!qq||[e.code,e.name,e.dept,e.title,e.mobile,e.email].join(" ").toLowerCase().includes(qq)))
+      .sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(e=>{const sc=(e.status||"在職");return `<div class="row" data-emp="${esc(e.id)}" tabindex="0">
+      <div><div class="t"><span class="mono m">${esc(e.code||"")}</span>　${esc(e.name)}　<span class="m">${esc([e.dept,e.title].filter(Boolean).join("・"))}</span></div>
+      <div class="m">${e.mobile?esc(e.mobile)+" · ":""}${e.ext?"分機 "+esc(e.ext)+" · ":""}到職 ${esc(e.hireDate||"—")}${e.hireDate&&sc!=="離職"?"（"+seniority(e.hireDate)+"）":""}</div></div>
+      <div class="r"><span class="pill ${sc==="在職"?"ok":sc==="試用期"?"":sc==="留職停薪"?"warn":"mute"}">${esc(sc)}</span></div></div>`});
+    return N+`<div class="toolbar"><input id="q" placeholder="搜尋編號、姓名、部門、職稱、電話"><select id="f" style="flex:0 1 150px">${[["active","在職（含試用、留停）"],...HR_STATUS.map(x=>[x,x]),["every","全部"]].map(([k,v])=>opt(k,v,k===st)).join("")}</select>${adm?'<button class="btn primary" type="button" data-hr="emp">＋ 新增員工</button>':""}</div>
+    <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.hrEmp.length?"沒有符合條件的員工":"還沒有員工資料。"+(adm?"按「新增員工」建立第一位。":"")}</div>`}</div>
+    ${adm?'<div class="note">身分證字號、生日、地址、緊急聯絡人等個資只有管理員看得到。</div>':""}`;
+  }
+  if(t==="hr_pos"){
+    const act=S.hrEmp.filter(e=>hrActive(e));
+    const depts=[...new Set([...S.hrPos.map(p=>p.dept||"未分部門"),...act.map(e=>e.dept||"未分部門")])].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
+    let tp=0,ta=0;
+    const body=depts.map(d=>{
+      const ps=S.hrPos.filter(p=>(p.dept||"未分部門")===d).sort((a,b)=>(+a.order||0)-(+b.order||0)||String(a.title).localeCompare(b.title,"zh-Hant"));
+      const inD=act.filter(e=>(e.dept||"未分部門")===d);let dp=0,da=0;
+      const rows=ps.map(p=>{const a=inD.filter(e=>(e.title||"")===(p.title||"")).length,pl=+p.planned||0;dp+=pl;da+=a;const g=a-pl;
+        return `<tr ${adm?`data-pos="${esc(p.id)}"`:""}><td>${esc(p.title||"")}</td><td class="n">${pl}</td><td class="n">${a}</td><td class="n">${g<0?`<span class="pill warn">缺 ${-g}</span>`:g>0?`<span class="pill bad">超 ${g}</span>`:'<span class="pill ok">足額</span>'}</td><td>${esc(p.note||"")}</td></tr>`}).join("");
+      const extra=inD.filter(e=>!ps.some(p=>(p.title||"")===(e.title||"")));
+      const ex=extra.length?`<tr><td><span class="m">未列入編制：${esc([...new Set(extra.map(e=>e.title||"未設定職稱"))].join("、"))}</span></td><td class="n">—</td><td class="n">${extra.length}</td><td></td><td></td></tr>`:"";
+      da+=extra.length;tp+=dp;ta+=da;
+      return `<tr class="dept"><td>${esc(d)}</td><td class="n">${dp}</td><td class="n">${da}</td><td class="n">${da-dp<0?"缺 "+(dp-da):da-dp>0?"超 "+(da-dp):"足額"}</td><td></td></tr>${rows}${ex}`}).join("");
+    return N+`<div class="toolbar"><div class="note" style="flex:1 1 240px">實際人數依「員工基本資料」中在職、試用期、留職停薪員工的部門與職稱自動計算。</div>${adm?'<button class="btn primary" type="button" data-hr="pos">＋ 新增編制職位</button>':""}</div>
+    <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><span class="k">編制人數</span><span class="v">${tp}</span></div><div class="stat"><span class="k">實際人數</span><span class="v">${ta}</span></div><div class="stat ${ta<tp?"warn":ta>tp?"bad":""}"><span class="k">${ta<tp?"缺額":ta>tp?"超編":"差額"}</span><span class="v">${Math.abs(tp-ta)}</span></div></div>
+    ${depts.length?`<div class="tablewrap"><table class="grid" style="min-width:560px"><thead><tr><th>部門／職稱</th><th class="n">編制</th><th class="n">實際</th><th class="n">狀態</th><th>說明</th></tr></thead><tbody>${body}</tbody></table></div>`
+    :`<div class="card"><div class="empty">還沒有編制資料。${adm?"按「新增編制職位」設定每個部門各職稱的編制人數。":""}</div></div>`}`;
+  }
+  if(t==="hr_con"){
+    if(!adm)return '<div class="card"><div class="empty">契約管理只有管理員可以查看。</div></div>';
+    const td=todayStr(),stOf=c=>{if(!c.end)return["不定期","ok"];const d=daysBetween(td,c.end);return d<0?["已到期","mute"]:d<=30?[d+" 天後到期","warn"]:["有效","ok"]};
+    const qq=q.trim().toLowerCase();
+    const rows=S.hrCon.filter(c=>!qq||[empName(c.empId),c.type,c.note].join(" ").toLowerCase().includes(qq)).sort((a,b)=>String(a.end||"9999").localeCompare(b.end||"9999")).map(c=>{const st=stOf(c);
+      return `<div class="row" data-hrcon="${esc(c.id)}" tabindex="0"><div><div class="t">${esc(empName(c.empId)||"（員工已刪除）")}　<span class="m">${esc(c.type||"")}</span></div>
+      <div class="m mono">${esc(c.start||"")} → ${esc(c.end||"不定期")}${c.signDate?"　簽約 "+esc(c.signDate):""}${c.fileName?"　📎":""}</div></div><div class="r"><span class="pill ${st[1]}">${esc(st[0])}</span></div></div>`});
+    const soon=S.hrCon.filter(c=>c.end&&daysBetween(td,c.end)>=0&&daysBetween(td,c.end)<=30).length;
+    return N+`${soon?`<div class="banner">有 ${soon} 份契約將在 30 天內到期，請安排續約。</div>`:""}
+    <div class="toolbar"><input id="q" placeholder="搜尋員工、契約類型"><button class="btn primary" type="button" data-hr="con">＋ 新增契約</button></div>
+    <div class="list">${rows.length?rows.join(""):'<div class="empty">還沒有契約資料。按「新增契約」記錄員工的勞動契約、保密協議等。</div>'}</div>`;
+  }
+  return"";
+}
+function visionForm(){
+  const v=S.vision||{};
+  openDlg(`<h3>編輯企業願景</h3>
+  <label>企業願景（一句話）<textarea name="vision" placeholder="例：成為全台最值得信賴的節能降溫專家">${esc(v.vision||"")}</textarea></label>
+  <label>企業使命<textarea name="mission" placeholder="我們為客戶做什麼、為什麼而做">${esc(v.mission||"")}</textarea></label>
+  <label>核心價值（每行一項）<textarea name="values" style="min-height:96px" placeholder="誠信&#10;專業&#10;服務">${esc(v.values||"")}</textarea></label>
+  <label>經營理念<textarea name="philosophy">${esc(v.philosophy||"")}</textarea></label>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{await setDoc(doc(fs,"hrSettings","vision"),{vision:val(fd,"vision"),mission:val(fd,"mission"),values:val(fd,"values"),philosophy:val(fd,"philosophy"),updatedAt:new Date().toISOString(),updatedBy:me.email});toast("已儲存企業願景")});
+  addVoice({vision:"append",mission:"append",values:"append",philosophy:"append"});
+}
+function empForm(e){
+  const adm=isAdm(),isNew=!e;e=e||{status:"在職",hireDate:todayStr()};const p=(!isNew&&S.hrPriv[e.id])||{};
+  if(!adm){const sc=e.status||"在職";openDlg(`<h3>${esc(e.name)}</h3><dl class="kv"><dt>員工編號</dt><dd class="mono">${esc(e.code||"")}</dd><dt>部門／職稱</dt><dd>${esc([e.dept,e.title].filter(Boolean).join("・"))}</dd>
+    <dt>直屬主管</dt><dd>${esc(empName(e.managerId)||"—")}</dd><dt>狀態</dt><dd>${esc(sc)}</dd><dt>分機</dt><dd>${esc(e.ext||"—")}</dd><dt>手機</dt><dd>${esc(e.mobile||"—")}</dd><dt>Email</dt><dd>${esc(e.email||"—")}</dd><dt>到職日</dt><dd>${esc(e.hireDate||"—")}</dd></dl>
+    <div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null);return}
+  const depts=[...new Set([...S.hrPos.map(x=>x.dept),...S.hrEmp.map(x=>x.dept)].filter(Boolean))],titles=[...new Set([...S.hrPos.map(x=>x.title),...S.hrEmp.map(x=>x.title)].filter(Boolean))];
+  const mgrs=S.hrEmp.filter(x=>x.id!==e.id&&hrActive(x)).sort((a,b)=>String(a.code).localeCompare(b.code));
+  openDlg(`<h3>${isNew?"新增員工":"員工資料　"+esc(e.name)}</h3>
+  <datalist id="deptList">${depts.map(x=>`<option value="${esc(x)}">`).join("")}</datalist><datalist id="titleList">${titles.map(x=>`<option value="${esc(x)}">`).join("")}</datalist>
+  <fieldset><legend>基本資料（全體同仁可查看）</legend><div class="grid2">
+    <label>員工編號<input name="code" value="${esc(e.code||"")}" placeholder="例：A001" autocomplete="off" required></label>
+    <label>姓名<input name="name" value="${esc(e.name||"")}" required></label>
+    <label>部門<input name="dept" list="deptList" value="${esc(e.dept||"")}" placeholder="例：業務部"></label>
+    <label>職稱<input name="title" list="titleList" value="${esc(e.title||"")}" placeholder="例：業務專員"></label>
+    <label>直屬主管<select name="managerId"><option value="">— 無（最上層）—</option>${mgrs.map(x=>opt(x.id,(x.code?x.code+" ":"")+x.name+(x.title?"・"+x.title:""),x.id===e.managerId)).join("")}</select></label>
+    <label>在職狀態<select name="status">${HR_STATUS.map(x=>opt(x,x,x===(e.status||"在職"))).join("")}</select></label>
+    <label>到職日<input type="date" name="hireDate" value="${esc(e.hireDate||"")}"></label>
+    <label>離職日<input type="date" name="leaveDate" value="${esc(e.leaveDate||"")}"></label>
+    <label>公司分機<input name="ext" value="${esc(e.ext||"")}" inputmode="numeric"></label>
+    <label>手機<input name="mobile" value="${esc(e.mobile||"")}"></label>
+    <label>Email<input name="email" value="${esc(e.email||"")}" inputmode="email"></label>
+    <label>系統登入帳號<select name="account"><option value="">— 未連結 —</option>${S.staff.map(u=>opt(u.id,(u.code?u.code+" ":"")+(u.name||u.id),u.id===e.account)).join("")}</select></label>
+  </div></fieldset>
+  <fieldset class="adm"><legend>個人資料（僅管理員可查看）</legend><div class="grid2">
+    <label>身分證／居留證號<input name="idNo" value="${esc(p.idNo||"")}" maxlength="10" autocomplete="off" style="text-transform:uppercase"></label>
+    <label>性別<select name="gender">${["","男","女","其他"].map(x=>opt(x,x||"—",x===(p.gender||""))).join("")}</select></label>
+    <label>出生日期<input type="date" name="birthday" value="${esc(p.birthday||"")}"></label>
+    <label>最高學歷<input name="education" value="${esc(p.education||"")}" placeholder="例：○○大學 機械系"></label>
+    ${addrFields("e","通訊地址",p.addr||parseAddr(p.address||""))}
+    <label>緊急聯絡人<input name="emName" value="${esc(p.emName||"")}"></label>
+    <label>關係<input name="emRel" value="${esc(p.emRel||"")}" placeholder="例：配偶"></label>
+    <label class="full">緊急聯絡電話<input name="emPhone" value="${esc(p.emPhone||"")}" inputmode="tel"></label>
+    <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label>
+  </div></fieldset>
+  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"新增員工":"儲存"}</button></div>`,
+  async fd=>{
+    const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),dept:val(fd,"dept"),title:val(fd,"title"),managerId:val(fd,"managerId"),status:val(fd,"status"),hireDate:val(fd,"hireDate"),leaveDate:val(fd,"leaveDate"),
+      ext:val(fd,"ext").replace(/\D/g,""),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email"),account:val(fd,"account"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const a=addrRead("e");
+    const pv={idNo:val(fd,"idNo").toUpperCase(),gender:val(fd,"gender"),birthday:val(fd,"birthday"),education:val(fd,"education"),address:fullAddr(a),addr:a,emName:val(fd,"emName"),emRel:val(fd,"emRel"),emPhone:val(fd,"emPhone"),note:val(fd,"note")};
+    if(!d.code||!d.name){showErr({message:"請填寫員工編號與姓名。"});return false}
+    if(S.hrEmp.some(x=>x.code===d.code&&x.id!==e.id)){showErr({message:"員工編號 "+d.code+" 已經有人使用。"});return false}
+    if(!twIdOk(pv.idNo)){showErr({message:"身分證／居留證號格式或檢查碼不正確，請再確認。"});return false}
+    if(d.status==="離職"&&!d.leaveDate){showErr({message:"狀態為離職時，請填寫離職日。"});return false}
+    if(d.leaveDate&&d.hireDate&&d.leaveDate<d.hireDate){showErr({message:"離職日不能早於到職日。"});return false}
+    {const er=phoneErr([["手機",d.mobile,"mobile"]])||addrErr(a,"通訊地址");if(er){showErr({message:er});return false}}
+    if(d.managerId){let m=d.managerId,n=0;while(m&&n++<50){if(m===e.id){showErr({message:"直屬主管不能設定成自己的下屬。"});return false}m=S.hrEmp.find(x=>x.id===m)?.managerId}}
+    const id=isNew?doc(collection(fs,"hrEmployees")).id:e.id;
+    await setDoc(doc(fs,"hrEmployees",id),clean(d));await setDoc(doc(fs,"hrPrivate",id),clean(pv));toast(isNew?"已新增員工 "+d.name:"已儲存");
+  },true);
+  bindAddr("e");bindPhones({mobile:"mobile"});
+  addVoice({code:"text",name:"text",dept:"text",title:"text",mobile:"tel",education:"text",emName:"text",emRel:"text",emPhone:"tel",note:"append"},["e"]);
+  if(!isNew)confirmDelete("#del","員工",async()=>{if(S.hrEmp.some(x=>x.managerId===e.id&&hrActive(x)))throw{message:"還有員工的直屬主管是這位，請先調整後再刪除。也可以把狀態改成「離職」保留紀錄。"};await deleteDoc(doc(fs,"hrEmployees",e.id));await deleteDoc(doc(fs,"hrPrivate",e.id))});
+}
+function posForm(p){
+  const isNew=!p;p=p||{planned:1};
+  const depts=[...new Set([...S.hrPos.map(x=>x.dept),...S.hrEmp.map(x=>x.dept)].filter(Boolean))],titles=[...new Set([...S.hrPos.map(x=>x.title),...S.hrEmp.map(x=>x.title)].filter(Boolean))];
+  openDlg(`<h3>${isNew?"新增編制職位":"編輯編制職位"}</h3>
+  <datalist id="deptList">${depts.map(x=>`<option value="${esc(x)}">`).join("")}</datalist><datalist id="titleList">${titles.map(x=>`<option value="${esc(x)}">`).join("")}</datalist>
+  <div class="grid2"><label>部門<input name="dept" list="deptList" value="${esc(p.dept||"")}" required></label><label>職稱<input name="title" list="titleList" value="${esc(p.title||"")}" required></label>
+  <label>編制人數<input type="number" name="planned" min="0" step="1" inputmode="numeric" value="${esc(p.planned??1)}"></label><label>排序<input type="number" name="order" step="1" inputmode="numeric" value="${esc(p.order??"")}" placeholder="數字小的排前面"></label>
+  <label class="full">說明<input name="note" value="${esc(p.note||"")}" placeholder="例：負責中部地區業務"></label></div>
+  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{const d={dept:val(fd,"dept"),title:val(fd,"title"),planned:Math.max(0,parseInt(val(fd,"planned"),10)||0),order:val(fd,"order")===""?"":+val(fd,"order"),note:val(fd,"note")};
+    if(!d.dept||!d.title){showErr({message:"請填寫部門與職稱。"});return false}
+    if(S.hrPos.some(x=>x.dept===d.dept&&x.title===d.title&&x.id!==p.id)){showErr({message:"這個部門已經有「"+d.title+"」的編制，請直接修改那一筆。"});return false}
+    await setDoc(doc(fs,"hrPositions",isNew?doc(collection(fs,"hrPositions")).id:p.id),d);toast("已儲存編制")});
+  if(!isNew)confirmDelete("#del","編制",()=>deleteDoc(doc(fs,"hrPositions",p.id)));
+}
+function hrConForm(c){
+  const isNew=!c;c=c||{type:"不定期勞動契約",signDate:todayStr(),start:todayStr()};
+  openDlg(`<h3>${isNew?"新增契約":"編輯契約"}</h3>
+  <div class="grid2"><label class="full">員工<select name="empId" required><option value="">請選擇員工</option>${S.hrEmp.slice().sort((a,b)=>String(a.code).localeCompare(b.code)).map(e=>opt(e.id,(e.code?e.code+" ":"")+e.name+((e.status||"在職")==="離職"?"（離職）":""),e.id===c.empId)).join("")}</select></label>
+  <label>契約類型<select name="type">${HR_CON_TYPES.map(x=>opt(x,x,x===c.type)).join("")}</select></label>
+  <label>簽約日<input type="date" name="signDate" value="${esc(c.signDate||"")}"></label>
+  <label>生效日<input type="date" name="start" value="${esc(c.start||"")}" required></label>
+  <label>到期日（不定期可留空）<input type="date" name="end" value="${esc(c.end||"")}"></label>
+  <label class="full">附件（契約掃描檔，圖片或 PDF，1 MB 以內）<input type="file" name="file" accept="image/*,application/pdf"></label>
+  ${c.fileName?`<div class="full note">目前附件：<a href="#" id="openFile">${esc(c.fileName)}</a></div>`:""}
+  <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
+  <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{const d={empId:val(fd,"empId"),type:val(fd,"type"),signDate:val(fd,"signDate"),start:val(fd,"start"),end:val(fd,"end"),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    if(!d.empId||!d.start){showErr({message:"請選擇員工並填寫生效日。"});return false}
+    if(d.end&&d.end<d.start){showErr({message:"到期日不能早於生效日。"});return false}
+    if(d.type==="定期勞動契約"&&!d.end){showErr({message:"定期勞動契約請填寫到期日。"});return false}
+    const id=isNew?doc(collection(fs,"hrContracts")).id:c.id,f=fd.get("file");
+    if(f&&f.size){if(f.size>1024*1024){showErr({message:"附件超過 1 MB，請壓縮後再上傳，或拍照時降低解析度。"});return false}
+      const data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)});
+      await setDoc(doc(fs,"hrFiles",id),{data,name:f.name,type:f.type});d.fileName=f.name}
+    else if(c.fileName)d.fileName=c.fileName;
+    await setDoc(doc(fs,"hrContracts",id),d);toast("已儲存契約")},true);
+  const of=$("#openFile");if(of)of.onclick=async ev=>{ev.preventDefault();try{const snap=await getDoc(doc(fs,"hrFiles",c.id));if(!snap.exists())throw 0;const{data}=snap.data();const b=await (await fetch(data)).blob();window.open(URL.createObjectURL(b),"_blank")}catch(e){toast("附件無法開啟")}};
+  addVoice({note:"append"});
+  if(!isNew)confirmDelete("#del","契約",async()=>{await deleteDoc(doc(fs,"hrContracts",c.id));if(c.fileName)await deleteDoc(doc(fs,"hrFiles",c.id)).catch(()=>{})});
+}
+$("#main").addEventListener("click",ev=>{const t=ev.target;
+  const h=t.closest("[data-hr]");if(h){({vision:visionForm,emp:()=>empForm(null),pos:()=>posForm(null),con:()=>hrConForm(null)})[h.dataset.hr]?.();return}
+  const e=t.closest("[data-emp]");if(e){const x=S.hrEmp.find(k=>k.id===e.dataset.emp);if(x)empForm(x);return}
+  const p=t.closest("[data-pos]");if(p&&isAdm()){const x=S.hrPos.find(k=>k.id===p.dataset.pos);if(x)posForm(x);return}
+  const c=t.closest("[data-hrcon]");if(c){const x=S.hrCon.find(k=>k.id===c.dataset.hrcon);if(x)hrConForm(x)}});
 
 /* ---------- 客戶通聯 ---------- */
 const CALL_TYPES=["新客戶詢問","舊客戶詢問","報價追蹤","報修／維修","客訴","帳款／發票","廠商來電","其他"];
@@ -1564,6 +1781,11 @@ function viewAnalysis(loading){
     <div class="card"><h3>來電地區 <small>依縣市，前 8 名</small></h3>${hbars(countBy(S.calls,"county").filter(r=>r.v).slice(0,8))}</div>
     <div class="card"><h3>接電人 <small>筆數</small></h3>${hbars(countBy(S.calls.map(c=>({...c,rv:staffLabel(c.receiver)})),"rv").filter(r=>r.v))}</div>
   </div>`:'<div class="card"><div class="empty">還沒有通聯紀錄，到「客戶通聯」新增第一筆後就會顯示分析。</div></div>'}
+  <section><h2>人事分析 <small>在職 ${S.hrEmp.filter(hrActive).length} 人</small></h2></section>
+  ${S.hrEmp.length?`<div class="an-grid">
+    <div class="card"><h3>各部門在職人數 <small>人</small></h3>${hbars(countBy(S.hrEmp.filter(hrActive),"dept").map(r=>({...r,l:r.l==="未填"?"未分部門":r.l})))}</div>
+    <div class="card"><h3>在職狀態 <small>人</small></h3>${hbars(countBy(S.hrEmp,"status",HR_STATUS))}</div>
+  </div>`:'<div class="card"><div class="empty">還沒有員工資料，到「人事管理 → 員工基本資料」新增後就會顯示。</div></div>'}
   <section><h2>12 項功能狀態</h2><div class="list modlist">${modRows}</div></section>`;
 }
 $("#main").addEventListener("click",e=>{if(tab!=="analysis")return;const r=e.target.closest(".modlist [data-mod]");if(r)openModule(r.dataset.mod)});
@@ -1578,7 +1800,7 @@ const MODULES=[
   {k:"po",lb:"採購|申購",nm:"採購／申購",ds:"申購單、採購單與簽核"},
   {k:"inv",lb:"進銷存",nm:"進銷存",ds:"庫存、進貨與銷貨"},
   {k:"acct",lb:"財會|稅務",nm:"財會稅務",ds:"應收應付、發票與稅務"},
-  {k:"hr",lb:"人事|管理",nm:"人事管理",ds:"員工資料、出勤與請假"},
+  {k:"hr",lb:"人事|管理",nm:"人事管理",ds:"企業願景、組織圖、員工資料、編制與契約",go:"hr_vision"},
   {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"公司行程與後勤排程"},
   {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"派車、出勤任務與回報"},
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
@@ -1589,6 +1811,7 @@ function moduleStat(m){
   if(m.k==="cust"){const n=S.calls.filter(c=>String(c.at).slice(0,7)===todayStr().slice(0,7)).length;return "本月 "+n+" 筆通聯"}
   if(m.k==="quote"){const n=S.quotes.filter(x=>x.status==="draft"||x.status==="sent").length;return n?n+" 張報價進行中":S.quotes.length+" 張報價單"}
   if(m.k==="rental")return S.contracts.filter(c=>c.status==="租賃中").length+" 筆出租中";
+  if(m.k==="hr")return "在職 "+S.hrEmp.filter(hrActive).length+" 人";
   if(m.k==="remind"){const n=remindList().length;return n?n+" 筆需要處理":"目前沒有提醒"}
   return"";
 }
@@ -1650,10 +1873,16 @@ function startData(){
     },err=>{S.loaded[name]=true;fresh[name]=true;console.warn("讀取失敗",name,err.code);if(Object.keys(fresh).length===5)clearTimeout(timer);$("#sync").textContent=err.code==="permission-denied"?"部分資料沒有存取權限（"+name+"）":"資料連線中斷，請重新整理頁面";render()}));
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
+  {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
+   hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null});
+   hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
+   hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.hrEmp=[];S.hrPos=[];S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;
