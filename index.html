@@ -89,6 +89,8 @@ fieldset.adm{border-color:var(--warn)}
 .tl .hc:hover{border-color:var(--accent)}
 .tl .hc b{font-size:15px}.tl .hc img{max-height:140px;max-width:100%;border-radius:4px;justify-self:start;background:#fff}
 @media (max-width:520px){.tl li{grid-template-columns:72px 16px minmax(0,1fr);gap:0 6px}.tl .yr{font-size:11px;white-space:nowrap}}
+.miss{color:var(--bad);font-size:12.5px;font-weight:500;white-space:nowrap}
+.misslist{color:var(--bad);background:var(--bad-soft);border-radius:8px;padding:10px 14px;font-size:13.5px}
 .seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;justify-self:start;max-width:100%;overflow-x:auto}
 .seg button{border:0;background:none;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.12)}
@@ -904,6 +906,14 @@ function seniority(from,to){if(!from)return"";const a=new Date(from),b=to?new Da
 function twIdOk(v){if(!v)return true;v=v.toUpperCase();if(!/^[A-Z][1289]\d{8}$/.test(v))return/^[A-Z][A-D]\d{8}$/.test(v);
   const L="ABCDEFGHJKLMNPQRSTUVXYWZIO",n=L.indexOf(v[0])+10,w=[8,7,6,5,4,3,2,1,1];let s=Math.floor(n/10)+(n%10)*9;for(let i=1;i<10;i++)s+=+v[i]*w[i-1];return s%10===0}
 function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">人事資料的資料庫權限還沒開通，資料暫時無法讀取或儲存。請管理員設定 Firestore 規則後再使用。</div>':""}
+/* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
+function empMissing(e){
+  const m=[],need=(v,l)=>{if(!String(v??"").trim())m.push(l)};
+  need(e.code,"員工編號");need(e.name,"姓名");need(e.dept,"部門");need(e.title,"職稱");need(e.hireDate,"到職日");need(e.mobile,"手機");
+  if(isAdm()){const p=S.hrPriv[e.id]||{};need(p.idNo,"身分證字號");need(p.gender,"性別");need(p.birthday,"出生日期");need(p.address,"通訊地址");need(p.emName,"緊急聯絡人");need(p.emPhone,"緊急聯絡電話");
+    if(!S.hrCon.some(c=>c.empId===e.id&&/勞動契約/.test(c.type||"")))m.push("勞動契約")}
+  return m;
+}
 function viewHR(t){
   const adm=isAdm(),N=hrNotice();
   if(t==="hr_vision"){
@@ -936,8 +946,8 @@ function viewHR(t){
       .sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(e=>{const sc=(e.status||"在職");return `<div class="row" data-emp="${esc(e.id)}" tabindex="0">
       <div><div class="t"><span class="mono m">${esc(e.code||"")}</span>　${esc(e.name)}　<span class="m">${esc([e.dept,e.title].filter(Boolean).join("・"))}</span></div>
       <div class="m">${e.mobile?esc(e.mobile)+" · ":""}${e.ext?"分機 "+esc(e.ext)+" · ":""}到職 ${esc(e.hireDate||"—")}${e.hireDate&&sc!=="離職"?"（"+seniority(e.hireDate)+"）":""}</div></div>
-      <div class="r"><span class="pill ${sc==="在職"?"ok":sc==="試用期"?"":sc==="留職停薪"?"warn":"mute"}">${esc(sc)}</span></div></div>`});
-    return N+`<div class="toolbar"><input id="q" placeholder="搜尋編號、姓名、部門、職稱、電話"><select id="f" style="flex:0 1 150px">${[["active","在職（含試用、留停）"],...HR_STATUS.map(x=>[x,x]),["every","全部"]].map(([k,v])=>opt(k,v,k===st)).join("")}</select>${adm?'<button class="btn primary" type="button" data-hr="emp">＋ 新增員工</button>':""}</div>
+      <div class="r"><span class="pill ${sc==="在職"?"ok":sc==="試用期"?"":sc==="留職停薪"?"warn":"mute"}">${esc(sc)}</span>${(()=>{const miss=empMissing(e);return miss.length&&sc!=="離職"?`<span class="miss" title="缺少：${esc(miss.join("、"))}">人事資料有缺（${miss.length}）</span>`:""})()}</div></div>`});
+    return N+`<div class="toolbar"><input id="q" placeholder="搜尋編號、姓名、部門、職稱、電話"><select id="f" style="flex:0 1 150px">${[["all","在職（含試用、留停）"],...HR_STATUS.map(x=>[x,x]),["every","全部"]].map(([k,v])=>opt(k,v,k===(filter||"all"))).join("")}</select>${adm?'<button class="btn primary" type="button" data-hr="emp">＋ 新增員工</button>':""}</div>
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.hrEmp.length?"沒有符合條件的員工":"還沒有員工資料。"+(adm?"按「新增員工」建立第一位。":"")}</div>`}</div>
     ${adm?'<div class="note">身分證字號、生日、地址、緊急聯絡人等個資只有管理員看得到。</div>':""}`;
   }
@@ -1081,7 +1091,9 @@ function empForm(e){
     <div class="actions"><button class="btn" type="button" data-close>關閉</button></div>`,null);return}
   const depts=[...new Set([...S.hrPos.map(x=>x.dept),...S.hrEmp.map(x=>x.dept)].filter(Boolean))],titles=[...new Set([...S.hrPos.map(x=>x.title),...S.hrEmp.map(x=>x.title)].filter(Boolean))];
   const mgrs=S.hrEmp.filter(x=>x.id!==e.id&&hrActive(x)).sort((a,b)=>String(a.code).localeCompare(b.code));
+  const miss=isNew?[]:empMissing(e);
   openDlg(`<h3>${isNew?"新增員工":"員工資料　"+esc(e.name)}</h3>
+  ${miss.length&&(e.status||"在職")!=="離職"?`<div class="misslist">人事資料有缺，請補齊：${esc(miss.join("、"))}${miss.includes("勞動契約")?"（勞動契約請到「契約管理」新增）":""}</div>`:""}
   <datalist id="deptList">${depts.map(x=>`<option value="${esc(x)}">`).join("")}</datalist><datalist id="titleList">${titles.map(x=>`<option value="${esc(x)}">`).join("")}</datalist>
   <fieldset><legend>基本資料（全體同仁可查看）</legend><div class="grid2">
     <label>員工編號<input name="code" value="${esc(e.code||"")}" placeholder="例：A001" autocomplete="off" required></label>
