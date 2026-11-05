@@ -1460,10 +1460,10 @@ function hrConForm(c){
   const isNew=!c;c=c||{type:"不定期勞動契約",signDate:todayStr(),start:todayStr()};
   openDlg(`<h3>${isNew?"新增契約":"編輯契約"}</h3>
   <div class="grid2"><label class="full">員工<select name="empId" required><option value="">請選擇員工</option>${S.hrEmp.slice().sort((a,b)=>String(a.code).localeCompare(b.code)).map(e=>opt(e.id,(e.code?e.code+" ":"")+e.name+((e.status||"在職")==="離職"?"（離職）":""),e.id===c.empId)).join("")}</select></label>
-  <label>契約類型<select name="type">${HR_CON_TYPES.map(x=>opt(x,x,x===c.type)).join("")}</select></label>
+  <label>契約類型<select name="type">${HR_CON_TYPES.map(x=>opt(x,x+({"不定期勞動契約":"（正職，無到期日）","定期勞動契約":"（約聘、臨時、短期，需填到期日）"}[x]||""),x===c.type)).join("")}</select></label>
   <label>簽約日<input type="date" name="signDate" value="${esc(c.signDate||"")}"></label>
   <label>生效日<input type="date" name="start" value="${esc(c.start||"")}" required></label>
-  <label>到期日（不定期可留空）<input type="date" name="end" value="${esc(c.end||"")}"></label>
+  <label id="endLab"><span id="endTxt">到期日</span><input type="date" name="end" value="${esc(c.end||"")}"></label>
   <label class="full">附件（契約掃描檔，圖片或 PDF，1 MB 以內）<input type="file" name="file" accept="image/*,application/pdf"></label>
   ${c.fileName?`<div class="full note">目前附件：<a href="#" id="openFile">${esc(c.fileName)}</a></div>`:""}
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
@@ -1480,6 +1480,8 @@ function hrConForm(c){
     await setDoc(doc(fs,"hrContracts",id),d);toast("已儲存契約")},true);
   const of=$("#openFile");if(of)of.onclick=async ev=>{ev.preventDefault();try{const snap=await getDoc(doc(fs,"hrFiles",c.id));if(!snap.exists())throw 0;const{data}=snap.data();const b=await (await fetch(data)).blob();window.open(URL.createObjectURL(b),"_blank")}catch(e){toast("附件無法開啟")}};
   addVoice({note:"append"});
+  {const F=form.elements,upd=()=>{const t=F.type.value,open=t==="不定期勞動契約";F.end.disabled=open;if(open)F.end.value="";
+    $("#endTxt").textContent=open?"到期日（正職不定期契約，不需填寫）":t==="定期勞動契約"?"到期日（必填）":"到期日（沒有期限可留空）"};F.type.addEventListener("change",upd);upd()}
   if(!isNew)confirmDelete("#del","契約",async()=>{await deleteDoc(doc(fs,"hrContracts",c.id));if(c.fileName)await deleteDoc(doc(fs,"hrFiles",c.id)).catch(()=>{})});
 }
 $("#main").addEventListener("click",ev=>{const t=ev.target;
