@@ -606,6 +606,7 @@ function customerForm(c,pre){
   <div class="grid2"><label class="full">統一編號（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
   ${taxBlock("k",c.taxExempt)}
   <div class="full" id="dealBadge"></div>
+  <div class="full toolbar" id="dealActs"></div>
   <label class="full">公司 / 客戶名稱<input name="name" value="${esc(c.name||"")}" required></label>
   <label>公司電話<input name="phone" value="${esc(c.phone||"")}" inputmode="tel"></label>
   <label>傳真<input name="fax" value="${esc(c.fax||"")}" inputmode="tel"></label>
@@ -632,7 +633,16 @@ function customerForm(c,pre){
      hint.textContent=v&&!emailOk(v)?"Email 格式不正確，需要有 @，例如 name@company.com.tw":"";hint.style.color="var(--bad)"};
    em.addEventListener("blur",fix);em.addEventListener("input",()=>{if(emailOk(em.value.trim())||!em.value.trim())hint.textContent=""});
    ws.addEventListener("blur",()=>{ws.value=normUrl(ws.value)});fix()}
-  {const F=form.elements,up=()=>{$("#dealBadge").innerHTML=dealBadge(custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value}))};F.name.addEventListener("input",up);F.name.addEventListener("change",up);F.taxId.addEventListener("input",up);up()}
+  {const F=form.elements,up=()=>{const dl=custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value});$("#dealBadge").innerHTML=dealBadge(dl);
+    $("#dealActs").innerHTML=(canQuote()?'<button class="btn primary" type="button" data-quotecust>業務報價：帶入此客戶建立報價單</button>':"")+(dl.quotes&&canQuote()?`<button class="btn" type="button" data-quotelist>查看報價紀錄（${dl.quotes}）</button>`:"")};
+   form.addEventListener("click",ev=>{
+     if(ev.target.closest("[data-quotecust]")){if(!F.name.value.trim()){showErr({message:"請先填寫客戶名稱或統編，再建立報價單。"});return}
+       const a=addrRead("a"),dSame=!!F.d_same?.checked,dv=dSame?a:addrRead("d");
+       const cu={name:F.name.value.trim(),taxId:F.taxId.value.trim(),phone:fmtTel(F.phone.value),fax:fmtTel(F.fax.value),contact:F.contact.value.trim(),mobile:fmtMobile(F.mobile.value),
+         address:fullAddr(a),addr:a,delivery:dSame?fullAddr(a):fullAddr(dv),dlv:dv,taxExempt:F.k_exempt?.checked?F.k_exemptType.value:""};
+       const me2=myEmp();dlg.close();
+       quoteForm({date:todayStr(),sales:me2?.perm==="2"?me2.name:(me.name||""),salesMobile:(me2?.perm==="2"&&me2.mobile)||me.mobile||"",taxMode:"excl",status:"draft",validDays:30,items:[{}],customerId:c.id||"",cust:cu},"prefill");return}
+     if(ev.target.closest("[data-quotelist]")){const nm=F.name.value.trim();dlg.close();$("#menuView").hidden=true;$("#appView").hidden=false;tab="quotes";q=nm;filter="all";render();window.scrollTo(0,0)}});F.name.addEventListener("input",up);F.name.addEventListener("change",up);F.taxId.addEventListener("input",up);up()}
   addVoice({taxId:"digits",name:"text",phone:"tel",fax:"tel",contact:"text",mobile:"tel",email:"email",note:"append"},["a","d"]);
   if(!isNew)confirmDelete("#del","客戶",async()=>{if(S.contracts.some(k=>k.customerId===c.id&&k.status==="租賃中"))throw{message:"此客戶仍有租賃中的租約，無法刪除。"};await db.doc("customers/"+c.id).delete()});
 }
@@ -1492,7 +1502,7 @@ function quoteForm(src,copy){
   if(copy){x.date=todayStr();x.status="draft";["signature","signedAt","signerName","signMethod","signToken","signExpires","sentAt","hasScan"].forEach(k=>delete x[k])}
   const c=x.cust||{};
   const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
-  openDlg(`<h3>${isNew?(copy?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
+  openDlg(`<h3>${isNew?(copy===true?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
   <datalist id="specList">${S.equipment.map(e=>`<option value="${esc(e.name)}">`).join("")}</datalist>
   <datalist id="catList">${cats.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
   <fieldset><legend>客戶資料</legend><div class="grid2">
