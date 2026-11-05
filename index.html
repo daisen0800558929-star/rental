@@ -826,6 +826,11 @@ function voiceClean(kind,t){
   return t.replace(/\s+/g,kind==="append"?" ":"");
 }
 let micActive=null;
+/* 報價明細每一列的「產品名稱／規格」加麥克風 */
+function rowVoice(tr){if(!SR||!tr)return;const el=tr.querySelector("[name=i_spec]");if(!el||el.parentElement.classList.contains("micbox"))return;
+  const box=document.createElement("span");box.className="micbox";el.before(box);box.appendChild(el);
+  const b=document.createElement("button");b.type="button";b.className="mic";b.innerHTML=MIC_SVG;b.setAttribute("aria-label","語音輸入產品名稱");box.appendChild(b);
+  b.onclick=()=>listen(t=>{el.value=voiceClean("text",t);el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}))},b)}
 function listen(onText,btn){
   if(micActive){try{micActive.stop()}catch(e){}if(micActive._btn===btn){micActive=null;return}}
   const r=new SR();r.lang="zh-TW";r.interimResults=false;r.maxAlternatives=1;r._btn=btn;micActive=r;
@@ -1136,7 +1141,7 @@ function quoteForm(src,copy){
     form.elements.voltOther.disabled=form.elements.volt.value!=="其他";
   };
   form.oninput=calc;
-  $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());calc();body.lastElementChild.querySelector("input").focus()};
+  $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());rowVoice(body.lastElementChild);calc();body.lastElementChild.querySelector("input").focus()};
   body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input,select").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const eq=S.equipment.find(k=>k.name===e.target.value);if(!eq)return;const tr=e.target.closest("tr");
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
@@ -1183,6 +1188,8 @@ function quoteForm(src,copy){
   {let t=null;const later=()=>{clearTimeout(t);t=setTimeout(findHist,400)};
    form.elements.c_name.addEventListener("input",later);form.elements.c_name.addEventListener("change",later);form.elements.c_taxId.addEventListener("input",later)}
   bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});bindTax("q","c_name","c_taxId");
+  addVoice({c_taxId:"digits",c_name:"text",c_phone:"tel",c_fax:"tel",c_contact:"text",c_mobile:"tel",sales:"text",salesMobile:"tel",voltOther:"text",note:"append"},["ca","cd"]);
+  $("#itemsBody").querySelectorAll("tr").forEach(rowVoice);
   calc();
 }
 
