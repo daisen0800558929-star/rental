@@ -1038,17 +1038,30 @@ function viewInv(t){
   return N+(type==="lend"&&outN?`<div class="note">目前有 ${outN} 筆借出／試吹／展覽尚未歸還。</div>`:"")+`<div class="toolbar"><input id="q" placeholder="搜尋單號、${T.party||"原因"}、商品">${invCan("add")?`<button class="btn primary" type="button" data-inv="${type}">＋ 新增${type==="lend"?"借出／試吹／展覽":T.nm}單</button>`:""}</div>
   <div class="list">${rows.length?rows.join(""):`<div class="empty">還沒有${type==="lend"?"借出／試吹／展覽":T.nm}紀錄。${S.invProd.length?"":"請先到「商品編號」建立商品。"}</div>`}</div>`;
 }
-const INV_RULE_DEFAULT=`編號格式：類別碼－型號（－規格）
-類別碼：WF 水冷扇／FAN 工業風扇、排風扇／VEN 通風設備／FP 魚池過濾設備／PT 零件耗材／SV 服務項目
-範例：WF-L105、WF-L105-220V、FAN-60、FP-200、PT-PUMP-01
-英文一律大寫，用「-」分隔，同一個編號不能重複使用。`;
+const INV_RULE_DEFAULT=`品編總共 20 碼。
+類別碼（第 1 碼）：1 水冷扇／2 魚池過濾／3 工廠通風／4 其他
+用途碼（類別碼後）：
+1-01 水冷扇總成
+1-02 水冷扇出租
+1-R2 水冷扇出租拉回（沖銷 1-02）
+1-03 水冷扇零件
+1-04 水冷扇借出／試用
+1-R4 水冷扇歸還（沖銷 1-04）
+1-05 水冷扇報修，現場檢修
+1-Z 水冷扇拉回檢修
+1-RZ 水冷扇檢修歸還`;
+const INV_MAIN={"1":"水冷扇","2":"魚池過濾","3":"工廠通風","4":"其他"};
+const INV_SUB=[["01","總成"],["02","出租"],["R2","出租拉回（沖銷 -02）"],["03","零件"],["04","借出／試用"],["R4","歸還（沖銷 -04）"],["05","報修，現場檢修"],["Z","拉回檢修"],["RZ","檢修歸還"]];
+const INV_CODE_LEN=20;
+const codePrefix=code=>{const m=String(code||"").toUpperCase().match(/^([1-4])-(RZ|R2|R4|Z|0[1-5])/);return m?m[1]+"-"+m[2]:""};
 function prodForm(p){
   const isNew=!p;p=p||{unit:"台",active:true};
   const cats=[...new Set(S.invProd.map(x=>x.cat).filter(Boolean))];
   openDlg(`<h3>${isNew?"新增商品":"商品　"+esc(p.code)}</h3><datalist id="pcats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
   <div class="coderule"><div class="addr-t">品編說明${isAdm()?'<button class="btn small" type="button" id="editRule">編輯說明</button>':""}</div><div style="white-space:pre-wrap">${esc(S.invRule||INV_RULE_DEFAULT)}</div>
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
-  <div class="grid2"><label>商品編號<input name="code" value="${esc(p.code||"")}" placeholder="例：WF-L105" autocomplete="off" required></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label>
+  <div class="grid2"><label class="full">類別碼／用途碼（選了會自動帶入編號開頭）<select name="prefix"><option value="">請選擇</option>${Object.entries(INV_MAIN).map(([m,n])=>`<optgroup label="${m}　${n}">${INV_SUB.map(([k,t])=>opt(m+"-"+k,m+"-"+k+"　"+n+t,codePrefix(p.code)===m+"-"+k)).join("")}</optgroup>`).join("")}</select></label>
+  <label class="full">商品編號（共 ${INV_CODE_LEN} 碼）<input name="code" value="${esc(p.code||"")}" placeholder="例：1-01-…" maxlength="${INV_CODE_LEN}" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.04em"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label>
   <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
   <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
   <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
@@ -1060,9 +1073,15 @@ function prodForm(p){
     const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),spec:val(fd,"spec"),cat:val(fd,"cat"),unit:val(fd,"unit")||"台",safety:val(fd,"safety")===""?"":Math.max(0,parseInt(val(fd,"safety"),10)||0),
       cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(!d.code||!d.name){showErr({message:"請填寫商品編號與名稱。"});return false}
+    if(!/^[1-4]-/.test(d.code)){showErr({message:"商品編號第 1 碼要是類別碼 1～4（1 水冷扇、2 魚池過濾、3 工廠通風、4 其他），後面接「-」。"});return false}
+    if(d.code.length!==INV_CODE_LEN){showErr({message:`商品編號需要剛好 ${INV_CODE_LEN} 碼，目前是 ${d.code.length} 碼。`});return false}
     if(S.invProd.some(x=>x.code===d.code&&x.id!==p.id)){showErr({message:"商品編號 "+d.code+" 已經存在，請換一個編號。"});return false}
     await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
   addVoice({name:"text",spec:"text",cat:"text",note:"append"});
+  {const F=form.elements,cnt=()=>{const n=F.code.value.length;$("#codeCnt").textContent=`已輸入 ${n}／${INV_CODE_LEN} 碼`;$("#codeCnt").style.color=n&&n!==INV_CODE_LEN?"var(--warn)":"var(--ok)"};
+   F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/\s/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}cnt();const pf=codePrefix(F.code.value);if(pf)F.prefix.value=pf});
+   F.prefix.addEventListener("change",()=>{const v=F.prefix.value;if(!v)return;const old=codePrefix(F.code.value);F.code.value=old?v+F.code.value.slice(old.length):v+"-"+F.code.value.replace(/^[1-4]-?/,"");F.code.value=F.code.value.replace(/--+/g,"-").slice(0,INV_CODE_LEN);
+     if(!F.cat.value)F.cat.value=INV_MAIN[v[0]];cnt();F.code.focus()});cnt()}
   {const b=$("#editRule");if(b)b.onclick=()=>{const keep=p.id?p:null;dlg.close();openDlg(`<h3>編輯品編說明</h3><div class="note">這段說明會顯示在新增商品的「商品編號」上方，讓同仁照同一套規則編號。</div>
     <label>品編說明<textarea name="text" style="min-height:200px">${esc(S.invRule||INV_RULE_DEFAULT)}</textarea></label>
     <div class="actions"><button class="btn" type="button" id="ruleReset">恢復預設</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
