@@ -377,7 +377,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={job_admin:"行政工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -393,6 +393,7 @@ function render(){
   if(tab.startsWith("inv_"))h=viewInv(tab);
   if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」勾選「報價系統」，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
+  if(tab==="job_admin")h=viewJobDesc("admin");
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
@@ -2313,7 +2314,8 @@ const MODULES=[
   {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"公司行程與後勤排程"},
   {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"派車、出勤任務與回報"},
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
-  {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"}
+  {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
+  {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"}
 ];
 function moduleStat(m){
   if(!db)return"";
@@ -2352,10 +2354,51 @@ $("#menuBtn").onclick=showMenu;
 $("#logoutBtn2").onclick=()=>signOut(auth);
 $("#accBtn").onclick=()=>{$("#menuView").hidden=true;$("#appView").hidden=false;tab="accounts";q="";render();window.scrollTo(0,0)};
 
+
+/* ---------- 部門工作說明書 ---------- */
+const JOB_DEFAULT={admin:{title:"行政工作說明書",role:"行政專員",dept:"行政部門",boss:"管理部／總經理",place:"彰化總公司（彰化市自強南路537號）",
+ sections:[
+ ["工作目的","負責公司日常行政、客戶來電與資料管理，協助業務、廠務、會計順利運作，讓客戶的每一通電話都有紀錄、有回覆、有追蹤。"],
+ ["主要職責","1. 接聽客戶來電，在 ERP「客戶通聯」登錄每一通電話（來電分類、客戶需求、內容說明、統編、公司名稱、聯絡人、電話、地址、來源等）。\n2. 建立與維護客戶資料：統編查詢核對公司名稱、電話與地址防呆檢查，區分已成交舊客戶與未成交潛在客戶。\n3. 協助業務製作報價單、傳送客戶線上簽名、追蹤回簽並歸檔。\n4. 設備租賃文件：租約建立、到期前 7 天提醒客戶續約或安排拉回。\n5. 進銷存單據登錄：進貨、銷貨、借出／試吹／展覽、歸還與報廢，依大森 10 碼品編選擇商品。\n6. 報修與維修聯繫：記錄客戶報修內容，通知廠務安排派車與維修時間，並回覆客戶。\n7. 文件與用品管理：合約、報價、發票等文件歸檔；辦公用品請購與庫存。\n8. 公告與訊息：發布公司公告，轉達主管交辦事項。"],
+ ["每日工作","□ 開機登入 ERP，查看「溫馨提醒」（租約到期、逾期未還）\n□ 接聽來電並即時登錄客戶通聯\n□ 回覆前一天未完成的客戶詢問\n□ 確認當日出貨、送修、派車行程\n□ 下班前檢查當天通聯是否都已登錄、該追蹤的已標註"],
+ ["每週工作","□ 整理本週通聯，交業務追蹤未成交潛在客戶\n□ 核對借出／試吹／展覽設備是否如期歸還\n□ 檢查低於安全庫存的商品並通知採購"],
+ ["每月工作","□ 匯出本月通聯與報價統計給主管\n□ 協助會計核對銷貨與租金資料\n□ 文件歸檔與檔案整理"],
+ ["使用的 ERP 功能","客戶通聯、客戶資料、業務報價（依權限）、設備租賃管理、進銷存（依權限）、溫馨提醒、公告區"],
+ ["任職條件","1. 具備基本電腦與手機操作能力，會使用 Email、LINE。\n2. 說話清楚有禮貌，具服務熱忱。\n3. 細心、能確實記錄與追蹤事項。"],
+ ["工作守則","1. 客戶來電當天一定要登錄，不可只記在紙上。\n2. 客戶資料（統編、電話、地址）要正確，查不到的統編要再次確認。\n3. 客戶個人資料不得外流。\n4. 無法當場回覆的問題，要記錄並在當天內回覆客戶或轉交負責同仁。"]]}};
+function jobData(k){const v=k==="admin"?S.jobAdmin:null;if(!v||!v.sections)return JOB_DEFAULT[k];return{...v,sections:v.sections.map(x=>Array.isArray(x)?x:[x.t||"",x.b||""])}}
+function viewJobDesc(k){
+  const d=jobData(k),adm=isAdm(),isTpl=!(k==="admin"&&S.jobAdmin);
+  return `<div class="toolbar"><span style="flex:1"></span><button class="btn" type="button" data-jobprint>列印</button>${adm?`<button class="btn primary" type="button" data-jobedit="${k}">編輯說明書</button>`:""}</div>
+  ${isTpl?`<div class="note">這是系統提供的範本內容${adm?"，請按「編輯說明書」依公司實際情況修改後儲存":"，管理員修改後會更新"}。</div>`:""}
+  <div class="card vis jobdoc"><div><h3>${esc(d.title||"工作說明書")}</h3>
+   <div class="grid2" style="gap:4px 16px;font-size:14px">${[["部門",d.dept],["職稱",d.role],["直屬主管",d.boss],["工作地點",d.place]].filter(x=>x[1]).map(([a,b])=>`<div><span class="m">${a}：</span>${esc(b)}</div>`).join("")}</div></div>
+   ${(d.sections||[]).map(([t,b])=>`<div><h3>${esc(t)}</h3><p style="white-space:pre-wrap;margin:0">${esc(b)}</p></div>`).join("")}
+   ${d.updatedAt?`<div class="note">最後更新：${esc(d.updatedAt.slice(0,10))}${d.updatedBy?"　"+esc(staffLabel(d.updatedBy)):""}</div>`:""}</div>`;
+}
+function jobForm(k){
+  const d=jobData(k);let secs=(d.sections||[]).map(x=>[...x]);
+  const secHtml=()=>secs.map(([t,b],i)=>`<div class="card" style="padding:10px;display:grid;gap:6px" data-sec="${i}"><div style="display:flex;gap:8px;align-items:end"><label style="flex:1">項目名稱<input name="st_${i}" value="${esc(t)}"></label><button class="btn small" type="button" data-secup="${i}" ${i?"":"disabled"}>上移</button><button class="btn small danger" type="button" data-secdel="${i}">刪除</button></div><label>內容<textarea name="sb_${i}" style="min-height:120px">${esc(b)}</textarea></label></div>`).join("");
+  openDlg(`<h3>編輯${esc(d.title||"工作說明書")}</h3>
+  <div class="grid2"><label class="full">標題<input name="title" value="${esc(d.title||"")}"></label><label>部門<input name="dept" value="${esc(d.dept||"")}"></label><label>職稱<input name="role" value="${esc(d.role||"")}"></label>
+  <label>直屬主管<input name="boss" value="${esc(d.boss||"")}"></label><label>工作地點<input name="place" value="${esc(d.place||"")}"></label></div>
+  <div id="secBox" style="display:grid;gap:10px">${secHtml()}</div><button class="btn" type="button" id="secAdd">＋ 新增項目</button>
+  <div class="actions">${k==="admin"&&S.jobAdmin?'<button class="btn" type="button" id="jobReset">恢復範本</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{const read=()=>secs.map((_,i)=>[val(fd,"st_"+i),String(fd.get("sb_"+i)||"").trim()]).filter(([t,b])=>t||b);
+    await setDoc(doc(fs,"hrSettings","job_"+k),{title:val(fd,"title"),dept:val(fd,"dept"),role:val(fd,"role"),boss:val(fd,"boss"),place:val(fd,"place"),sections:read().map(([t,b])=>({t,b})),updatedAt:new Date().toISOString(),updatedBy:me.email});toast("已儲存工作說明書")},true);
+  const box=$("#secBox"),sync=()=>{secs=secs.map((x,i)=>[form.elements["st_"+i]?.value??x[0],form.elements["sb_"+i]?.value??x[1]])},redraw=()=>{box.innerHTML=secHtml();addVoice(Object.fromEntries(secs.map((_,i)=>["sb_"+i,"append"])))};
+  box.addEventListener("click",e=>{const del=e.target.closest("[data-secdel]"),up=e.target.closest("[data-secup]");if(!del&&!up)return;sync();
+    if(del)secs.splice(+del.dataset.secdel,1);else{const i=+up.dataset.secup;[secs[i-1],secs[i]]=[secs[i],secs[i-1]]}redraw()});
+  $("#secAdd").onclick=()=>{sync();secs.push(["新項目",""]);redraw();form.elements["st_"+(secs.length-1)]?.select()};
+  {const r=$("#jobReset");if(r)r.onclick=async()=>{if(!confirm("要恢復成系統範本嗎？目前修改的內容會被取代。"))return;await deleteDoc(doc(fs,"hrSettings","job_"+k));S.jobAdmin=null;dlg.close();toast("已恢復範本");render()}}
+  redraw();
+}
+document.addEventListener("click",e=>{const ed=e.target.closest("[data-jobedit]");if(ed){if(isAdm())jobForm(ed.dataset.jobedit);return}if(e.target.closest("[data-jobprint]"))window.print()});
+
 /* ---------- 選擇部門 ---------- */
 // 各部門在圓形選單看得到的功能（沒列的部門顯示全部）
-const DEPT_MODS={admin:["cust"]};
-const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES};
+const DEPT_MODS={admin:["cust","jobadm"]};
+const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES.filter(m=>!m.dept||m.dept===curDept)};
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
 const deptName=k=>(DEPTS.find(d=>d[0]===k)||[])[1]||"";
@@ -2409,7 +2452,7 @@ function startData(){
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;const jd=d.find(x=>x.id==="job_admin");S.jobAdmin=jd?jd.data():null;const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
