@@ -377,7 +377,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -394,6 +394,7 @@ function render(){
   if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」勾選「報價系統」，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
+  if(tab==="take")h=viewTake(loading);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
@@ -1677,7 +1678,26 @@ async function takeCall(c,confirmed){
     if(k&&(!k.owner||isAdm()))await db.doc("customers/"+k.id).update({owner:myName(),ownedAt:now});
     toast("已接案："+(c.company||c.contact||""));return true}catch(e){showErr(e);return false}
 }
-setInterval(()=>{if(tab==="calls"&&!dlg.open&&!document.hidden)render()},300000);
+setInterval(()=>{if((tab==="calls"||tab==="take")&&!dlg.open&&!document.hidden)render()},300000);
+let takeF="open";
+function viewTake(loading){
+  const all=S.calls.map(c=>({c,r:callTake(c)})).sort((a,b)=>String(b.c.at).localeCompare(String(a.c.at)));
+  const G={open:x=>x.r.st!=="ok",wait:x=>x.r.st==="wait",late:x=>x.r.st==="late",mine:x=>x.r.st==="ok"&&x.r.who===myName(),done:x=>x.r.st==="ok"};
+  const L=[["open","未接案"],["wait","待處理"],["late","接案超時"],["mine","我的接案"],["done","已接案"]];
+  const n=k=>all.filter(G[k]).length;
+  const rows=all.filter(G[takeF]).map(({c,r})=>`<div class="row" data-takeopen="${esc(c.id)}" tabindex="0">
+    <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}${c.mobile?" · "+esc(c.mobile):c.tel?" · "+esc(c.tel):""}</span></div>
+    <div class="m"><span class="mono">${esc(String(c.at||"").replace("T"," "))}</span> · ${esc(c.need||"")}${c.county?" · "+esc(c.county+(c.district||"")):""}${c.content?" · "+esc(c.content.slice(0,40)):""}</div></div>
+    <div class="r">${r.st==="ok"?`<span class="pill ok">${esc(r.who)}</span>`:r.st==="late"?'<span class="pill bad">接案超時</span>':'<span class="pill warn">待處理</span>'}</div></div>`);
+  return `<div class="cards" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px">
+    ${[["wait","待處理","var(--warn)"],["late","接案超時","var(--bad)"],["mine","我的接案","var(--ok)"]].map(([k,t,c])=>`<button type="button" class="card" data-takef="${k}" style="text-align:center;padding:12px;cursor:pointer;border-color:${takeF===k?c:"var(--line)"}"><div class="m">${t}</div><div class="mono" style="font-size:26px;font-weight:700;color:${c}">${n(k)}</div></button>`).join("")}</div>
+  <div class="seg" role="group">${L.map(([k,v])=>`<button type="button" data-takef="${k}" aria-pressed="${k===takeF}">${v}（${n(k)}）</button>`).join("")}</div>
+  <div class="note">點一筆通聯可查看內容，確認能處理後在上方按「我要接案」。</div>
+  <div class="list">${emptyOr(rows,loading,takeF==="mine"?"目前沒有你接案的通聯。":takeF==="done"?"還沒有已接案的通聯。":"目前沒有待接案的通聯 👍")}</div>`;
+}
+document.addEventListener("click",e=>{if(tab!=="take")return;const f=e.target.closest("[data-takef]");if(f){takeF=f.dataset.takef;render();return}
+  const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
+document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
 function viewCalls(loading){
   const qq=q.trim().toLowerCase();
   const t=todayStr(),wk=addDaysStr(t,-6),inRange=c=>{const d=String(c.at||"").slice(0,10);return callRange==="all"||(callRange==="today"&&d===t)||(callRange==="week"&&d>=wk&&d<=t)||(callRange==="month"&&d.slice(0,7)===t.slice(0,7))};
@@ -2385,6 +2405,7 @@ const MODULES=[
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
   {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
   {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"},
+  {k:"take",lb:"接案|狀況",nm:"接案狀況",ds:"客戶通聯的待處理、接案超時與已接案",go:"take",dept:"sales"},
   {k:"jobsales",lb:"業務工作|說明書",nm:"業務工作說明書",ds:"業務部門的職責、日常工作與作業規範",go:"job_sales",dept:"sales"}
 ];
 function moduleStat(m){
@@ -2512,7 +2533,7 @@ document.addEventListener("click",e=>{const jd=e.target.closest("[data-jobdept]"
 
 /* ---------- 選擇部門 ---------- */
 // 各部門在圓形選單看得到的功能（沒列的部門顯示全部）
-const DEPT_MODS={admin:["cust","jobadm"],sales:["cust","jobsales"]};
+const DEPT_MODS={admin:["cust","jobadm"],sales:["cust","take","jobsales"]};
 const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES.filter(m=>!m.dept||m.dept===curDept)};
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
