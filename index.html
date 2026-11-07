@@ -715,11 +715,15 @@ async function lookupTax(no,force){
   if(live.error){const k=knownTax(no);if(k)return k}
   return live;
 }
+// 商業登記申登機關代碼（各縣市政府）
+const BIZ_AGENCY=["","387000000A","376470000A","380000000A","379000000A","382000000A","395000000A","397000000A","376480000A","376490000A","376450000A","376440000A","376580000A","376500000A","376600000A","376530000A","376420000A","376550000A","376540000A","376560000A","376570000A","371020000A","371030000A","376610000A","376430000A"];
 async function lookupTaxLive(no){
   const G="https://data.gcis.nat.gov.tw/od/data/api/",q=f=>"?$format=json&$filter="+encodeURIComponent(f)+"&$skip=0&$top=1";
   const src=[
     async()=>{const j=await fetchJSON(G+"5F64D864-61CB-4D0D-8AD9-492047CC1EA6"+q("Business_Accounting_NO eq "+no));const r=Array.isArray(j)?j[0]:null;return r?.Company_Name?{name:r.Company_Name,status:r.Company_Status_Desc||"",kind:"公司"}:null},
-    async()=>{const j=await fetchJSON(G+"7E6AFA72-AD6A-46D3-8681-ED77951D912D"+q("President_No eq "+no));const r=Array.isArray(j)?j[0]:null;return r?.Business_Name?{name:r.Business_Name,status:r.Business_Current_Status_Desc||"",kind:"商號"}:null},
+    // 商業(行號、企業社)登記：經濟部要求同時帶「申登機關」代碼，所以各縣市一起查，取有資料的那一筆
+    async()=>{const one=async ag=>{const j=await fetchJSON(G+"7E6AFA72-AD6A-46D3-8681-ED77951D912D"+q("President_No eq "+no+(ag?" and Agency eq "+ag:"")));const r=Array.isArray(j)?j[0]:null;if(r?.Business_Name)return{name:r.Business_Name,status:r.Business_Current_Status_Desc||"",kind:"商號",addr:r.Business_Address||""};throw 0};
+      try{return await Promise.any(BIZ_AGENCY.map(one))}catch(e){if(e?.errors?.every(x=>x===0))return null;throw e}},
     async()=>{const j=await fetchJSON("https://company.g0v.ronny.tw/api/show/"+no);const d=j?.data;const n=d&&(d["公司名稱"]||d["商業名稱"]||d["名稱"]);return n?{name:Array.isArray(n)?n[0]:n,status:d["公司狀況"]||d["現況"]||"",kind:d["商業名稱"]?"商號":"公司"}:null}
   ];
   let reached=false;
