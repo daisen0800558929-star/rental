@@ -628,7 +628,7 @@ function customerForm(c,pre){
     ${dup?`<div style="margin-top:6px;color:var(--warn)"><b>注意：客戶資料裡已經有「${esc(dup.name)}」</b>，可能是同一家公司。<button class="btn small" type="button" data-dupopen="${esc(dup.id)}">開啟既有資料</button></div>`:""}
     ${pre._img?`<img src="${pre._img}" alt="名片" style="display:block;max-width:100%;max-height:220px;margin-top:8px;border:1px solid var(--line);border-radius:6px;background:#fff">`:""}
     <details style="margin-top:6px"><summary>查看辨識出的文字</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(pre._ocr)}</pre></details></div>`})():""}
-  <div class="grid2"><label class="full">登錄人<select name="recorder" ${canWrite?"":"disabled"}>${recorderOpts(c.recorder)}</select></label>
+  <div class="grid2">${recBox(c.recorder)}
   <label class="full">統一編號（填入後自動帶出公司名稱）<input name="taxId" value="${esc(c.taxId||"")}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 位數字"></label>
   ${taxBlock("k",c.taxExempt)}
   <div class="full" id="dealBadge"></div>
@@ -645,8 +645,8 @@ function customerForm(c,pre){
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
   async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
-    const d={recorder:val(fd,"recorder"),name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email").toLowerCase(),website:normUrl(val(fd,"website")),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
-    if(!d.recorder){showErr({message:"請選擇登錄人。"});return false}
+    const d={recorder:c?.recorder||myName(),name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email").toLowerCase(),website:normUrl(val(fd,"website")),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
+    if(isNew&&!canRecord()){recDenied();return false}
     if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
     {const e=await taxGate("k");if(e){showErr({message:e});return false}}
     d.taxExempt=fd.get("k_exempt")?val(fd,"k_exemptType"):"";d.taxVerified=d.taxId&&!d.taxExempt?new Date().toISOString():"";
@@ -942,7 +942,7 @@ function importDialog(){
         const g=k=>idx[k]===undefined?"":String(r[idx[k]]??"").trim();
         const a=parseAddr(g("address")),dv=parseAddr(g("delivery"));
         const d={name:g("name"),taxId:g("taxId").replace(/\D/g,""),phone:fmtTel(g("phone")),fax:fmtTel(g("fax")),contact:g("contact"),mobile:fmtMobile(g("mobile")),email:looksUrl(g("email"))?"":g("email").toLowerCase(),website:normUrl(g("website")||(looksUrl(g("email"))?g("email"):"")),
-          address:g("address")?fullAddr(a)||g("address"):"",addr:a,delivery:g("delivery")?fullAddr(dv)||g("delivery"):"",dlv:g("delivery")?dv:null,note:g("note"),taxExempt:"",taxVerified:""};
+          address:g("address")?fullAddr(a)||g("address"):"",addr:a,delivery:g("delivery")?fullAddr(dv)||g("delivery"):"",dlv:g("delivery")?dv:null,note:g("note"),taxExempt:"",taxVerified:"",recorder:myName()};
         const err=[];
         if(!d.name)err.push("缺客戶名稱");
         if(d.taxId&&!taxChecksum(d.taxId))err.push("統編錯誤");
@@ -1252,7 +1252,7 @@ function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">�
 /* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
 /* 報價權限：管理員，或員工資料權限為 2 且已連結登入帳號的在職員工 */
 /* 權限等級：1 一般職員／2 報價／3 進銷存查看與新增／4 加修改／5 加刪除；系統管理員視為 5 */
-const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"],["call_rec","可擔任登錄人（廠務部需另外開啟）"]];
+const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"],["call_rec","可登錄客戶（廠務部需另外開啟）"]];
 const PERM_ALL=PERMS.map(p=>p[0]);
 /* 權限可複選；舊資料的等級 1～5 自動換算 */
 const permsOf=e=>{if(Array.isArray(e?.perms))return e.perms.filter(p=>PERM_ALL.includes(p));const n=parseInt(e?.perm,10)||1;
@@ -1664,18 +1664,12 @@ function viewCalls(loading){
   <div class="toolbar"><input id="q" placeholder="搜尋公司、聯絡人、電話、內容"><select id="callRange" style="flex:0 1 130px">${[["today","今日"],["week","近 7 天"],["month","本月"],["all","全部"]].map(([k,v])=>opt(k,v,k===callRange)).join("")}</select><select id="f" style="flex:0 1 180px"><option value="all">全部需求</option>${CALL_NEEDS.map(n=>opt(n,n)).join("")}</select>${canWrite?'<button class="btn primary" type="button" data-newcall>＋ 新增通聯</button>':""}</div>
   <div class="list">${emptyOr(rows,loading,callRange==="today"&&!todayN?"今天還沒有通聯紀錄。接到客戶來電時，按「新增通聯」記下來。":S.calls.length?"沒有符合條件的通聯紀錄":"還沒有通聯紀錄。接到客戶來電時，按「新增通聯」記下來。")}</div>`;
 }
-/* 登錄人下拉：所有在職員工（人事資料）＋系統帳號 */
-function recorderOpts(cur){
-  const list=[],seen=new Set(),add=(n,sub)=>{n=String(n||"").trim();if(!n||seen.has(n))return;seen.add(n);list.push([n,sub])};
-  // 廠務部員工預設不列入，除非在員工資料勾選「可擔任登錄人」
-  const plant=e=>/廠務/.test(e.dept||"")&&!permsOf(e).includes("call_rec");
-  const hide=new Set(S.hrEmp.filter(plant).flatMap(e=>[e.name,e.account].filter(Boolean)));
-  S.hrEmp.filter(e=>hrActive(e)&&!plant(e)).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~"))).forEach(e=>add(e.name,[e.code,e.dept].filter(Boolean).join("　")));
-  S.staff.filter(u=>u.active!==false&&!hide.has(u.id)&&!hide.has(u.name)).forEach(u=>add(u.name||u.id,u.code||""));
-  if(cur)add(cur,"");
-  const mine=myEmp()?.name||me?.name||me?.email||"",v=cur||mine;
-  return `<option value="">請選擇</option>`+list.map(([n,sub])=>`<option value="${esc(n)}"${n===v?" selected":""}>${esc(n)}${sub?"（"+esc(sub)+"）":""}</option>`).join("");
-}
+/* 登錄人：固定為目前登入的人，不能代為登錄 */
+const myName=()=>myEmp()?.name||me?.name||me?.email||"";
+const recBox=cur=>`<label class="full">登錄人<input value="${esc(cur||myName())}" readonly tabindex="-1" style="opacity:.8"><span class="note">自動帶入目前登入的人，不能代為登錄</span></label>`;
+// 廠務部員工預設不能登錄客戶，除非在員工資料勾選「可擔任登錄人」
+const canRecord=()=>{if(isAdm())return true;const e=myEmp();return !(e&&/廠務/.test(e.dept||"")&&!permsOf(e).includes("call_rec"))};
+const recDenied=()=>{showErr({message:"廠務部同仁需要管理員在「人事管理 → 員工資料」勾選「可擔任登錄人」後，才能登錄客戶資料。"})};
 function callForm(src){
   const isNew=!src,c=src||{at:nowLocal(),receiver:me.email};
   const staffOpts=S.staff.filter(u=>u.active!==false||u.id===c.receiver).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~")));
@@ -1683,7 +1677,7 @@ function callForm(src){
   openDlg(`<h3>${isNew?"新增客戶通聯":"編輯客戶通聯"}</h3>
   <datalist id="custList">${S.customers.map(k=>`<option value="${esc(k.name)}">`).join("")}</datalist>
   <div class="grid2">
-    <label class="full">登錄人<select name="recorder" required>${recorderOpts(c.recorder)}</select></label>
+    ${recBox(c.recorder)}
     <label class="full">日期時間<input type="datetime-local" name="at" value="${esc(c.at)}" required></label>
     <label>1. 來電分類<select name="type" required><option value="">請選擇</option>${CALL_TYPES.map(n=>opt(n,n,n===c.type)).join("")}</select></label>
     <label>2. 客戶需求<select name="need" required><option value="">請選擇</option>${CALL_NEEDS.map(n=>opt(n,n,n===c.need)).join("")}</select></label>
@@ -1707,9 +1701,9 @@ function callForm(src){
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"儲存通聯":"儲存"}</button>`:""}</div>`,
   async fd=>{
     const zipOf=(cty,dis)=>(ZIP[cty]||[]).find(z=>z.name===dis)?.zip||"";
-    const d={recorder:val(fd,"recorder"),taxId:val(fd,"taxId"),taxExempt:fd.get("c_exempt")?val(fd,"c_exemptType"):"",at:val(fd,"at"),receiver:val(fd,"receiver"),type:val(fd,"type"),need:val(fd,"need"),content:val(fd,"content"),company:val(fd,"company"),contact:val(fd,"contact"),
+    const d={recorder:src?.recorder||myName(),taxId:val(fd,"taxId"),taxExempt:fd.get("c_exempt")?val(fd,"c_exemptType"):"",at:val(fd,"at"),receiver:val(fd,"receiver"),type:val(fd,"type"),need:val(fd,"need"),content:val(fd,"content"),company:val(fd,"company"),contact:val(fd,"contact"),
       tel:fmtTel(val(fd,"tel")),mobile:fmtMobile(val(fd,"mobile")),county:val(fd,"county"),district:val(fd,"district"),road:val(fd,"road"),detail:val(fd,"detail"),note:val(fd,"note"),source:val(fd,"source")};
-    if(!d.recorder){showErr({message:"請選擇登錄人。"});return false}
+    if(isNew&&!canRecord()){recDenied();return false}
     d.zip=zipOf(d.county,d.district);
     if(!d.at){showErr({message:"請填寫日期時間。"});return false}
     if(!d.type||!d.need){showErr({message:"請選擇來電分類與客戶需求。"});return false}
@@ -1721,7 +1715,7 @@ function callForm(src){
     const ex=S.customers.find(k=>k.name===d.company);
     if(ex)d.customerId=ex.id;
     else if(d.company&&fd.get("saveCust")){const ref=db.collection("customers").doc();
-      await ref.set({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:d.taxId,taxExempt:d.taxExempt,taxVerified:d.taxId&&!d.taxExempt?new Date().toISOString():"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
+      await ref.set({recorder:d.recorder,name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:d.taxId,taxExempt:d.taxExempt,taxVerified:d.taxId&&!d.taxExempt?new Date().toISOString():"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
     if(isNew){d.createdAt=d.updatedAt;d.createdBy=me.email;await db.collection("calls").doc().set(d);toast("已儲存通聯紀錄")}
     else{await db.doc("calls/"+c.id).update(d);toast("已儲存")}
   },true);
