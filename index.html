@@ -1654,13 +1654,13 @@ function phoneErr(vals){for(const[label,v,k]of vals){if(k==="mobile"?!mobileOk(v
 let callRange="today";
 const addDaysStr=(d,n)=>new Date(dayNum(d)*864e5+n*864e5).toISOString().slice(0,10);
 $("#main").addEventListener("change",e=>{if(e.target.id==="callRange"){callRange=e.target.value;render()}});
-/* 通聯接案狀況：已接案顯示接案業務；未接案 24 小時內為待處理，超過為接案超時 */
+/* 通聯接案狀況：已接案顯示最近一次接案的業務；未接案 24 小時內為待處理，超過為接案超時 */
 function callTake(c){
   if(c.takenBy)return{st:"ok",who:c.takenBy};
   const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
   const t0=String(c.at||"");
-  const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)).sort((a,b)=>String(a.createdAt||a.date).localeCompare(String(b.createdAt||b.date)));
-  if(qs[0]?.sales)return{st:"ok",who:qs[0].sales};
+  const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
+  if(qs[0]?.sales)return{st:"ok",who:qs[0].sales}; // 最近一次接案（報價）的業務
   if(k?.owner)return{st:"ok",who:k.owner};
   const h=(Date.now()-new Date(t0).getTime())/36e5;
   return h>24?{st:"late"}:{st:"wait"};
