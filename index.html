@@ -377,7 +377,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={job_admin:"行政工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const m=$("#main");
@@ -393,7 +393,7 @@ function render(){
   if(tab.startsWith("inv_"))h=viewInv(tab);
   if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」勾選「報價系統」，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
-  if(tab==="job_admin")h=viewJobDesc("admin",true);
+  if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
@@ -2327,7 +2327,8 @@ const MODULES=[
   {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"派車、出勤任務與回報"},
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
   {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
-  {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"}
+  {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"},
+  {k:"jobsales",lb:"業務工作|說明書",nm:"業務工作說明書",ds:"業務部門的職責、日常工作與作業規範",go:"job_sales",dept:"sales"}
 ];
 function moduleStat(m){
   if(!db)return"";
@@ -2454,7 +2455,7 @@ document.addEventListener("click",e=>{const jd=e.target.closest("[data-jobdept]"
 
 /* ---------- 選擇部門 ---------- */
 // 各部門在圓形選單看得到的功能（沒列的部門顯示全部）
-const DEPT_MODS={admin:["cust","jobadm"]};
+const DEPT_MODS={admin:["cust","jobadm"],sales:["cust","jobsales"]};
 const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES.filter(m=>!m.dept||m.dept===curDept)};
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
