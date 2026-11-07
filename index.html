@@ -663,9 +663,20 @@ function customerForm(c,pre){
    ws.addEventListener("blur",()=>{ws.value=normUrl(ws.value)});fix()}
   {const F=form.elements,up=()=>{const dl=custDeal({id:c.id,name:F.name.value,taxId:F.taxId.value});$("#dealBadge").innerHTML=dealBadge(dl);
     const ob=ownerBlock(c.id?c:null,F.name.value),own=custOwner(c)||custOwner(S.customers.find(x=>normName(x.name)===normName(F.name.value)));
-    $("#dealActs").innerHTML=(own?`<div class="full note" style="width:100%">接案業務：<b>${esc(own)}</b>${ob?"　（其他業務不能報價）":""}${isAdm()&&c.id?`　<button class="btn small" type="button" data-ownerclr>解除接案</button>`:""}</div>`:"")+(canQuote()&&!ob?'<button class="btn primary" type="button" data-quotecust>業務報價：帶入此客戶建立報價單</button>':"")+(dl.quotes&&canQuote()?`<button class="btn" type="button" data-quotecopy>複製報價單</button><button class="btn" type="button" data-quotelist>查看報價紀錄（${dl.quotes}）</button>`:"")};
+    const okQ=canQuote()&&(isAdm()||own===myName()),needTake=canQuote()&&!isAdm()&&!own&&canWrite;
+    $("#dealActs").innerHTML=(own?`<div class="full note" style="width:100%">接案業務：<b>${esc(own)}</b>${ob?"　（其他業務不能報價）":""}${isAdm()&&c.id?`　<button class="btn small" type="button" data-ownerclr>解除接案</button>`:""}</div>`:"")
+      +(needTake?`<div class="full note" style="width:100%">此客戶尚未有業務接案，請先確認客戶資料，按「我要接案」後才能報價。</div><button class="btn primary" type="button" data-custtake>我要接案</button>`:"")
+      +(okQ?'<button class="btn primary" type="button" data-quotecust>業務報價：帶入此客戶建立報價單</button>':"")+(dl.quotes&&okQ?`<button class="btn" type="button" data-quotecopy>複製報價單</button>`:"")+(dl.quotes&&canQuote()?`<button class="btn" type="button" data-quotelist>查看報價紀錄（${dl.quotes}）</button>`:"")};
    const stamp={};form._cf=stamp;
    form.addEventListener("click",ev=>{if(form._cf!==stamp||!dlg.open)return;
+     if(ev.target.closest("[data-custtake]")){const k=c.id?c:S.customers.find(x=>normName(x.name)===normName(F.name.value));
+       if(!k){showErr({message:"請先儲存客戶資料，再按「我要接案」。"});return}
+       if(custOwner(k)&&custOwner(k)!==myName()){showErr({message:`此客戶已由業務「${custOwner(k)}」接案。`});return}
+       const now=new Date().toISOString(),nm=myName();
+       db.doc("customers/"+k.id).update({owner:nm,ownedAt:now}).then(async()=>{k.owner=nm;k.ownedAt=now;
+         // 同時把這個客戶尚未接案的通聯記為本人接案
+         for(const x of S.calls.filter(x=>(x.customerId===k.id||normName(x.company)===normName(k.name))&&callTake(x).st!=="ok"))try{await db.doc("calls/"+x.id).update({takenBy:nm,takenAt:now})}catch(e){}
+         toast("已接案："+k.name);up()}).catch(showErr);return}
      if(ev.target.closest("[data-ownerclr]")){if(!confirm("要解除「"+c.owner+"」的接案嗎？解除後由下一個報價的業務接案。"))return;db.doc("customers/"+c.id).update({owner:deleteField(),ownedAt:deleteField()}).then(()=>{delete c.owner;toast("已解除接案");up()});return}
      if(ev.target.closest("[data-quotecust]")){if(!F.name.value.trim()){showErr({message:"請先填寫客戶名稱或統編，再建立報價單。"});return}
        const a=addrRead("a"),dSame=!!F.d_same?.checked,dv=dSame?a:addrRead("d");
@@ -1954,7 +1965,9 @@ function quoteForm(src,copy){
     {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"通訊地址")||(cdSame?"":addrErr(qd,"安裝地址"));if(e){showErr({message:e});return false}}
     if(!items.length){showErr({message:"請至少填寫一個報價項目。"});return false}
     let customerId=val(fd,"customerId");
-    if(isNew){const o=ownerBlock(S.customers.find(z=>z.id===customerId),cust.name);if(o){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能再報價。如需轉移，請聯絡管理員。`});return false}}
+    if(isNew&&!isAdm()){const k=S.customers.find(z=>z.id===customerId)||S.customers.find(z=>normName(z.name)===normName(cust.name));const o=custOwner(k);
+      if(o&&o!==myName()){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能再報價。如需轉移，請聯絡管理員。`});return false}
+      if(!o){showErr({message:k?"此客戶尚未接案。請先打開客戶資料或通聯紀錄，按「我要接案」後才能報價。":"新客戶請先在「客戶通聯」登錄，並按「我要接案」後才能報價。"});return false}}
     if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
     const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
