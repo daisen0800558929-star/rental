@@ -1656,16 +1656,26 @@ const addDaysStr=(d,n)=>new Date(dayNum(d)*864e5+n*864e5).toISOString().slice(0,
 $("#main").addEventListener("change",e=>{if(e.target.id==="callRange"){callRange=e.target.value;render()}});
 /* 通聯接案狀況：已接案顯示最近一次接案的業務；未接案 24 小時內為待處理，超過為接案超時 */
 function callTake(c){
-  if(c.takenBy)return{st:"ok",who:c.takenBy};
   const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
   const t0=String(c.at||"");
   const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
-  if(qs[0]?.sales)return{st:"ok",who:qs[0].sales}; // 最近一次接案（報價）的業務
+  // 最近一次接案：「我要接案」與報價單取時間較新的
+  if(c.takenBy&&(!qs[0]?.sales||String(c.takenAt||"")>=String(qs[0].createdAt||qs[0].date||"")))return{st:"ok",who:c.takenBy};
+  if(qs[0]?.sales)return{st:"ok",who:qs[0].sales};
   if(k?.owner)return{st:"ok",who:k.owner};
   const h=(Date.now()-new Date(t0).getTime())/36e5;
   return h>24?{st:"late"}:{st:"wait"};
 }
-const takeHtml=c=>{const r=callTake(c);return r.st==="ok"?`<span class="m">接案狀況：<b style="color:var(--ok)">${esc(r.who)}</b></span>`:r.st==="late"?`<span class="m">接案狀況：<b style="color:var(--bad)">接案超時</b></span>`:`<span class="m">接案狀況：<b style="color:var(--warn)">待處理</b></span>`};
+const takeHtml=c=>{const r=callTake(c),btn=canWrite&&canQuote()&&r.who!==myName()?`<button class="btn small${r.st==="ok"?"":" primary"}" type="button" data-takecall="${esc(c.id)}">我要接案</button>`:"";return btn+(r.st==="ok"?`<span class="m">接案狀況：<b style="color:var(--ok)">${esc(r.who)}</b></span>`:r.st==="late"?`<span class="m">接案狀況：<b style="color:var(--bad)">接案超時</b></span>`:`<span class="m">接案狀況：<b style="color:var(--warn)">待處理</b></span>`)};
+async function takeCall(c){
+  const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
+  const o=ownerBlock(k,c.company);if(o){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能接案。如需轉移，請聯絡管理員。`});return}
+  if(!confirm(`確定由「${myName()}」接案：${c.company||c.contact||"此通聯"}？`))return;
+  const now=new Date().toISOString();
+  try{await db.doc("calls/"+c.id).update({takenBy:myName(),takenAt:now});
+    if(k&&(!k.owner||isAdm()))await db.doc("customers/"+k.id).update({owner:myName(),ownedAt:now});
+    toast("已接案："+(c.company||c.contact||""))}catch(e){showErr(e)}
+}
 setInterval(()=>{if(tab==="calls"&&!dlg.open&&!document.hidden)render()},300000);
 function viewCalls(loading){
   const qq=q.trim().toLowerCase();
@@ -1765,6 +1775,7 @@ function callForm(src){
   if(!isNew&&canWrite)confirmDelete("#del","通聯紀錄",()=>db.doc("calls/"+c.id).delete());
 }
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){callForm(null);return}
+  {const tb=e.target.closest("[data-takecall]");if(tb){e.stopPropagation();const c=S.calls.find(x=>x.id===tb.dataset.takecall);if(c)takeCall(c);return}}
   const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 $("#main").addEventListener("keydown",e=>{if(e.key!=="Enter")return;const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 
