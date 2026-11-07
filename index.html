@@ -1654,6 +1654,19 @@ function phoneErr(vals){for(const[label,v,k]of vals){if(k==="mobile"?!mobileOk(v
 let callRange="today";
 const addDaysStr=(d,n)=>new Date(dayNum(d)*864e5+n*864e5).toISOString().slice(0,10);
 $("#main").addEventListener("change",e=>{if(e.target.id==="callRange"){callRange=e.target.value;render()}});
+/* 通聯接案狀況：已接案顯示接案業務；未接案 24 小時內為待處理，超過為接案超時 */
+function callTake(c){
+  if(c.takenBy)return{st:"ok",who:c.takenBy};
+  const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
+  const t0=String(c.at||"");
+  const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)).sort((a,b)=>String(a.createdAt||a.date).localeCompare(String(b.createdAt||b.date)));
+  if(qs[0]?.sales)return{st:"ok",who:qs[0].sales};
+  if(k?.owner)return{st:"ok",who:k.owner};
+  const h=(Date.now()-new Date(t0).getTime())/36e5;
+  return h>24?{st:"late"}:{st:"wait"};
+}
+const takeHtml=c=>{const r=callTake(c);return r.st==="ok"?`<span class="m">接案狀況：<b style="color:var(--ok)">${esc(r.who)}</b></span>`:r.st==="late"?`<span class="m">接案狀況：<b style="color:var(--bad)">接案超時</b></span>`:`<span class="m">接案狀況：<b style="color:var(--warn)">待處理</b></span>`};
+setInterval(()=>{if(tab==="calls"&&!dlg.open&&!document.hidden)render()},300000);
 function viewCalls(loading){
   const qq=q.trim().toLowerCase();
   const t=todayStr(),wk=addDaysStr(t,-6),inRange=c=>{const d=String(c.at||"").slice(0,10);return callRange==="all"||(callRange==="today"&&d===t)||(callRange==="week"&&d>=wk&&d<=t)||(callRange==="month"&&d.slice(0,7)===t.slice(0,7))};
@@ -1662,7 +1675,7 @@ function viewCalls(loading){
     .sort((a,b)=>String(b.at).localeCompare(String(a.at))).map(c=>`<div class="row" data-call="${esc(c.id)}" tabindex="0">
       <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}${c.mobile?" · "+esc(c.mobile):c.tel?" · "+esc(c.tel):""}</span></div>
       <div class="m"><span class="mono">${esc(String(c.at||"").replace("T"," "))}</span> · ${esc(c.type||"")}${c.recorder?" · 登錄 "+esc(c.recorder):""} · 接電 ${esc(staffLabel(c.receiver))}${c.content?" · "+esc(c.content.slice(0,40)):""}</div></div>
-      <div class="r"><span class="pill">${esc(c.need||"")}</span><span class="m">${esc(c.source||"")}</span></div></div>`);
+      <div class="r"><span class="pill">${esc(c.need||"")}</span><span class="m">${esc(c.source||"")}</span>${takeHtml(c)}</div></div>`);
   return `<div class="note">今天 <b class="mono">${esc(t)}</b>　共 <b class="mono">${todayN}</b> 筆通聯</div>
   <div class="toolbar"><input id="q" placeholder="搜尋公司、聯絡人、電話、內容"><select id="callRange" style="flex:0 1 130px">${[["today","今日"],["week","近 7 天"],["month","本月"],["all","全部"]].map(([k,v])=>opt(k,v,k===callRange)).join("")}</select><select id="f" style="flex:0 1 180px"><option value="all">全部需求</option>${CALL_NEEDS.map(n=>opt(n,n)).join("")}</select>${canWrite?'<button class="btn primary" type="button" data-newcall>＋ 新增通聯</button>':""}</div>
   <div class="list">${emptyOr(rows,loading,callRange==="today"&&!todayN?"今天還沒有通聯紀錄。接到客戶來電時，按「新增通聯」記下來。":S.calls.length?"沒有符合條件的通聯紀錄":"還沒有通聯紀錄。接到客戶來電時，按「新增通聯」記下來。")}</div>`;
