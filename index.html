@@ -1252,13 +1252,13 @@ function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">�
 /* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
 /* 報價權限：管理員，或員工資料權限為 2 且已連結登入帳號的在職員工 */
 /* 權限等級：1 一般職員／2 報價／3 進銷存查看與新增／4 加修改／5 加刪除；系統管理員視為 5 */
-const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"]];
+const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"],["call_rec","可擔任登錄人（廠務部需另外開啟）"]];
 const PERM_ALL=PERMS.map(p=>p[0]);
 /* 權限可複選；舊資料的等級 1～5 自動換算 */
 const permsOf=e=>{if(Array.isArray(e?.perms))return e.perms.filter(p=>PERM_ALL.includes(p));const n=parseInt(e?.perm,10)||1;
   return [n>=2&&"quote",n>=3&&"inv_view",n>=3&&"inv_add",n>=4&&"inv_edit",n>=5&&"inv_del"].filter(Boolean)};
 const permLabel=ps=>{const inv=["view","add","edit","del"].filter(a=>ps.includes("inv_"+a)).map(a=>({view:"查",add:"增",edit:"改",del:"刪"})[a]);
-  return [ps.includes("quote")?"報價":"",inv.length?"進銷存（"+inv.join("")+"）":""].filter(Boolean).join("・")};
+  return [ps.includes("quote")?"報價":"",inv.length?"進銷存（"+inv.join("")+"）":"",ps.includes("call_rec")?"登錄人":""].filter(Boolean).join("・")};
 const myPerms=()=>{if(isAdm())return PERM_ALL;const e=myEmp();if(e&&hrActive(e))return permsOf(e);const u=S.staff.find(u=>u.id===me?.email);return u?permsOf(u):[]};
 const invCan=act=>myPerms().includes("inv_"+act);
 const salesReps=()=>S.hrEmp.filter(e=>permsOf(e).includes("quote")&&hrActive(e)).sort((a,b)=>String(a.code).localeCompare(b.code));
@@ -1667,8 +1667,11 @@ function viewCalls(loading){
 /* 登錄人下拉：所有在職員工（人事資料）＋系統帳號 */
 function recorderOpts(cur){
   const list=[],seen=new Set(),add=(n,sub)=>{n=String(n||"").trim();if(!n||seen.has(n))return;seen.add(n);list.push([n,sub])};
-  S.hrEmp.filter(hrActive).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~"))).forEach(e=>add(e.name,[e.code,e.dept].filter(Boolean).join("　")));
-  S.staff.filter(u=>u.active!==false).forEach(u=>add(u.name||u.id,u.code||""));
+  // 廠務部員工預設不列入，除非在員工資料勾選「可擔任登錄人」
+  const plant=e=>/廠務/.test(e.dept||"")&&!permsOf(e).includes("call_rec");
+  const hide=new Set(S.hrEmp.filter(plant).flatMap(e=>[e.name,e.account].filter(Boolean)));
+  S.hrEmp.filter(e=>hrActive(e)&&!plant(e)).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~"))).forEach(e=>add(e.name,[e.code,e.dept].filter(Boolean).join("　")));
+  S.staff.filter(u=>u.active!==false&&!hide.has(u.id)&&!hide.has(u.name)).forEach(u=>add(u.name||u.id,u.code||""));
   if(cur)add(cur,"");
   const mine=myEmp()?.name||me?.name||me?.email||"",v=cur||mine;
   return `<option value="">請選擇</option>`+list.map(([n,sub])=>`<option value="${esc(n)}"${n===v?" selected":""}>${esc(n)}${sub?"（"+esc(sub)+"）":""}</option>`).join("");
