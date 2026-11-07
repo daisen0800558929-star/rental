@@ -724,6 +724,10 @@ async function lookupTaxLive(no){
     // 商業(行號、企業社)登記：經濟部要求同時帶「申登機關」代碼，所以各縣市一起查，取有資料的那一筆
     async()=>{const one=async ag=>{const j=await fetchJSON(G+"7E6AFA72-AD6A-46D3-8681-ED77951D912D"+q("President_No eq "+no+(ag?" and Agency eq "+ag:"")));const r=Array.isArray(j)?j[0]:null;if(r?.Business_Name)return{name:r.Business_Name,status:r.Business_Current_Status_Desc||"",kind:"商號",addr:r.Business_Address||""};throw 0};
       try{return await Promise.any(BIZ_AGENCY.map(one))}catch(e){if(e?.errors?.every(x=>x===0))return null;throw e}},
+    // 財政部營業(稅籍)登記：企業社、行號、分公司都有
+    async()=>{const j=await fetchJSON("https://eip.fia.gov.tw/OAI/api/businessRegistration/"+no);const r=Array.isArray(j)?j[0]:j;if(!r||typeof r!=="object")return null;
+      const key=Object.keys(r).find(k=>/^(businessNm|banNm|businessName|name|營業人名稱)$/i.test(k))||Object.keys(r).find(k=>/(Nm|Name|名稱)$/i.test(k)&&!/head|resp|負責/i.test(k));
+      const n=key&&String(r[key]||"").trim();return n?{name:n,status:r.businessStatus||r.status||"",kind:"稅籍"}:null},
     async()=>{const j=await fetchJSON("https://company.g0v.ronny.tw/api/show/"+no);const d=j?.data;const n=d&&(d["公司名稱"]||d["商業名稱"]||d["名稱"]);return n?{name:Array.isArray(n)?n[0]:n,status:d["公司狀況"]||d["現況"]||"",kind:d["商業名稱"]?"商號":"公司"}:null}
   ];
   let reached=false;
@@ -751,7 +755,9 @@ function bindTax(P,nameF,taxF){
     if(tx.value!==no||ex.checked)return check();
     st.info=r;
     if(r.error){show(`✕ 經濟部查詢網站暫時沒有回應（政府網站偶爾較慢或維護中）　<button class="btn small" type="button" data-retrytax="${P}">重新查詢</button>`,"bad");return}
-    if(!r.found){show("✕ 查無此統編的登記資料，請確認統編是否正確","bad");return}
+    if(!r.found){
+      if(st.manual===no&&nm.value.trim()){show(`已手動確認：線上查不到此統編，使用輸入的公司名稱「${esc(nm.value.trim())}」`);st.ok=true;return}
+      show(`✕ 線上查不到此統編的登記資料，請確認統編是否正確　<button class="btn small" type="button" data-retrytax="${P}">重新查詢</button> <button class="btn small" type="button" data-manualtax="${P}">統編確認無誤，手動輸入名稱</button>`,"bad");return}
     if(normName(r.name)!==normName(nm.value)&&st.lastNo!==no){nm.value=r.name;nm.dispatchEvent(new Event("change",{bubbles:true}))}
     st.lastNo=no;
     const same=normName(r.name)===normName(nm.value);
@@ -759,6 +765,7 @@ function bindTax(P,nameF,taxF){
     else show(`✕ 此統編登記名稱為「${esc(r.name)}」，與輸入的公司名稱不符　<button class="btn small" type="button" data-usename="${P}">改用登記名稱</button>`,"bad");
   };
   form.addEventListener("click",e=>{const rb=e.target.closest(`[data-retrytax="${P}"]`);if(rb){const no=tx.value;delete taxCache[no];check();return}
+    const mb=e.target.closest(`[data-manualtax="${P}"]`);if(mb){st.manual=tx.value;if(!nm.value.trim()){nm.focus();show("請在「公司名稱」輸入正確名稱");return}check();return}
     const b=e.target.closest(`[data-usename="${P}"]`);if(b&&st.info?.name){nm.value=st.info.name;nm.dispatchEvent(new Event("input",{bubbles:true}));check()}});
   let t=null;const later=()=>{clearTimeout(t);t=setTimeout(check,350)};
   tx.addEventListener("input",later);nm.addEventListener("input",later);nm.addEventListener("change",later);
