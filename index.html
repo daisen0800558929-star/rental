@@ -1717,8 +1717,12 @@ function viewTake(loading){
 }
 document.addEventListener("change",e=>{if(e.target.id==="takeP"){takeP=e.target.value;render()}});
 document.addEventListener("click",e=>{if(tab!=="take")return;if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
-  const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
-document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
+  const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
+document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
+// 我的接案明細：打開客戶資料（含成交狀態、接案業務、報價紀錄）；沒有客戶資料時才開通聯紀錄
+function openTakeRow(id){const c=S.calls.find(x=>x.id===id);if(!c)return;
+  const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
+  if(k)customerForm(k);else callForm(c,true)}
 function viewCalls(loading){
   const qq=q.trim().toLowerCase();
   const t=todayStr(),wk=addDaysStr(t,-6),inRange=c=>{const d=String(c.at||"").slice(0,10);return callRange==="all"||(callRange==="today"&&d===t)||(callRange==="week"&&d>=wk&&d<=t)||(callRange==="month"&&d.slice(0,7)===t.slice(0,7))};
