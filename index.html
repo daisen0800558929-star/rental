@@ -225,6 +225,15 @@ html,body{margin:0}
 .modlist{display:grid;gap:0}
 .modlist .row{cursor:default;grid-template-columns:minmax(0,1fr) auto}
 .modlist .row[data-mod]{cursor:pointer}
+/* 選擇部門 */
+.dept-main{padding-block:26px 48px;display:grid;gap:18px;justify-items:center}
+.dept-main h2{margin:0;font-size:20px;text-align:center}
+.dept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(560px,100%)}
+.dept-btn{appearance:none;border:2px solid var(--c);background:var(--surface);color:var(--text);border-radius:14px;min-height:118px;font:inherit;font-size:22px;font-weight:700;letter-spacing:.12em;cursor:pointer;display:grid;place-items:center;gap:4px;padding:14px;transition:transform .12s,background .12s}
+.dept-btn small{font-size:12.5px;font-weight:400;letter-spacing:0;color:var(--muted)}
+.dept-btn:hover,.dept-btn:focus-visible{background:color-mix(in srgb,var(--c) 14%,var(--surface));transform:translateY(-2px)}
+.dept-btn.on{background:color-mix(in srgb,var(--c) 18%,var(--surface))}
+@media (max-width:420px){.dept-btn{min-height:104px;font-size:20px}}
 /* 功能選單 */
 .menu-top{background:var(--surface);border-bottom:1px solid var(--line)}
 .menu-top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px;flex-wrap:wrap}
@@ -275,10 +284,17 @@ html,body{margin:0}
     <button class="btn" type="button" id="resetBtn">忘記密碼</button>
   </form>
 </div>
+<div id="deptView" hidden>
+  <div class="menu-top"><div class="wrap">
+    <img src="logo.png" alt="大森節能">
+    <div class="userbox"><span class="sub" id="whoami3"></span><button class="btn small" id="logoutBtn3" type="button">登出</button></div>
+  </div></div>
+  <div class="wrap"><main class="dept-main"><h2>請選擇部門</h2><div class="dept-grid" id="deptGrid"></div><div class="wheel-note">選好部門後進入 ERP 功能選單，之後可按「切換部門」更換</div></main></div>
+</div>
 <div id="menuView" hidden>
   <div class="menu-top"><div class="wrap">
     <img src="logo.png" alt="大森節能">
-    <div class="userbox"><span class="sub" id="whoami2"></span><button class="btn small" id="accBtn" type="button" hidden>帳號管理</button><button class="btn small" id="logoutBtn2" type="button">登出</button></div>
+    <div class="userbox"><button class="btn small" id="deptBtn" type="button">切換部門</button><span class="sub" id="whoami2"></span><button class="btn small" id="accBtn" type="button" hidden>帳號管理</button><button class="btn small" id="logoutBtn2" type="button">登出</button></div>
   </div></div>
   <div class="wrap"><main class="menu-main"><div class="wheel-wrap"><div class="wheel" id="tiles"></div></div><div class="wheel-note">點選圓圈進入功能　點中間 ERP 查看內容分析　淡色為建置中</div></main></div>
 </div>
@@ -2310,7 +2326,7 @@ function renderMenu(){
       <span>${m.lb.split("|").map(esc).join("<br>")}</span>${n?`<span class="badge mono">${n}</span>`:""}</button>`}).join("");
   el.innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true">${arcs}</svg><button class="hub" type="button" data-hub aria-label="開啟全部項目內容分析"><b>ERP</b><small>大森節能</small><small class="hub-sub">內容分析</small></button>${nodes}`;
 }
-function showMenu(){$("#appView").hidden=true;$("#menuView").hidden=false;if(dlg.open)dlg.close();renderMenu();window.scrollTo(0,0)}
+function showMenu(){$("#appView").hidden=true;$("#deptView").hidden=true;$("#menuView").hidden=false;if(dlg.open)dlg.close();renderMenu();window.scrollTo(0,0)}
 function openModule(k){
   const m=MODULES.find(x=>x.k===k);if(!m)return;
   if(!m.go){toast("「"+m.nm+"」功能建置中，敬請期待");return}
@@ -2325,6 +2341,19 @@ $("#tiles").addEventListener("click",e=>{if(e.target.closest("[data-hub]")){open
 $("#menuBtn").onclick=showMenu;
 $("#logoutBtn2").onclick=()=>signOut(auth);
 $("#accBtn").onclick=()=>{$("#menuView").hidden=true;$("#appView").hidden=false;tab="accounts";q="";render();window.scrollTo(0,0)};
+
+/* ---------- 選擇部門 ---------- */
+const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
+let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
+const deptName=k=>(DEPTS.find(d=>d[0]===k)||[])[1]||"";
+function showDept(){$("#appView").hidden=true;$("#menuView").hidden=true;$("#deptView").hidden=false;if(dlg.open)dlg.close();
+  $("#deptGrid").innerHTML=DEPTS.map(([k,n,c])=>`<button class="dept-btn${k===curDept?" on":""}" type="button" data-dept="${k}" style="--c:${c}">${esc(n)}${k===curDept?"<small>上次選擇</small>":""}</button>`).join("");
+  window.scrollTo(0,0)}
+function pickDept(k){curDept=k;try{localStorage.setItem("daisenDept",k)}catch(e){}
+  $("#deptBtn").textContent=deptName(k)+"　切換部門";$("#deptView").hidden=true;showMenu()}
+$("#deptGrid").addEventListener("click",e=>{const b=e.target.closest("[data-dept]");if(b)pickDept(b.dataset.dept)});
+$("#deptBtn").onclick=showDept;
+$("#logoutBtn3").onclick=()=>signOut(auth);
 
 /* ---------- 進入首頁 ---------- */
 (()=>{const sp=$("#splash");let gone=false;
@@ -2384,14 +2413,14 @@ $("#resetBtn").onclick=async()=>{const em=$("#loginEmail").value.trim();if(!em){
 dlg.addEventListener("close",()=>render());
 onAuthStateChanged(auth,async u=>{
   stopData();
-  if(!u){$("#appView").hidden=true;$("#menuView").hidden=true;$("#loginView").hidden=false;return}
+  if(!u){$("#appView").hidden=true;$("#menuView").hidden=true;$("#deptView").hidden=true;$("#loginView").hidden=false;return}
   const email=String(u.email).toLowerCase();
   let info=null;
   try{const snap=await getDoc(doc(fs,"staff",email));if(snap.exists())info=snap.data()}catch(err){}
   if(email===OWNER)info={...(info||{}),role:"admin",active:true};
   if(!info||info.active===false){await signOut(auth);loginErr(info?"此帳號已停用，請聯絡管理員。":"此帳號尚未開通，請聯絡管理員。");return}
   me={email,uid:u.uid,name:info.name||"",mobile:info.mobile||"",role:ROLES[info.role]?info.role:"staff"};
-  $("#whoami").textContent=$("#whoami2").textContent=(me.name||email)+" · "+ROLES[me.role];$("#loginView").hidden=true;$("#appView").hidden=true;$("#menuView").hidden=false;startData();
+  $("#whoami").textContent=$("#whoami2").textContent=$("#whoami3").textContent=(me.name||email)+" · "+ROLES[me.role];$("#loginView").hidden=true;$("#appView").hidden=true;$("#menuView").hidden=true;showDept();startData();
 });
 </script>
 </body>
