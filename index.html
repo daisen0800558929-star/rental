@@ -1667,14 +1667,14 @@ function callTake(c){
   return h>24?{st:"late"}:{st:"wait"};
 }
 const takeHtml=c=>{const r=callTake(c),btn=canWrite&&canQuote()&&r.who!==myName()?`<button class="btn small${r.st==="ok"?"":" primary"}" type="button" data-takecall="${esc(c.id)}">我要接案</button>`:"";return btn+(r.st==="ok"?`<span class="m">接案狀況：<b style="color:var(--ok)">${esc(r.who)}</b></span>`:r.st==="late"?`<span class="m">接案狀況：<b style="color:var(--bad)">接案超時</b></span>`:`<span class="m">接案狀況：<b style="color:var(--warn)">待處理</b></span>`)};
-async function takeCall(c){
+async function takeCall(c,confirmed){
   const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
-  const o=ownerBlock(k,c.company);if(o){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能接案。如需轉移，請聯絡管理員。`});return}
-  if(!confirm(`確定由「${myName()}」接案：${c.company||c.contact||"此通聯"}？`))return;
+  const o=ownerBlock(k,c.company);if(o){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能接案。如需轉移，請聯絡管理員。`});return false}
+  if(!confirmed&&!confirm(`確定由「${myName()}」接案：${c.company||c.contact||"此通聯"}？`))return false;
   const now=new Date().toISOString();
   try{await db.doc("calls/"+c.id).update({takenBy:myName(),takenAt:now});
     if(k&&(!k.owner||isAdm()))await db.doc("customers/"+k.id).update({owner:myName(),ownedAt:now});
-    toast("已接案："+(c.company||c.contact||""))}catch(e){showErr(e)}
+    toast("已接案："+(c.company||c.contact||""));return true}catch(e){showErr(e);return false}
 }
 setInterval(()=>{if(tab==="calls"&&!dlg.open&&!document.hidden)render()},300000);
 function viewCalls(loading){
@@ -1696,11 +1696,15 @@ const recBox=cur=>`<label class="full">登錄人<input value="${esc(cur||myName(
 // 廠務部員工預設不能登錄客戶，除非在員工資料勾選「可擔任登錄人」
 const canRecord=()=>{if(isAdm())return true;const e=myEmp();return !(e&&/廠務/.test(e.dept||"")&&!permsOf(e).includes("call_rec"))};
 const recDenied=()=>{showErr({message:"廠務部同仁需要管理員在「人事管理 → 員工資料」勾選「可擔任登錄人」後，才能登錄客戶資料。"})};
-function callForm(src){
+function callForm(src,focusTake){
   const isNew=!src,c=src||{at:nowLocal(),receiver:me.email};
+  const tk=!isNew?callTake(c):null,showTake=!isNew&&canWrite&&canQuote();
   const staffOpts=S.staff.filter(u=>u.active!==false||u.id===c.receiver).sort((a,b)=>String(a.code||"~").localeCompare(String(b.code||"~")));
   if(!staffOpts.some(u=>u.id===me.email))staffOpts.unshift({id:me.email,name:me.name,code:""});
   openDlg(`<h3>${isNew?"新增客戶通聯":"編輯客戶通聯"}</h3>
+  ${!isNew?`<div class="banner" id="takeBox" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--accent-soft);color:var(--fg)">
+    <span>接案狀況：${tk.st==="ok"?`<b style="color:var(--ok)">${esc(tk.who)}</b>`:tk.st==="late"?'<b style="color:var(--bad)">接案超時</b>':'<b style="color:var(--warn)">待處理</b>'}</span>
+    ${showTake&&tk.who!==myName()?`<span style="flex:1"></span><button class="btn primary" type="button" id="takeNow">我要接案</button><span class="note" style="width:100%">請先看完下方的通聯內容，確認自己能處理後再按「我要接案」正式接案。</span>`:""}</div>`:""}
   <datalist id="custList">${S.customers.map(k=>`<option value="${esc(k.name)}">`).join("")}</datalist>
   <div class="grid2">
     ${recBox(c.recorder)}
@@ -1772,9 +1776,10 @@ function callForm(src){
       if(!o.county){toast("聽到：「"+t+"」，請從縣市開始說，例如：彰化縣彰化市自強南路537號");return}
       F.county.value=o.county;fillDis(o.district);F.road.value=o.road||"";F.detail.value=o.detail||"";prev();toast("已填入地址，請確認")},b)}}
   if(!isNew&&canWrite)confirmDelete("#del","通聯紀錄",()=>db.doc("calls/"+c.id).delete());
+  {const b=$("#takeNow");if(b){b.onclick=async()=>{b.disabled=true;if(await takeCall(c,true))dlg.close();else b.disabled=false};if(focusTake)$("#takeBox").scrollIntoView({block:"start"})}}
 }
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){callForm(null);return}
-  {const tb=e.target.closest("[data-takecall]");if(tb){e.stopPropagation();const c=S.calls.find(x=>x.id===tb.dataset.takecall);if(c)takeCall(c);return}}
+  {const tb=e.target.closest("[data-takecall]");if(tb){e.stopPropagation();const c=S.calls.find(x=>x.id===tb.dataset.takecall);if(c)callForm(c,true);return}}
   const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 $("#main").addEventListener("keydown",e=>{if(e.key!=="Enter")return;const r=e.target.closest("[data-call]");if(r){const c=S.calls.find(x=>x.id===r.dataset.call);if(c)callForm(c)}});
 
