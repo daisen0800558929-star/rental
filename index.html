@@ -2317,14 +2317,14 @@ function moduleStat(m){
 }
 function renderMenu(){
   const el=$("#tiles");if(!el||$("#menuView").hidden)return;
-  const N=MODULES.length,R=40,pos=i=>{const a=(-90+i*360/N)*Math.PI/180;return[50+R*Math.cos(a),50+R*Math.sin(a)]};
+  const MODS=deptMods(),N=MODS.length,R=40,pos=i=>{const a=(-90+i*360/N)*Math.PI/180;return[50+R*Math.cos(a),50+R*Math.sin(a)]};
   const col=i=>WHEEL_COLORS[i%WHEEL_COLORS.length];
-  const arcs=MODULES.map((m,i)=>{const[x1,y1]=pos(i),[x2,y2]=pos((i+1)%N);return `<path d="M${x1} ${y1} A${R} ${R} 0 0 1 ${x2} ${y2}" fill="none" stroke="${col(i+1)}" stroke-width="1.6"/>`}).join("");
-  const nodes=MODULES.map((m,i)=>{
+  const arcs=MODS.map((m,i)=>{const[x1,y1]=pos(i),[x2,y2]=pos((i+1)%N);return `<path d="M${x1} ${y1} A${R} ${R} 0 0 1 ${x2} ${y2}" fill="none" stroke="${col(i+1)}" stroke-width="1.6"/>`}).join("");
+  const nodes=MODS.map((m,i)=>{
     const[x,y]=pos(i),locked=db&&((m.k==="quote"&&!canQuote())||(m.k==="inv"&&!invCan("view"))),ready=!!m.go&&!locked,stat=locked?"需要權限":ready?moduleStat(m):"建置中",n=m.k==="remind"&&db?remindList().length:0;
     return `<button class="node${ready?"":" soon"}" type="button" data-mod="${m.k}" style="--c:${col(i)};left:${x}%;top:${y}%" title="${esc(m.nm+"："+m.ds+(stat?"（"+stat+"）":""))}" aria-label="${esc(m.nm+(ready?"":"（建置中）"))}">
       <span>${m.lb.split("|").map(esc).join("<br>")}</span>${n?`<span class="badge mono">${n}</span>`:""}</button>`}).join("");
-  el.innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true">${arcs}</svg><button class="hub" type="button" data-hub aria-label="開啟全部項目內容分析"><b>ERP</b><small>大森節能</small><small class="hub-sub">內容分析</small></button>${nodes}`;
+  el.innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true">${N===1?`<circle cx="50" cy="50" r="${R}" fill="none" stroke="${col(0)}" stroke-width="1.6"/>`:arcs}</svg><button class="hub" type="button" data-hub aria-label="開啟全部項目內容分析"><b>ERP</b><small>大森節能</small><small class="hub-sub">內容分析</small></button>${nodes}`;
 }
 function showMenu(){$("#appView").hidden=true;$("#deptView").hidden=true;$("#menuView").hidden=false;if(dlg.open)dlg.close();renderMenu();window.scrollTo(0,0)}
 function openModule(k){
@@ -2343,6 +2343,9 @@ $("#logoutBtn2").onclick=()=>signOut(auth);
 $("#accBtn").onclick=()=>{$("#menuView").hidden=true;$("#appView").hidden=false;tab="accounts";q="";render();window.scrollTo(0,0)};
 
 /* ---------- 選擇部門 ---------- */
+// 各部門在圓形選單看得到的功能（沒列的部門顯示全部）
+const DEPT_MODS={admin:["cust"]};
+const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES};
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
 const deptName=k=>(DEPTS.find(d=>d[0]===k)||[])[1]||"";
