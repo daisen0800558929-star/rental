@@ -1679,23 +1679,44 @@ async function takeCall(c,confirmed){
     toast("已接案："+(c.company||c.contact||""));return true}catch(e){showErr(e);return false}
 }
 setInterval(()=>{if((tab==="calls"||tab==="take")&&!dlg.open&&!document.hidden)render()},300000);
-let takeF="open";
+let takeP="month";
+/* 接案狀況：登入業務個人的接案分析 */
 function viewTake(loading){
-  const all=S.calls.map(c=>({c,r:callTake(c)})).sort((a,b)=>String(b.c.at).localeCompare(String(a.c.at)));
-  const G={open:x=>x.r.st!=="ok",wait:x=>x.r.st==="wait",late:x=>x.r.st==="late",mine:x=>x.r.st==="ok"&&x.r.who===myName(),done:x=>x.r.st==="ok"};
-  const L=[["open","未接案"],["wait","待處理"],["late","接案超時"],["mine","我的接案"],["done","已接案"]];
-  const n=k=>all.filter(G[k]).length;
-  const rows=all.filter(G[takeF]).map(({c,r})=>`<div class="row" data-takeopen="${esc(c.id)}" tabindex="0">
-    <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}${c.mobile?" · "+esc(c.mobile):c.tel?" · "+esc(c.tel):""}</span></div>
-    <div class="m"><span class="mono">${esc(String(c.at||"").replace("T"," "))}</span> · ${esc(c.need||"")}${c.county?" · "+esc(c.county+(c.district||"")):""}${c.content?" · "+esc(c.content.slice(0,40)):""}</div></div>
-    <div class="r">${r.st==="ok"?`<span class="pill ok">${esc(r.who)}</span>`:r.st==="late"?'<span class="pill bad">接案超時</span>':'<span class="pill warn">待處理</span>'}</div></div>`);
-  return `<div class="cards" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px">
-    ${[["wait","待處理","var(--warn)"],["late","接案超時","var(--bad)"],["mine","我的接案","var(--ok)"]].map(([k,t,c])=>`<button type="button" class="card" data-takef="${k}" style="text-align:center;padding:12px;cursor:pointer;border-color:${takeF===k?c:"var(--line)"}"><div class="m">${t}</div><div class="mono" style="font-size:26px;font-weight:700;color:${c}">${n(k)}</div></button>`).join("")}</div>
-  <div class="seg" role="group">${L.map(([k,v])=>`<button type="button" data-takef="${k}" aria-pressed="${k===takeF}">${v}（${n(k)}）</button>`).join("")}</div>
-  <div class="note">點一筆通聯可查看內容，確認能處理後在上方按「我要接案」。</div>
-  <div class="list">${emptyOr(rows,loading,takeF==="mine"?"目前沒有你接案的通聯。":takeF==="done"?"還沒有已接案的通聯。":"目前沒有待接案的通聯 👍")}</div>`;
+  const nm=myName(),t=todayStr(),wk=addDaysStr(t,-6);
+  const inP=d=>{d=String(d||"").slice(0,10);return takeP==="all"||(takeP==="week"&&d>=wk&&d<=t)||(takeP==="month"&&d.slice(0,7)===t.slice(0,7))||(takeP==="year"&&d.slice(0,4)===t.slice(0,4))};
+  const custOfCall=c=>S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
+  const qOf=c=>{const k=custOfCall(c);return S.quotes.filter(x=>x.sales===nm&&((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,10)>=String(c.at||"").slice(0,10))
+    .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)))};
+  const mine=S.calls.filter(c=>inP(c.at)&&callTake(c).who===nm).map(c=>{const qs=qOf(c),st=qs.some(x=>x.status==="signed")?"signed":qs.some(x=>x.status==="lost")&&!qs.some(x=>x.status!=="lost")?"lost":qs.length?"quoted":"none";
+    return{c,qs,st,amt:qs.reduce((a,x)=>a+quoteCalc(x).total,0),won:qs.filter(x=>x.status==="signed").reduce((a,x)=>a+quoteCalc(x).total,0)}}).sort((a,b)=>String(b.c.at).localeCompare(String(a.c.at)));
+  const N=mine.length,quoted=mine.filter(x=>x.st!=="none").length,signed=mine.filter(x=>x.st==="signed").length,lost=mine.filter(x=>x.st==="lost").length;
+  const amt=mine.reduce((a,x)=>a+x.amt,0),won=mine.reduce((a,x)=>a+x.won,0);
+  const resp=mine.filter(x=>x.c.takenBy===nm&&x.c.takenAt).map(x=>(new Date(x.c.takenAt)-new Date(x.c.at))/36e5).filter(h=>h>=0);
+  const avg=resp.length?resp.reduce((a,h)=>a+h,0)/resp.length:null;
+  const dropped=S.calls.filter(c=>c.releasedFrom===nm&&inP(c.releasedAt)).length;
+  const open=S.calls.filter(c=>callTake(c).st!=="ok"),late=open.filter(c=>callTake(c).st==="late").length;
+  const pct=(a,b)=>b?Math.round(a/b*100)+"%":"—";
+  const tile=(t,v,sub,col)=>`<div class="card" style="padding:12px;text-align:center"><div class="m">${t}</div><div class="mono" style="font-size:24px;font-weight:700;${col?"color:"+col:""}">${v}</div>${sub?`<div class="m" style="font-size:12px">${sub}</div>`:""}</div>`;
+  const bar=(t,v,max,col)=>`<div style="display:grid;grid-template-columns:72px 1fr 44px;gap:8px;align-items:center;margin:6px 0"><span class="m">${t}</span><span style="height:14px;border-radius:7px;background:var(--line);overflow:hidden"><span style="display:block;height:100%;width:${max?Math.max(v?4:0,v/max*100):0}%;background:${col};border-radius:7px"></span></span><b class="mono" style="text-align:right">${v}</b></div>`;
+  const ST={none:["尚未報價","warn"],quoted:["已報價","mute"],signed:["已成交","ok"],lost:["未成交","bad"]};
+  const rows=mine.map(({c,qs,st,amt})=>`<div class="row" data-takeopen="${esc(c.id)}" tabindex="0">
+    <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}</span></div>
+    <div class="m"><span class="mono">${esc(String(c.at||"").slice(0,10))}</span> · ${esc(c.need||"")}${qs.length?" · 報價 "+qs.length+" 張":""}</div></div>
+    <div class="r"><span class="pill ${ST[st][1]}">${ST[st][0]}</span>${amt?`<span class="mono m">${money(amt)}</span>`:""}</div></div>`);
+  return `<div class="note">業務：<b>${esc(nm)}</b></div>
+  <div class="toolbar"><select id="takeP" style="flex:0 1 160px">${[["week","近 7 天"],["month","本月"],["year","今年"],["all","全部"]].map(([k,v])=>opt(k,v,k===takeP)).join("")}</select><span style="flex:1"></span>
+    <button class="btn${open.length?" primary":""}" type="button" data-gocalls>可接案件 ${open.length} 筆${late?"（超時 "+late+"）":""}</button></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0">
+    ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("尚未報價",N-quoted,"",N-quoted?"var(--warn)":"")}
+    ${tile("報價金額",money(amt))}${tile("成交金額",money(won),"","var(--ok)")}${tile("平均接案時間",avg==null?"—":avg<1?Math.round(avg*60)+" 分":avg.toFixed(1)+" 時","從來電到按接案")}${tile("放棄接案",dropped,"",dropped?"var(--bad)":"")}
+  </div>
+  <div class="card" style="padding:12px 16px;margin-bottom:12px"><h3 style="margin:0 0 6px">接案 → 報價 → 成交</h3>
+    ${bar("接案",N,N,"var(--accent)")}${bar("已報價",quoted,N,"#9bbb59")}${bar("已成交",signed,N,"var(--ok)")}${bar("未成交",lost,N,"var(--bad)")}</div>
+  <h3 style="margin:14px 0 6px">我的接案明細</h3>
+  <div class="list">${emptyOr(rows,loading,"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>`;
 }
-document.addEventListener("click",e=>{if(tab!=="take")return;const f=e.target.closest("[data-takef]");if(f){takeF=f.dataset.takef;render();return}
+document.addEventListener("change",e=>{if(e.target.id==="takeP"){takeP=e.target.value;render()}});
+document.addEventListener("click",e=>{if(tab!=="take")return;if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
   const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
 document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r){const c=S.calls.find(x=>x.id===r.dataset.takeopen);if(c)callForm(c,true)}});
 function viewCalls(loading){
@@ -2405,7 +2426,7 @@ const MODULES=[
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
   {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
   {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"},
-  {k:"take",lb:"接案|狀況",nm:"接案狀況",ds:"客戶通聯的待處理、接案超時與已接案",go:"take",dept:"sales"},
+  {k:"take",lb:"接案|狀況",nm:"接案狀況",ds:"登入業務個人的接案、報價與成交分析",go:"take",dept:"sales"},
   {k:"jobsales",lb:"業務工作|說明書",nm:"業務工作說明書",ds:"業務部門的職責、日常工作與作業規範",go:"job_sales",dept:"sales"}
 ];
 function moduleStat(m){
