@@ -1679,7 +1679,7 @@ async function takeCall(c,confirmed){
     toast("已接案："+(c.company||c.contact||""));return true}catch(e){showErr(e);return false}
 }
 setInterval(()=>{if((tab==="calls"||tab==="take")&&!dlg.open&&!document.hidden)render()},300000);
-let takeP="month";
+let takeP="month",takeCat="";
 /* 接案狀況：登入業務個人的接案分析 */
 function viewTake(loading){
   const nm=myName(),t=todayStr(),wk=addDaysStr(t,-6);
@@ -1698,26 +1698,34 @@ function viewTake(loading){
   const pct=(a,b)=>b?Math.round(a/b*100)+"%":"—";
   const tile=(t,v,sub,col)=>`<div class="card" style="padding:12px;text-align:center"><div class="m">${t}</div><div class="mono" style="font-size:24px;font-weight:700;${col?"color:"+col:""}">${v}</div>${sub?`<div class="m" style="font-size:12px">${sub}</div>`:""}</div>`;
   const bar=(t,v,max,col)=>`<div style="display:grid;grid-template-columns:72px 1fr 44px;gap:8px;align-items:center;margin:6px 0"><span class="m">${t}</span><span style="height:14px;border-radius:7px;background:var(--line);overflow:hidden"><span style="display:block;height:100%;width:${max?Math.max(v?4:0,v/max*100):0}%;background:${col};border-radius:7px"></span></span><b class="mono" style="text-align:right">${v}</b></div>`;
-  const ST={none:["尚未報價","warn"],quoted:["已報價","mute"],signed:["已成交","ok"],lost:["未成交","bad"]};
-  const rows=mine.map(({c,qs,st,amt})=>`<div class="row" data-takeopen="${esc(c.id)}" tabindex="0">
+  const ST={none:["待報價","warn"],quoted:["持續追蹤","info"],signed:["已成交","ok"],lost:["戰敗／放棄","bad"],drop:["戰敗／放棄","bad"]};
+  // 我放棄的案件也列入「戰敗／放棄」
+  const drops=S.calls.filter(c=>c.releasedFrom===nm&&inP(c.releasedAt||c.at)&&callTake(c).who!==nm).map(c=>({c,qs:[],st:"drop",amt:0,won:0}));
+  const CAT=[["signed","已成交","var(--ok)",x=>x.st==="signed"],["none","待報價","var(--warn)",x=>x.st==="none"],["quoted","持續追蹤","var(--accent)",x=>x.st==="quoted"],["lost","戰敗／放棄","var(--bad)",x=>x.st==="lost"||x.st==="drop"]];
+  const pool=[...mine,...drops],cat=CAT.find(k=>k[0]===takeCat);
+  const list=cat?pool.filter(cat[3]):mine;
+  const rows=list.map(({c,qs,st,amt})=>`<div class="row" data-takeopen="${esc(c.id)}" tabindex="0">
     <div><div class="t">${esc(c.company||c.contact||"（未填公司）")}　<span class="m">${esc(c.contact||"")}</span></div>
     <div class="m"><span class="mono">${esc(String(c.at||"").slice(0,10))}</span> · ${esc(c.need||"")}${qs.length?" · 報價 "+qs.length+" 張":""}</div></div>
-    <div class="r"><span class="pill ${ST[st][1]}">${ST[st][0]}</span>${amt?`<span class="mono m">${money(amt)}</span>`:""}</div></div>`);
+    <div class="r"><span class="pill ${ST[st][1]}" ${st==="quoted"?'style="background:var(--accent-soft);color:var(--accent)"':""}>${st==="drop"?"已放棄":ST[st][0]}</span>${amt?`<span class="mono m">${money(amt)}</span>`:""}</div></div>`);
+  const catBtns=`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0 10px">${CAT.map(([k,t,col,f])=>`<button type="button" data-takecat="${k}" class="card" style="padding:8px 4px;text-align:center;cursor:pointer;border:2px solid ${takeCat===k?col:"var(--line)"}"><div style="color:${col};font-weight:700;font-size:13.5px">${t}</div><div class="mono" style="font-size:20px;font-weight:700;color:${col}">${pool.filter(f).length}</div></button>`).join("")}</div>`;
+  const sumT=cat?`<div class="card" style="padding:10px 14px;margin-bottom:8px;border-left:4px solid ${cat[2]};display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px"><span><b style="color:${cat[2]}">${cat[1]}分類總表</b>　共 <b class="mono">${list.length}</b> 件${list.some(x=>x.amt)?`　報價合計 <b class="mono">${money(list.reduce((a,x)=>a+x.amt,0))}</b>`:""}${cat[0]==="signed"?`　成交合計 <b class="mono" style="color:var(--ok)">${money(list.reduce((a,x)=>a+x.won,0))}</b>`:""}
+</span><span style="flex:1"></span><button class="btn small" type="button" data-takecat="">顯示全部</button></div>`:"";
   return `<div class="note">業務：<b>${esc(nm)}</b></div>
   <div class="toolbar"><select id="takeP" style="flex:0 1 160px">${[["week","近 7 天"],["month","本月"],["year","今年"],["all","全部"]].map(([k,v])=>opt(k,v,k===takeP)).join("")}</select><span style="flex:1"></span>
     <button class="btn${open.length?" primary":""}" type="button" data-gocalls>可接案件 ${open.length} 筆${late?"（超時 "+late+"）":""}</button></div>
-  <h3 style="margin:14px 0 6px">我的接案明細</h3>
-  <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
+  <h3 style="margin:14px 0 6px">我的接案明細</h3>${catBtns}${sumT}
+  <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0">
-    ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("尚未報價",N-quoted,"",N-quoted?"var(--warn)":"")}
+    ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("待報價",N-quoted,"",N-quoted?"var(--warn)":"")}
     ${tile("報價金額",money(amt))}${tile("成交金額",money(won),"","var(--ok)")}${tile("平均接案時間",avg==null?"—":avg<1?Math.round(avg*60)+" 分":avg.toFixed(1)+" 時","從來電到按接案")}${tile("放棄接案",dropped,"",dropped?"var(--bad)":"")}
   </div>
   <div class="card" style="padding:12px 16px;margin-bottom:12px"><h3 style="margin:0 0 6px">接案 → 報價 → 成交</h3>
-    ${bar("接案",N,N,"var(--accent)")}${bar("已報價",quoted,N,"#9bbb59")}${bar("已成交",signed,N,"var(--ok)")}${bar("未成交",lost,N,"var(--bad)")}</div>
+    ${bar("接案",N,N,"var(--accent)")}${bar("已報價",quoted,N,"#9bbb59")}${bar("已成交",signed,N,"var(--ok)")}${bar("戰敗",lost,N,"var(--bad)")}</div>
 `;
 }
 document.addEventListener("change",e=>{if(e.target.id==="takeP"){takeP=e.target.value;render()}});
-document.addEventListener("click",e=>{if(tab!=="take")return;if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
+document.addEventListener("click",e=>{if(tab!=="take")return;{const b=e.target.closest("[data-takecat]");if(b){takeCat=takeCat===b.dataset.takecat?"":b.dataset.takecat;render();return}}if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
   const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
 document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
 // 我的接案明細：打開客戶資料（含成交狀態、接案業務、報價紀錄）；沒有客戶資料時才開通聯紀錄
