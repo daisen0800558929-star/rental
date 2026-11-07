@@ -393,7 +393,7 @@ function render(){
   if(tab.startsWith("inv_"))h=viewInv(tab);
   if(tab==="quotes")h=canQuote()?viewQuotes(loading):'<div class="card"><div class="empty">你沒有報價系統的權限。請管理員到「人事管理 → 員工資料」勾選「報價系統」，並連結你的登入帳號。</div></div>';
   if(tab==="analysis")h=viewAnalysis(loading);
-  if(tab==="job_admin")h=viewJobDesc("admin");
+  if(tab==="job_admin")h=viewJobDesc("admin",true);
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
@@ -2414,10 +2414,10 @@ function viewJobs(){
   return `<div class="chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${DEPTS.map(([d,n,c])=>`<button type="button" class="btn small${d===k?" primary":""}" data-jobdept="${d}" style="border-color:${c}">${esc(n)}${S.jobs?.[d]?"":"（範本）"}</button>`).join("")}</div>`+viewJobDesc(k);
 }
 function jobData(k){const v=S.jobs?.[k];if(!v||!v.sections)return JOB_DEFAULT[k];return{...v,sections:v.sections.map(x=>Array.isArray(x)?x:[x.t||"",x.b||""])}}
-function viewJobDesc(k){
-  const d=jobData(k),adm=canJobEdit(),isTpl=!S.jobs?.[k];
+function viewJobDesc(k,ro){
+  const d=jobData(k),adm=canJobEdit()&&!ro,isTpl=!S.jobs?.[k];
   return `<div class="toolbar"><span style="flex:1"></span><button class="btn" type="button" data-jobprint>列印</button>${adm?`<button class="btn primary" type="button" data-jobedit="${k}">編輯說明書</button>`:""}</div>
-  ${isTpl?`<div class="note">這是系統提供的範本內容${adm?"，請按「編輯說明書」依公司實際情況修改後儲存":"，管理員修改後會更新"}。</div>`:""}
+  ${ro?`<div class="note">內容由「人事管理 → 工作說明書」統一設定，管理員修改後這裡會同步更新。${isTpl?"（目前為範本內容）":""}</div>`:isTpl?`<div class="note">這是系統提供的範本內容${adm?"，請按「編輯說明書」依公司實際情況修改後儲存":"，管理員修改後會更新"}。</div>`:""}
   <div class="card vis jobdoc"><div><h3>${esc(d.title||"工作說明書")}</h3>
    <div class="grid2" style="gap:4px 16px;font-size:14px">${[["部門",d.dept],["職稱",d.role],["直屬主管",d.boss],["工作地點",d.place]].filter(x=>x[1]).map(([a,b])=>`<div><span class="m">${a}：</span>${esc(b)}</div>`).join("")}</div></div>
    ${(d.sections||[]).map(([t,b])=>`<div><h3>${esc(t)}</h3><p style="white-space:pre-wrap;margin:0">${esc(b)}</p></div>`).join("")}
