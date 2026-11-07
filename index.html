@@ -1657,13 +1657,14 @@ $("#main").addEventListener("change",e=>{if(e.target.id==="callRange"){callRange
 /* 通聯接案狀況：已接案顯示最近一次接案的業務；未接案 24 小時內為待處理，超過為接案超時 */
 function callTake(c){
   const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null);
-  const t0=String(c.at||"");
-  const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
+  const t0=String(c.at||""),rel=String(c.releasedAt||"");
+  const qs=S.quotes.filter(x=>((k&&x.customerId===k.id)||(c.company&&normName(x.cust?.name)===normName(c.company)))&&String(x.createdAt||x.date||"").slice(0,16)>=t0.slice(0,10)&&(!rel||String(x.createdAt||"")>rel)).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
   // 最近一次接案：「我要接案」與報價單取時間較新的
   if(c.takenBy&&(!qs[0]?.sales||String(c.takenAt||"")>=String(qs[0].createdAt||qs[0].date||"")))return{st:"ok",who:c.takenBy};
   if(qs[0]?.sales)return{st:"ok",who:qs[0].sales};
-  if(k?.owner)return{st:"ok",who:k.owner};
-  const h=(Date.now()-new Date(t0).getTime())/36e5;
+  if(k?.owner&&(!rel||String(k.ownedAt||"")>rel))return{st:"ok",who:k.owner};
+  // 放棄接案後，從放棄的時間重新計算 24 小時
+  const h=(Date.now()-new Date(rel||t0).getTime())/36e5;
   return h>24?{st:"late"}:{st:"wait"};
 }
 const takeHtml=c=>{const r=callTake(c),btn=canWrite&&canQuote()&&r.who!==myName()?`<button class="btn small${r.st==="ok"?"":" primary"}" type="button" data-takecall="${esc(c.id)}">我要接案</button>`:"";return btn+(r.st==="ok"?`<span class="m">接案狀況：<b style="color:var(--ok)">${esc(r.who)}</b></span>`:r.st==="late"?`<span class="m">接案狀況：<b style="color:var(--bad)">接案超時</b></span>`:`<span class="m">接案狀況：<b style="color:var(--warn)">待處理</b></span>`)};
@@ -1704,7 +1705,9 @@ function callForm(src,focusTake){
   openDlg(`<h3>${isNew?"新增客戶通聯":"編輯客戶通聯"}</h3>
   ${!isNew?`<div class="banner" id="takeBox" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--accent-soft);color:var(--fg)">
     <span>接案狀況：${tk.st==="ok"?`<b style="color:var(--ok)">${esc(tk.who)}</b>`:tk.st==="late"?'<b style="color:var(--bad)">接案超時</b>':'<b style="color:var(--warn)">待處理</b>'}</span>
-    ${showTake&&tk.who!==myName()?`<span style="flex:1"></span><button class="btn primary" type="button" id="takeNow">我要接案</button><span class="note" style="width:100%">請先看完下方的通聯內容，確認自己能處理後再按「我要接案」正式接案。</span>`:""}</div>`:""}
+    ${canWrite&&tk.st==="ok"&&(tk.who===myName()||isAdm())?`<span style="flex:1"></span><button class="btn danger" type="button" id="dropTake">放棄接案</button><span class="note" style="width:100%">放棄後改回「待處理」，由其他業務接案（只有接案業務本人與管理員可以操作）。</span>`:""}
+    ${c.releasedBy?`<span class="note" style="width:100%">${esc(c.releasedBy)} 於 ${esc(String(c.releasedAt||"").slice(0,16).replace("T"," "))} 放棄接案${c.releasedFrom&&c.releasedFrom!==c.releasedBy?"（原接案："+esc(c.releasedFrom)+"）":""}</span>`:""}
+    ${showTake&&tk.who!==myName()&&!(tk.st==="ok"&&isAdm())?`<span style="flex:1"></span><button class="btn primary" type="button" id="takeNow">我要接案</button><span class="note" style="width:100%">請先看完下方的通聯內容，確認自己能處理後再按「我要接案」正式接案。</span>`:""}</div>`:""}
   <datalist id="custList">${S.customers.map(k=>`<option value="${esc(k.name)}">`).join("")}</datalist>
   <div class="grid2">
     ${recBox(c.recorder)}
@@ -1776,6 +1779,11 @@ function callForm(src,focusTake){
       if(!o.county){toast("聽到：「"+t+"」，請從縣市開始說，例如：彰化縣彰化市自強南路537號");return}
       F.county.value=o.county;fillDis(o.district);F.road.value=o.road||"";F.detail.value=o.detail||"";prev();toast("已填入地址，請確認")},b)}}
   if(!isNew&&canWrite)confirmDelete("#del","通聯紀錄",()=>db.doc("calls/"+c.id).delete());
+  {const b=$("#dropTake");if(b)b.onclick=async()=>{if(!confirm(`確定放棄「${tk.who}」的接案？放棄後改由其他業務接案。`))return;b.disabled=true;
+     const k=S.customers.find(x=>x.id===c.customerId)||(c.company?S.customers.find(x=>normName(x.name)===normName(c.company)):null),now=new Date().toISOString();
+     try{await db.doc("calls/"+c.id).update({takenBy:deleteField(),takenAt:deleteField(),releasedBy:myName(),releasedFrom:tk.who,releasedAt:now});
+       if(k&&k.owner===tk.who)await db.doc("customers/"+k.id).update({owner:deleteField(),ownedAt:deleteField()});
+       toast("已放棄接案，改為待處理");dlg.close()}catch(e){b.disabled=false;showErr(e)}}}
   {const b=$("#takeNow");if(b){b.onclick=async()=>{b.disabled=true;if(await takeCall(c,true))dlg.close();else b.disabled=false};if(focusTake)$("#takeBox").scrollIntoView({block:"start"})}}
 }
 $("#main").addEventListener("click",e=>{if(e.target.closest("[data-newcall]")){callForm(null);return}
@@ -2529,7 +2537,9 @@ $("#logoutBtn3").onclick=()=>signOut(auth);
 /* ---------- data (Firebase) ---------- */
 /* 去除 undefined 欄位，Firestore 不接受 undefined */
 const clean=d=>JSON.parse(JSON.stringify(d));
-const wrap=r=>({id:r.id,set:d=>setDoc(r,clean(d)),update:d=>updateDoc(r,clean(d)),delete:()=>deleteDoc(r)});
+// 更新時保留 deleteField() 等特殊值，其餘照常去除 undefined
+const cleanUpd=d=>Object.fromEntries(Object.entries(d).filter(([,v])=>v!==undefined).map(([k,v])=>[k,v&&typeof v==="object"&&!Array.isArray(v)&&v.constructor!==Object?v:clean(v)]));
+const wrap=r=>({id:r.id,set:d=>setDoc(r,clean(d)),update:d=>updateDoc(r,cleanUpd(d)),delete:()=>deleteDoc(r)});
 const fsdb={
   collection:n=>({
     onSnapshot:(next,err)=>onSnapshot(collection(fs,n),{includeMetadataChanges:true},snap=>next({docs:snap.docs.map(d=>({id:d.id,data:()=>d.data()})),metadata:snap.metadata}),err),
