@@ -1947,6 +1947,7 @@ const custOwner=k=>k?.owner||"";
 const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?custOwner(S.customers.find(x=>normName(x.name)===normName(name))):"");return o&&o!==myName()?o:""};
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
 const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
+const IVOLTS=["單相110V","單相220V","三相220V","三相380V","三相440V","無電壓管制"];
 // 各品項的產品名稱下拉選單
 const QPROD={"水冷扇":["36吋DC水冷扇／無段變速","L150水冷扇","L120水冷扇","L105水冷扇","L100水冷扇","L80水冷扇","L60水冷扇","L40水冷扇","L20水冷扇","Ju50水冷扇","106水冷扇","1203水冷扇","2201水冷扇","2203水冷扇","DS120水冷扇","環保空調"],
   "風機":["54吋喇叭扇／七葉塑鋼／1.5HP","46吋喇叭扇／七葉塑鋼／1.5HP","42吋喇叭扇七葉塑鋼／1HP","54吋方型扇／七葉塑鋼／1.5HP","54吋方型扇／七葉塑鋼／1HP","42吋方型扇七葉塑鋼／1HP"]};
@@ -1959,6 +1960,7 @@ function itemRow(i={}){
   return `<tr><td class="idx"></td>
   <td style="width:130px"><select name="i_cat"><option value="">請選擇</option>${QCATS.map(v=>opt(v,v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
   <td>${pickSel(i.cat,i.spec)}<input name="i_spec" list="${specListOf(i.cat)}" ${QPROD[i.cat]&&(!i.spec||QPROD[i.cat].includes(i.spec))?'style="display:none"':""} value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
+  <td style="width:130px"><select name="i_volt">${opt("","請選擇",!i.volt)}${IVOLTS.map(v=>opt(v,v,i.volt===v)).join("")}</select></td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
   <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
@@ -2008,7 +2010,7 @@ function quoteForm(src,copy){
     <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items" style="min-width:900px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" style="min-width:1030px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
@@ -2018,8 +2020,8 @@ function quoteForm(src,copy){
   <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立報價單":"儲存"}</button></div>`,
   async fd=>{
     const g=k=>fd.getAll(k).map(v=>String(v).trim());
-    const cd=g("i_code"),sp=g("i_spec"),ca=g("i_cat"),sv=g("i_svc"),dy=g("i_days"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
-    const items=sp.map((v,i)=>({code:cd[i]||"",spec:v,cat:ca[i],svc:sv[i],days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
+    const vo=g("i_volt"),cd=g("i_code"),sp=g("i_spec"),ca=g("i_cat"),sv=g("i_svc"),dy=g("i_days"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
+    const items=sp.map((v,i)=>({code:cd[i]||"",spec:v,volt:vo[i]||"",cat:ca[i],svc:sv[i],days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
     const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
     const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
     if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
@@ -2131,7 +2133,7 @@ function quoteSheet(x,o={}){
   const ck=on=>`<span class="bx">${on?"✓":""}</span>`;
   const blank=(v,w)=>`<span class="blank"${w?` style="min-width:${w}px"`:""}>${v||"&nbsp;"}</span>`;
   const items=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td>
-    <td>${esc(i.spec)}${i.cat?`<div class="sub">${esc(i.cat)}</div>`:""}</td>
+    <td>${esc(i.spec)}${i.volt?"／"+esc(i.volt):""}${i.cat?`<div class="sub">${esc(i.cat)}</div>`:""}</td>
     <td class="svc">${ck(i.svc==="出租")}出租服務；天數：${i.svc==="出租"&&i.days?esc(i.days):""}<br>${ck(i.svc==="銷售")}銷售服務<br>${ck(i.svc==="維修")}維修服務</td>
     <td class="n">${N(i.qty)} ${esc(i.unit||"")}</td><td class="n">${N(i.price)}</td><td class="n">${N(i.sub)}</td></tr>`);
   while(items.length<3)items.push(`<tr><td class="c">${items.length+1}</td><td></td><td></td><td></td><td></td><td></td></tr>`);
