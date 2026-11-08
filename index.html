@@ -1948,8 +1948,8 @@ const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?cust
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
 function itemRow(i={}){
   return `<tr><td class="idx"></td>
-  <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:110px"><input name="i_cat" list="catList" value="${esc(i.cat||"")}"></td>
+  <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
   <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
@@ -1998,7 +1998,7 @@ function quoteForm(src,copy){
     <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items" style="min-width:900px"><thead><tr><th>項次</th><th>產品名稱 / 規格</th><th>品項</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" style="min-width:900px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
