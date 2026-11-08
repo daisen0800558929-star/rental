@@ -1750,7 +1750,7 @@ function viewTake(loading){
   const wonAmt=sq.reduce((a,q)=>a+quoteCalc(q).total,0),recv=sq.reduce((a,q)=>a+(q.paid==="full"?quoteCalc(q).total:q.paid==="dep"?quoteCalc(q).total/2:0),0);
   // 超時未收款：結案後超過 30 日仍未收全額
   const dayDiff=d=>Math.floor((new Date(t)-new Date(String(d).slice(0,10)))/864e5);
-  const ovAll=nSig.flatMap(x=>x.qs.filter(q=>q.status==="signed"&&q.closed).map(q=>({x,q,cd:q.closedAt||String(q.updatedAt||q.signedAt||q.date||"").slice(0,10)})));
+  const ovAll=nSig.flatMap(x=>x.qs.filter(q=>q.status==="signed"&&q.closed).map(q=>({x,q,cd:q.closedAt||String(q.updatedAt||q.signedAt||q.date||"").slice(0,10)}))).filter(o=>o.cd);
   const ov=ovAll.filter(o=>o.q.paid!=="full"&&dayDiff(o.cd)>30).map(o=>({...o,days:dayDiff(o.cd),due:quoteCalc(o.q).total*(o.q.paid==="dep"?.5:1)})).sort((a,b)=>b.days-a.days);
   const rate=(t,v,sub,col,attr)=>`<${attr?"button type=\"button\" "+attr:"div"} class="card" style="padding:8px 4px;text-align:center;${attr?"cursor:pointer;border:2px solid "+(takeCat==="overdue"?col:"var(--line)"):""}"><div class="m" style="font-size:12.5px">${t}</div><div class="mono" style="font-size:20px;font-weight:700;color:${col}">${v}</div><div class="m" style="font-size:11px">${sub}</div></${attr?"button":"div"}>`;
   const rates=`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px">
@@ -1987,7 +1987,6 @@ function quoteForm(src,copy){
   <fieldset><legend>報價資訊</legend><div class="grid2">
     <label>報價日期<input type="date" name="date" value="${esc(x.date)}" required></label>
     <label>狀態<select name="status">${Object.entries(QSTATUS).map(([k,v])=>opt(k,v[0],k===x.status)).join("")}</select></label>
-    <label>訂單狀態（成交後）<select name="closed">${opt("","進行中",!x.closed)}${opt("1","已結案",!!x.closed)}</select></label>
     <label>收款狀態（成交後）<select name="paid">${[["","未收款"],["dep","已收定金"],["full","已收全額"]].map(([k,v])=>opt(k,v,(x.paid||"")===k)).join("")}</select></label>
     ${!isAdm()?`<label>業務人員<input name="sales" value="${esc(x.sales||myName())}" readonly tabindex="-1" style="opacity:.8"><span class="note">自動帶入目前登入的業務</span></label>`:`<label>業務人員<select name="sales">${(()=>{const reps=salesReps();const cur=x.sales||myEmp()?.name||"";
       return (reps.length?"":'<option value="">（尚未有勾選報價系統權限的員工）</option>')+reps.map(r=>`<option value="${esc(r.name)}" data-mobile="${esc(r.mobile||"")}"${r.name===cur?" selected":""}>${esc((r.code?r.code+"　":"")+r.name)}</option>`).join("")
@@ -2023,7 +2022,7 @@ function quoteForm(src,copy){
       if(o&&o!==myName()){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能再報價。如需轉移，請聯絡管理員。`});return false}
       if(!o){showErr({message:k?"此客戶尚未接案。請先打開客戶資料或通聯紀錄，按「我要接案」後才能報價。":"新客戶請先在「客戶通聯」登錄，並按「我要接案」後才能報價。"});return false}}
     if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
-    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:val(fd,"closed")==="1",closedAt:val(fd,"closed")==="1"?(x.closedAt||todayStr()):"",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:!!x.closed,closedAt:x.closedAt||"",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
       d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
@@ -2174,6 +2173,12 @@ function quoteDetail(x){
     <button class="btn" type="button" id="sendQ">傳給客戶簽名</button>
     <button class="btn" type="button" id="upQ">上傳簽回檔</button>
     ${x.hasScan?'<button class="btn" type="button" id="scanQ">查看簽回檔</button>':""}</div>`:""}
+  ${x.status==="signed"?`<div class="banner" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:${x.closed?"var(--ok-soft)":"var(--accent-soft)"};color:var(--fg)">
+    <span>訂單結案：${x.closed?`<b style="color:var(--ok)">已結案</b>　<span class="mono">${esc(String(x.closedAt||"").replace(/-/g,""))}</span>${x.closedBy?"　"+esc(x.closedBy):""}`:'<b style="color:var(--warn)">尚未結案</b>'}</span><span style="flex:1"></span>
+    ${x.hasSalesDoc?'<button class="btn small" type="button" id="salesDocQ">查看銷貨單據</button>':""}
+    ${!x.closed&&canCloseOrder()?'<button class="btn small primary" type="button" id="closeQ">上傳銷貨單據並結案</button>':""}
+    ${x.closed&&isAdm()?'<button class="btn small" type="button" id="reopenQ">取消結案</button>':""}
+    ${!x.closed&&!canCloseOrder()?'<span class="note" style="width:100%">由行政人員收到銷貨單據、上傳後按「結案」。</span>':""}</div>`:""}
   <div class="actions">${canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span><button class="btn" type="button" id="copyQ">複製</button><button class="btn" type="button" id="editQ">編輯</button>':""}<button class="btn primary" type="button" id="printQ">列印 / 存成 PDF</button><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
   const on=(id,fn)=>{const b=form.querySelector(id);if(b)b.onclick=fn};
   on("#printQ",()=>printQuote(x));
@@ -2183,9 +2188,28 @@ function quoteDetail(x){
   on("#sendQ",()=>{dlg.close();sendForSign(x)});
   on("#upQ",()=>{dlg.close();uploadSigned(x)});
   on("#scanQ",()=>{dlg.close();viewScan(x)});
+  on("#closeQ",()=>{dlg.close();closeOrder(x)});
+  on("#salesDocQ",()=>{dlg.close();viewScan(x,"_sales")});
+  on("#reopenQ",async()=>{if(!confirm("確定取消結案？結案日期會清除。"))return;await db.doc("quotes/"+x.id).update({closed:false,closedAt:"",closedBy:""});toast("已取消結案");dlg.close()});
   if(canWrite)confirmDelete("#del","報價單",async()=>{await db.doc("quotes/"+x.id).delete();
     if(x.signToken)try{await deleteDoc(doc(fs,"signReqs",x.signToken))}catch(e){}
-    if(x.hasScan)try{await deleteDoc(doc(fs,"quoteFiles",x.id))}catch(e){}});
+    if(x.hasScan)try{await deleteDoc(doc(fs,"quoteFiles",x.id))}catch(e){}
+    if(x.hasSalesDoc)try{await deleteDoc(doc(fs,"quoteFiles",x.id+"_sales"))}catch(e){}});
+}
+/* 訂單結案：行政人員收到銷貨單據 → 上傳單據 → 按結案（結案日期＝按下當天） */
+const canCloseOrder=()=>isAdm()||(canWrite&&/行政/.test(myEmp()?.dept||""));
+function closeOrder(x){
+  openDlg(`<h3>上傳銷貨單據並結案　<span class="mono note">${esc(x.no)}</span></h3>
+  <div class="note">請上傳收到的銷貨單據（照片或 PDF），上傳後按「結案」。結案日期為今天 <b class="mono">${todayStr().replace(/-/g,"")}</b>，超時未收款從這天起算 30 日。</div>
+  <label>銷貨單據（照片或 PDF）<input type="file" name="file" accept="image/*,application/pdf" required></label>
+  <div id="upPrev"></div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">結案</button></div>`,
+  async fd=>{const f=fd.get("file");if(!f||!f.size){showErr({message:"請先上傳銷貨單據，才能結案。"});return false}
+    const data=await fileToData(f);
+    await db.doc("quoteFiles/"+x.id+"_sales").set({data,type:data.slice(5,data.indexOf(";")),name:f.name,quoteNo:x.no||"",kind:"sales",at:new Date().toISOString(),by:me.email});
+    await db.doc("quotes/"+x.id).update({closed:true,closedAt:todayStr(),closedBy:myName(),hasSalesDoc:true});
+    toast("已結案："+(x.cust?.name||x.no))});
+  form.elements.file.onchange=e=>{const f=e.target.files[0];$("#upPrev").innerHTML=f&&f.type.startsWith("image/")?`<img class="scanview" style="max-height:260px" src="${URL.createObjectURL(f)}" alt="預覽">`:f?`<div class="note">${esc(f.name)}</div>`:""};
 }
 /* 簽名板：回傳 {get():dataURL|null, clear()} */
 function sigPad(cv){
@@ -2309,13 +2333,14 @@ function uploadSigned(x){
   });
   form.elements.file.onchange=e=>{const f=e.target.files[0];$("#upPrev").innerHTML=f&&f.type.startsWith("image/")?`<img class="scanview" style="max-height:260px" src="${URL.createObjectURL(f)}" alt="預覽">`:f?`<div class="note">${esc(f.name)}</div>`:""};
 }
-async function viewScan(x){
-  let r=null;try{const s=await getDoc(doc(fs,"quoteFiles",x.id));if(s.exists())r=s.data()}catch(e){}
-  if(!r){toast("找不到簽回檔");return}
-  const blob=await (await fetch(r.data)).blob(),u=URL.createObjectURL(blob),nm=fileBase(x)+"_簽回"+(r.type==="application/pdf"?".pdf":".jpg");
-  openDlg(`<h3>簽回檔　<span class="mono note">${esc(x.no)}</span></h3>
+async function viewScan(x,suf=""){
+  const lab=suf?"銷貨單據":"簽回檔";
+  let r=null;try{const s=await getDoc(doc(fs,"quoteFiles",x.id+suf));if(s.exists())r=s.data()}catch(e){}
+  if(!r){toast("找不到"+lab);return}
+  const blob=await (await fetch(r.data)).blob(),u=URL.createObjectURL(blob),nm=fileBase(x)+"_"+(suf?"銷貨單據":"簽回")+(r.type==="application/pdf"?".pdf":".jpg");
+  openDlg(`<h3>${lab}　<span class="mono note">${esc(x.no)}</span></h3>
   <div class="note">上傳：${esc(String(r.at||"").slice(0,10))}　${esc(r.by||"")}</div>
-  ${r.type==="application/pdf"?`<a class="btn" href="${u}" target="_blank" rel="noopener">開啟 PDF</a>`:`<img class="scanview" src="${u}" alt="簽回檔">`}
+  ${r.type==="application/pdf"?`<a class="btn" href="${u}" target="_blank" rel="noopener">開啟 PDF</a>`:`<img class="scanview" src="${u}" alt="${lab}">`}
   <div class="actions"><a class="btn" href="${u}" download="${esc(nm)}">下載</a><span class="spacer"></span><button class="btn" type="button" data-close>關閉</button></div>`,null,true);
 }
 /* 客戶在線上簽完 → 自動寫回報價單（任何一位有編輯權限的同仁開著系統即可） */
