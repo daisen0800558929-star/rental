@@ -1950,13 +1950,15 @@ const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
 // 各品項的產品名稱下拉選單
 const QPROD={"水冷扇":["36吋DC水冷扇／無段變速","L150水冷扇","L120水冷扇","L105水冷扇","L100水冷扇","L80水冷扇","L60水冷扇","L40水冷扇","L20水冷扇","Ju50水冷扇","106水冷扇","1203水冷扇","2201水冷扇","2203水冷扇","DS120水冷扇","環保空調"],
   "風機":["54吋喇叭扇／七葉塑鋼／1.5HP","46吋喇叭扇／七葉塑鋼／1.5HP","42吋喇叭扇七葉塑鋼／1HP","54吋方型扇／七葉塑鋼／1.5HP","54吋方型扇／七葉塑鋼／1HP","42吋方型扇七葉塑鋼／1HP"]};
+const pickSel=(c,v)=>{const a=QPROD[c];if(!a)return'<select name="i_pick" style="display:none"></select>';const own=v&&!a.includes(v);
+  return `<select name="i_pick"><option value="">請選擇產品</option>${a.map(x=>opt(x,x,x===v)).join("")}<option value="__other"${own?" selected":""}>其他（自行輸入）</option></select>`};
 const specListOf=c=>QPROD[c]?"specList_"+QCATS.indexOf(c):"specList";
 // 商品或設備的分類對應到報價品項
 const qcatOf=c=>{c=String(c||"");return /水冷|水濂/.test(c)?"水冷扇":/風機|通風|風扇/.test(c)?"風機":/魚池|過濾|水資源/.test(c)?"魚池過濾設備":c?"其他":""};
 function itemRow(i={}){
   return `<tr><td class="idx"></td>
   <td style="width:130px"><select name="i_cat"><option value="">請選擇</option>${QCATS.map(v=>opt(v,v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
-  <td><input name="i_spec" list="${specListOf(i.cat)}" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
+  <td>${pickSel(i.cat,i.spec)}<input name="i_spec" list="${specListOf(i.cat)}" ${QPROD[i.cat]&&(!i.spec||QPROD[i.cat].includes(i.spec))?'style="display:none"':""} value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
   <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
@@ -2057,7 +2059,15 @@ function quoteForm(src,copy){
   form.oninput=calc;
   $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());rowVoice(body.lastElementChild);calc();body.lastElementChild.querySelector("input").focus()};
   body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input,select").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
-  body.addEventListener("change",e=>{if(e.target.name!=="i_cat")return;const sp=e.target.closest("tr").querySelector("[name=i_spec]");sp.setAttribute("list",specListOf(e.target.value));if(QPROD[e.target.value]&&!sp.value)sp.focus()});
+  // 下拉選完自動跳到右邊下一個欄位
+  const nextField=el=>{const tr=el.closest("tr"),fs=[...tr.querySelectorAll("input:not([type=hidden]),select")].filter(f=>f.offsetParent!==null&&!f.readOnly&&!f.disabled);const n=fs[fs.indexOf(el)+1];if(!n)return;
+    n.focus();n.scrollIntoView({block:"nearest",inline:"center"});if(n.tagName==="SELECT")try{n.showPicker()}catch(e){}};
+  body.addEventListener("change",e=>{const t=e.target,tr=t.closest("tr");if(!tr)return;
+    if(t.name==="i_cat"){const sp=tr.querySelector("[name=i_spec]"),old=tr.querySelector("[name=i_pick]");sp.setAttribute("list",specListOf(t.value));
+      old.outerHTML=pickSel(t.value,"");const a=QPROD[t.value];if(a&&(!sp.value||!a.includes(sp.value))){sp.value="";sp.style.display="none"}else if(!a)sp.style.display="";nextField(t);return}
+    if(t.name==="i_pick"){const sp=tr.querySelector("[name=i_spec]");if(t.value==="__other"){sp.style.display="";sp.value="";sp.focus();return}
+      sp.style.display="none";sp.value=t.value;sp.dispatchEvent(new Event("change",{bubbles:true}));nextField(t);return}
+    if(t.tagName==="SELECT"&&t.name!=="i_cat")nextField(t)});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
     if(pr){e.target.value=pr.name+(pr.spec?" "+pr.spec:"");cdI.value=pr.code;show.textContent=pr.code;
