@@ -1787,8 +1787,6 @@ function viewTake(loading){
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 6px">${b("報價金額",money(amt))}${b("成交金額",money(won),"","var(--ok)")}</div>`})()}${catBtns}${rates}${ovBlock||sumT+`
   <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>`}
   ${targetHtml(nm)}
-  <div class="card" style="padding:12px 16px;margin-bottom:12px"><h3 style="margin:0 0 6px">接案 → 報價 → 成交</h3>
-    ${bar("接案",N,N,"var(--accent)")}${bar("已報價",quoted,N,"#9bbb59")}${bar("已成交",signed,N,"var(--ok)")}${bar("戰敗",lost,N,"var(--bad)")}</div>
 `;
 }
 document.addEventListener("change",e=>{if(e.target.id==="takeP"){takeP=e.target.value;render()}});
