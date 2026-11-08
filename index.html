@@ -1962,8 +1962,8 @@ function itemRow(i={}){
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:150px"><div class="rentbox" ${i.svc==="出租"?"":'style="display:none"'}><input type="date" name="i_from" value="${esc(i.from||"")}" style="width:100%" aria-label="租期起"><input type="date" name="i_to" value="${esc(i.to||"")}" style="width:100%;margin-top:4px" aria-label="租期迄"></div>${i.svc==="出租"?"":'<span class="note rentna">—</span>'}</td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
-  <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
   <td style="width:72px"><input name="i_qty" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.qty??1)}"></td>
+  <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
   <td style="width:100px"><input name="i_price" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.price??"")}"></td>
   <td class="num mono" style="width:90px" data-sub></td>
   <td style="width:40px"><button class="btn small" type="button" data-delrow aria-label="刪除此列">✕</button></td></tr>`;
@@ -2007,7 +2007,7 @@ function quoteForm(src,copy){
     <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items" id="itemsTbl" style="min-width:1180px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th>租期區間</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" id="itemsTbl" style="min-width:1180px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th>租期區間</th><th class="num">出租天數</th><th class="num">數量</th><th>單位</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
