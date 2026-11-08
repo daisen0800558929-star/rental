@@ -1757,8 +1757,9 @@ function viewTake(loading){
   return `<div class="note">業務：<b>${esc(nm)}</b></div>
   <div class="toolbar"><select id="takeP" style="flex:0 1 160px">${[["week","近 7 天"],["month","本月"],["year","今年"],["all","全部"]].map(([k,v])=>opt(k,v,k===takeP)).join("")}</select><span style="flex:1"></span>
     <button class="btn${open.length?" primary":""}" type="button" data-gocalls>可接案件 ${open.length} 筆${late?"（超時 "+late+"）":""}</button></div>
-  <h3 style="margin:14px 0 6px">我的接案明細</h3>${catBtns}${rates}${targetHtml(nm)}${sumT}
+  <h3 style="margin:14px 0 6px">我的接案明細</h3>${catBtns}${rates}${sumT}
   <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
+  ${targetHtml(nm)}
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0">
     ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("待報價",N-quoted,"",N-quoted?"var(--warn)":"")}
     ${tile("報價金額",money(amt))}${tile("成交金額",money(won),"","var(--ok)")}${tile("平均接案時間",avg==null?"—":avg<1?Math.round(avg*60)+" 分":avg.toFixed(1)+" 時","從來電到按接案")}${tile("放棄接案",dropped,"",dropped?"var(--bad)":"")}
