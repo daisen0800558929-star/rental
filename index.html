@@ -1759,7 +1759,7 @@ function viewTake(loading){
     <button class="btn${open.length?" primary":""}" type="button" data-gocalls>可接案件 ${open.length} 筆${late?"（超時 "+late+"）":""}</button></div>
   <h3 style="margin:14px 0 6px">我的接案明細</h3>${(()=>{const allN=S.calls.filter(c=>inP(c.at)).length;
     const b=(t,v,sub,col)=>`<div class="card" style="padding:8px 4px;text-align:center"><div class="m" style="font-size:12.5px">${t}</div><div class="mono" style="font-size:19px;font-weight:700;${col?"color:"+col:""}">${v}</div>${sub?`<div class="m" style="font-size:11px">${sub}</div>`:""}</div>`;
-    return `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0">${b("公司總案數",allN,"全部通聯")}${b("接案數",N,"我接的案件","var(--accent)")}${b("接案率",pct(quoted,allN),quoted+"／"+allN+" 件（有報價）","var(--accent)")}</div>
+    return `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0">${b("公司總案數",allN,"全部通聯")}${b("接案數",N,"我接的案件","var(--accent)")}${b("接案未報價數",N-quoted,"待報價",N-quoted?"var(--warn)":"")}${b("接案率",pct(quoted,allN),quoted+"／"+allN+" 件（有報價）","var(--accent)")}</div>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 6px">${b("報價金額",money(amt))}${b("成交金額",money(won),"","var(--ok)")}</div>`})()}${catBtns}${rates}${sumT}
   <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
   ${targetHtml(nm)}
