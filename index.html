@@ -1962,6 +1962,7 @@ function itemRow(i={}){
   <td>${pickSel(i.cat,i.spec)}<input name="i_spec" list="${specListOf(i.cat)}" ${QPROD[i.cat]&&(!i.spec||QPROD[i.cat].includes(i.spec))?'style="display:none"':""} value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:130px"><select name="i_volt">${opt("","請選擇",!i.volt)}${IVOLTS.map(v=>opt(v,v,i.volt===v)).join("")}</select></td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
+  <td style="width:150px"><div class="rentbox" ${i.svc==="出租"?"":'style="display:none"'}><input type="date" name="i_from" value="${esc(i.from||"")}" style="width:100%" aria-label="租期起"><input type="date" name="i_to" value="${esc(i.to||"")}" style="width:100%;margin-top:4px" aria-label="租期迄"></div>${i.svc==="出租"?"":'<span class="note rentna">—</span>'}</td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
   <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
   <td style="width:72px"><input name="i_qty" type="number" min="0" step="any" inputmode="decimal" class="num" value="${esc(i.qty??1)}"></td>
@@ -2008,7 +2009,7 @@ function quoteForm(src,copy){
     <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items" style="min-width:1030px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" style="min-width:1180px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th>租期區間</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
@@ -2018,8 +2019,8 @@ function quoteForm(src,copy){
   <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立報價單":"儲存"}</button></div>`,
   async fd=>{
     const g=k=>fd.getAll(k).map(v=>String(v).trim());
-    const vo=g("i_volt"),cd=g("i_code"),sp=g("i_spec"),ca=g("i_cat"),sv=g("i_svc"),dy=g("i_days"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
-    const items=sp.map((v,i)=>({code:cd[i]||"",spec:v,volt:vo[i]||"",cat:ca[i],svc:sv[i],days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
+    const fr=g("i_from"),to=g("i_to"),vo=g("i_volt"),cd=g("i_code"),sp=g("i_spec"),ca=g("i_cat"),sv=g("i_svc"),dy=g("i_days"),un=g("i_unit"),qt=g("i_qty"),pr=g("i_price");
+    const items=sp.map((v,i)=>({code:cd[i]||"",spec:v,volt:vo[i]||"",cat:ca[i],svc:sv[i],from:sv[i]==="出租"?fr[i]||"":"",to:sv[i]==="出租"?to[i]||"":"",days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
     const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
     const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
     if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
@@ -2066,6 +2067,13 @@ function quoteForm(src,copy){
       old.outerHTML=pickSel(t.value,"");const a=QPROD[t.value];if(a&&(!sp.value||!a.includes(sp.value))){sp.value="";sp.style.display="none"}else if(!a)sp.style.display="";nextField(t);return}
     if(t.name==="i_pick"){const sp=tr.querySelector("[name=i_spec]");if(t.value==="__other"){sp.style.display="";sp.value="";sp.focus();return}
       sp.style.display="none";sp.value=t.value;sp.dispatchEvent(new Event("change",{bubbles:true}));nextField(t);return}
+    if(t.name==="i_svc"){const rb=tr.querySelector(".rentbox"),na=tr.querySelector(".rentna"),on=t.value==="出租";rb.style.display=on?"":"none";if(na)na.style.display=on?"none":"";
+      if(on){const f=tr.querySelector("[name=i_from]");f.focus();f.scrollIntoView({block:"nearest",inline:"center"});try{f.showPicker()}catch(e){}}else{tr.querySelector("[name=i_days]").value="";nextField(t)}calc();return}
+    if(t.name==="i_from"||t.name==="i_to"){const f=tr.querySelector("[name=i_from]"),o=tr.querySelector("[name=i_to]");
+      if(t.name==="i_from"){if(!o.value||o.value<f.value)o.value="";o.min=f.value;o.focus();try{o.showPicker()}catch(e){}}
+      if(f.value&&o.value){if(o.value<f.value){showErr({message:"租期迄日不能早於起日。"});o.value="";return}
+        const d=Math.round((new Date(o.value)-new Date(f.value))/864e5)+1,di=tr.querySelector("[name=i_days]");di.value=d;di.dispatchEvent(new Event("input",{bubbles:true}));calc();
+        if(t.name==="i_to"){di.focus();di.scrollIntoView({block:"nearest",inline:"center"})}}return}
     if(t.tagName==="SELECT"&&t.name!=="i_cat")nextField(t)});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
@@ -2130,7 +2138,7 @@ function quoteSheet(x,o={}){
   const ck=on=>`<span class="bx">${on?"✓":""}</span>`;
   const blank=(v,w)=>`<span class="blank"${w?` style="min-width:${w}px"`:""}>${v||"&nbsp;"}</span>`;
   const items=t.items.map((i,n)=>`<tr><td class="c">${n+1}</td>
-    <td>${esc(i.spec)}${i.volt?"／"+esc(i.volt):""}${i.cat?`<div class="sub">${esc(i.cat)}</div>`:""}</td>
+    <td>${esc(i.spec)}${i.volt?"／"+esc(i.volt):""}${i.cat?`<div class="sub">${esc(i.cat)}</div>`:""}${i.from&&i.to?`<div class="sub">租期 ${esc(i.from.replace(/-/g,"/"))}～${esc(i.to.replace(/-/g,"/"))}</div>`:""}</td>
     <td class="svc">${ck(i.svc==="出租")}出租服務；天數：${i.svc==="出租"&&i.days?esc(i.days):""}<br>${ck(i.svc==="銷售")}銷售服務<br>${ck(i.svc==="維修")}維修服務</td>
     <td class="n">${N(i.qty)} ${esc(i.unit||"")}</td><td class="n">${N(i.price)}</td><td class="n">${N(i.sub)}</td></tr>`);
   while(items.length<3)items.push(`<tr><td class="c">${items.length+1}</td><td></td><td></td><td></td><td></td><td></td></tr>`);
