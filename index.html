@@ -1947,12 +1947,16 @@ const custOwner=k=>k?.owner||"";
 const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?custOwner(S.customers.find(x=>normName(x.name)===normName(name))):"");return o&&o!==myName()?o:""};
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
 const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
+// 各品項的產品名稱下拉選單
+const QPROD={"水冷扇":["36吋DC水冷扇／無段變速","L150水冷扇","L120水冷扇","L105水冷扇","L100水冷扇","L80水冷扇","L60水冷扇","L40水冷扇","L20水冷扇","Ju50水冷扇","106水冷扇","1203水冷扇","2201水冷扇","2203水冷扇","DS120水冷扇","環保空調"],
+  "風機":["54吋喇叭扇／七葉塑鋼／1.5HP","46吋喇叭扇／七葉塑鋼／1.5HP","42吋喇叭扇七葉塑鋼／1HP","54吋方型扇／七葉塑鋼／1.5HP","54吋方型扇／七葉塑鋼／1HP","42吋方型扇七葉塑鋼／1HP"]};
+const specListOf=c=>QPROD[c]?"specList_"+QCATS.indexOf(c):"specList";
 // 商品或設備的分類對應到報價品項
 const qcatOf=c=>{c=String(c||"");return /水冷|水濂/.test(c)?"水冷扇":/風機|通風|風扇/.test(c)?"風機":/魚池|過濾|水資源/.test(c)?"魚池過濾設備":c?"其他":""};
 function itemRow(i={}){
   return `<tr><td class="idx"></td>
   <td style="width:130px"><select name="i_cat"><option value="">請選擇</option>${QCATS.map(v=>opt(v,v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
-  <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
+  <td><input name="i_spec" list="${specListOf(i.cat)}" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
   <td style="width:62px"><input name="i_unit" value="${esc(i.unit??"台")}"></td>
@@ -1970,6 +1974,7 @@ function quoteForm(src,copy){
   const c=x.cust||{};
   const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
   openDlg(`<h3>${isNew?(copy===true?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
+  ${Object.entries(QPROD).map(([c,a])=>`<datalist id="specList_${QCATS.indexOf(c)}">${a.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>`).join("")}
   <datalist id="specList">${S.invProd.filter(p=>p.active!==false&&p.code).map(p=>`<option value="${esc(prodOpt(p))}">`).join("")}${S.equipment.map(e=>`<option value="${esc(e.name)}">`).join("")}</datalist>
   <datalist id="catList">${cats.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
   <fieldset><legend>客戶資料</legend><div class="grid2">
@@ -2052,6 +2057,7 @@ function quoteForm(src,copy){
   form.oninput=calc;
   $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());rowVoice(body.lastElementChild);calc();body.lastElementChild.querySelector("input").focus()};
   body.addEventListener("click",e=>{const b=e.target.closest("[data-delrow]");if(!b)return;if(body.children.length>1)b.closest("tr").remove();else b.closest("tr").querySelectorAll("input,select").forEach(i=>i.value=i.name==="i_unit"?"台":i.name==="i_qty"?"1":"");calc()});
+  body.addEventListener("change",e=>{if(e.target.name!=="i_cat")return;const sp=e.target.closest("tr").querySelector("[name=i_spec]");sp.setAttribute("list",specListOf(e.target.value));if(QPROD[e.target.value]&&!sp.value)sp.focus()});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
     if(pr){e.target.value=pr.name+(pr.spec?" "+pr.spec:"");cdI.value=pr.code;show.textContent=pr.code;
