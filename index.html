@@ -1748,10 +1748,25 @@ function viewTake(loading){
   const sq=nSig.map(x=>x.qs.filter(q=>q.status==="signed")).flat();
   const closedN=nSig.filter(x=>x.qs.some(q=>q.status==="signed"&&q.closed)).length;
   const wonAmt=sq.reduce((a,q)=>a+quoteCalc(q).total,0),recv=sq.reduce((a,q)=>a+(q.paid==="full"?quoteCalc(q).total:q.paid==="dep"?quoteCalc(q).total/2:0),0);
-  const rate=(t,v,sub,col)=>`<div class="card" style="padding:8px 4px;text-align:center"><div class="m" style="font-size:12.5px">${t}</div><div class="mono" style="font-size:20px;font-weight:700;color:${col}">${v}</div><div class="m" style="font-size:11px">${sub}</div></div>`;
-  const rates=`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px">
+  // 超時未收款：結案後超過 30 日仍未收全額
+  const dayDiff=d=>Math.floor((new Date(t)-new Date(String(d).slice(0,10)))/864e5);
+  const ovAll=nSig.flatMap(x=>x.qs.filter(q=>q.status==="signed"&&q.closed).map(q=>({x,q,cd:q.closedAt||String(q.updatedAt||q.signedAt||q.date||"").slice(0,10)})));
+  const ov=ovAll.filter(o=>o.q.paid!=="full"&&dayDiff(o.cd)>30).map(o=>({...o,days:dayDiff(o.cd),due:quoteCalc(o.q).total*(o.q.paid==="dep"?.5:1)})).sort((a,b)=>b.days-a.days);
+  const rate=(t,v,sub,col,attr)=>`<${attr?"button type=\"button\" "+attr:"div"} class="card" style="padding:8px 4px;text-align:center;${attr?"cursor:pointer;border:2px solid "+(takeCat==="overdue"?col:"var(--line)"):""}"><div class="m" style="font-size:12.5px">${t}</div><div class="mono" style="font-size:20px;font-weight:700;color:${col}">${v}</div><div class="m" style="font-size:11px">${sub}</div></${attr?"button":"div"}>`;
+  const rates=`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px">
     ${rate("成交率",pct(nSig.length,tot),nSig.length+"／"+tot+" 件","var(--ok)")}
-    ${rate("訂單結案率",pct(closedN,nSig.length),closedN+"／"+nSig.length+" 件","var(--accent)")}${rate("收款率",wonAmt?Math.round(recv/wonAmt*100)+"%":"—",wonAmt?money(recv):"尚無成交","#f79646")}</div>`;
+    ${rate("訂單結案率",pct(closedN,nSig.length),closedN+"／"+nSig.length+" 件","var(--accent)")}${rate("收款率",wonAmt?Math.round(recv/wonAmt*100)+"%":"—",wonAmt?money(recv):"尚無成交","#f79646")}${rate("超時未收款率",ovAll.length?Math.round(ov.length/ovAll.length*100)+"%":"—",ov.length+"／"+ovAll.length+" 件",ov.length?"var(--bad)":"var(--muted)",'data-takecat="overdue"')}</div>`;
+  let ovBlock="";
+  if(takeCat==="overdue"){
+    const lv=d=>d>60?"未收款超過60日":d>45?"未收款超過45日":"未收款超過30日";
+    const ovRows=ov.map(o=>`<div class="row" data-takeopen="${esc(o.x.c.id)}" tabindex="0"><div><div class="t" style="color:var(--bad)">${esc(o.q.cust?.name||o.x.c.company||"")}　<span class="m">${esc(o.q.no||"")}</span></div>
+      <div class="m">結案 <span class="mono">${esc(String(o.cd).replace(/-/g,""))}</span> · 已過 <b style="color:var(--bad)">${o.days}</b> 日 · ${o.q.paid==="dep"?"已收定金，尾款未收":"尚未收款"}</div></div>
+      <div class="r"><span class="pill bad">${lv(o.days)}</span><span class="mono" style="color:var(--bad)">${money(o.due)}</span></div></div>`);
+    const cnt=k=>ov.filter(o=>lv(o.days)===k).length;
+    ovBlock=`<div class="card" style="padding:10px 14px;margin-bottom:8px;border-left:4px solid var(--bad);display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px"><span><b style="color:var(--bad)">超時未收款總表</b>　共 <b class="mono">${ov.length}</b> 件　未收合計 <b class="mono" style="color:var(--bad)">${money(ov.reduce((a,o)=>a+o.due,0))}</b></span><span style="flex:1"></span><button class="btn small" type="button" data-takecat="">顯示全部</button>
+      <div class="m" style="width:100%;color:var(--bad)">未收款超過60日 ${cnt("未收款超過60日")} 件　超過45日 ${cnt("未收款超過45日")} 件　超過30日 ${cnt("未收款超過30日")} 件</div></div>
+      <div class="list" style="margin-bottom:14px">${emptyOr(ovRows,loading,"目前沒有超時未收款的案件 👍")}</div>`;
+  }
   const sumT=cat?`<div class="card" style="padding:10px 14px;margin-bottom:8px;border-left:4px solid ${cat[2]};display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px"><span><b style="color:${cat[2]}">${cat[1]}分類總表</b>　共 <b class="mono">${list.length}</b> 件${list.some(x=>x.amt)?`　報價合計 <b class="mono">${money(list.reduce((a,x)=>a+x.amt,0))}</b>`:""}${cat[0]==="signed"?`　成交合計 <b class="mono" style="color:var(--ok)">${money(list.reduce((a,x)=>a+x.won,0))}</b>`:""}
 </span><span style="flex:1"></span><button class="btn small" type="button" data-takecat="">顯示全部</button></div>`:"";
   return `<div class="note">業務：<b>${esc(nm)}</b></div>
@@ -1761,8 +1776,8 @@ function viewTake(loading){
       const f=d=>d.replace(/-/g,"");return f(from)+"～"+f(t)})()}</span></h3>${(()=>{const allN=S.calls.filter(c=>inP(c.at)).length;
     const b=(t,v,sub,col)=>`<div class="card" style="padding:8px 4px;text-align:center"><div class="m" style="font-size:12.5px">${t}</div><div class="mono" style="font-size:19px;font-weight:700;${col?"color:"+col:""}">${v}</div>${sub?`<div class="m" style="font-size:11px">${sub}</div>`:""}</div>`;
     return `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0">${b("公司總案數",allN,"全部通聯")}${b("接案數",N,"我接的案件","var(--accent)")}${b("接案未報價",N-quoted,"待報價",N-quoted?"var(--warn)":"")}${b("接案率",pct(quoted,allN),quoted+"／"+allN+" 件（有報價）","var(--accent)")}</div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 6px">${b("報價金額",money(amt))}${b("成交金額",money(won),"","var(--ok)")}</div>`})()}${catBtns}${rates}${sumT}
-  <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 6px">${b("報價金額",money(amt))}${b("成交金額",money(won),"","var(--ok)")}</div>`})()}${catBtns}${rates}${ovBlock||sumT+`
+  <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>`}
   ${targetHtml(nm)}
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0">
     ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("待報價",N-quoted,"",N-quoted?"var(--warn)":"")}
@@ -1948,7 +1963,7 @@ function quoteForm(src,copy){
   const x=src?JSON.parse(JSON.stringify(src)):{date:todayStr(),sales:myName(),salesMobile:myMobile(),taxMode:"excl",status:"draft",validDays:30,items:[{}],cust:{}};
   if(isNew&&!isAdm()){x.sales=myName();x.salesMobile=myMobile()}
   if(!x.salesMobile)x.salesMobile=mobileOf(x.sales);
-  if(copy){delete x.closed;delete x.paid;x.date=todayStr();x.status="draft";["signature","signedAt","signerName","signMethod","signToken","signExpires","sentAt","hasScan"].forEach(k=>delete x[k])}
+  if(copy){delete x.closed;delete x.closedAt;delete x.paid;x.date=todayStr();x.status="draft";["signature","signedAt","signerName","signMethod","signToken","signExpires","sentAt","hasScan"].forEach(k=>delete x[k])}
   const c=x.cust||{};
   const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
   openDlg(`<h3>${isNew?(copy===true?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
@@ -2008,7 +2023,7 @@ function quoteForm(src,copy){
       if(o&&o!==myName()){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能再報價。如需轉移，請聯絡管理員。`});return false}
       if(!o){showErr({message:k?"此客戶尚未接案。請先打開客戶資料或通聯紀錄，按「我要接案」後才能報價。":"新客戶請先在「客戶通聯」登錄，並按「我要接案」後才能報價。"});return false}}
     if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
-    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:val(fd,"closed")==="1",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:val(fd,"closed")==="1",closedAt:val(fd,"closed")==="1"?(x.closedAt||todayStr()):"",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
       d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
