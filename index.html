@@ -167,6 +167,8 @@ table.items th{background:var(--bg);color:var(--muted);font-weight:500;font-size
 table.items td{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
 table.items td input{padding:7px 8px}
 table.items .num{text-align:right}
+table.items.norent{min-width:960px!important}
+table.items.norent tr>:nth-child(6),table.items.norent tr>:nth-child(7){display:none}
 table.items td.idx{color:var(--muted);text-align:center;width:36px}
 .totals{display:grid;grid-template-columns:auto auto;justify-content:end;gap:4px 18px;font-size:14px}
 .totals .grand{font-size:17px;font-weight:700}
@@ -2005,7 +2007,7 @@ function quoteForm(src,copy){
     <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
-    <div class="tablewrap"><table class="items" style="min-width:1180px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th>租期區間</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
+    <div class="tablewrap"><table class="items" id="itemsTbl" style="min-width:1180px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th>租期區間</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
     <tbody id="itemsBody">${(x.items?.length?x.items:[{}]).map(itemRow).join("")}</tbody></table></div>
     <div class="toolbar" style="margin-top:10px"><button class="btn small" type="button" id="addRow">＋ 新增一列</button><span class="spacer" style="flex:1"></span>
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
@@ -2045,6 +2047,7 @@ function quoteForm(src,copy){
   {const se=form.elements.sales;if(se?.tagName==="SELECT")se.addEventListener("change",()=>{const m=se.selectedOptions[0]?.dataset.mobile||mobileOf(se.value);if(m)form.elements.salesMobile.value=fmtMobile(m)})}
   const body=$("#itemsBody");
   const calc=()=>{
+    $("#itemsTbl").classList.toggle("norent",![...body.querySelectorAll("[name=i_svc]")].some(x=>x.value==="出租"));
     body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;
       const v=n=>+tr.querySelector(`[name=${n}]`).value||0;tr.querySelector("[data-sub]").textContent=Math.round(v("i_qty")*v("i_price")).toLocaleString("zh-TW");
       tr.querySelector("[name=i_days]").disabled=tr.querySelector("[name=i_svc]").value!=="出租"});
@@ -2063,7 +2066,7 @@ function quoteForm(src,copy){
       old.outerHTML=pickSel(t.value,"");const a=QPROD[t.value];if(a&&(!sp.value||!a.includes(sp.value))){sp.value="";sp.style.display="none"}else if(!a)sp.style.display="";nextField(t);return}
     if(t.name==="i_pick"){const sp=tr.querySelector("[name=i_spec]");if(t.value==="__other"){sp.style.display="";sp.value="";sp.focus();return}
       sp.style.display="none";sp.value=t.value;sp.dispatchEvent(new Event("change",{bubbles:true}));nextField(t);return}
-    if(t.name==="i_svc"){const rb=tr.querySelector(".rentbox"),na=tr.querySelector(".rentna"),on=t.value==="出租";rb.style.display=on?"":"none";if(na)na.style.display=on?"none":"";
+    if(t.name==="i_svc"){const rb=tr.querySelector(".rentbox"),na=tr.querySelector(".rentna"),on=t.value==="出租";rb.style.display=on?"":"none";if(na)na.style.display=on?"none":"";calc();
       if(on){const f=tr.querySelector("[name=i_from]");f.focus();f.scrollIntoView({block:"nearest",inline:"center"});try{f.showPicker()}catch(e){}}else{tr.querySelector("[name=i_days]").value="";nextField(t)}calc();return}
     if(t.name==="i_from"||t.name==="i_to"){const f=tr.querySelector("[name=i_from]"),o=tr.querySelector("[name=i_to]");
       if(t.name==="i_from"){if(!o.value||o.value<f.value)o.value="";o.min=f.value;o.focus();try{o.showPicker()}catch(e){}}
