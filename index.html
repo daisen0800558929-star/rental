@@ -1946,9 +1946,12 @@ const mobileOf=name=>{if(!name)return"";const e=S.hrEmp.find(k=>k.name===name&&k
 const custOwner=k=>k?.owner||"";
 const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?custOwner(S.customers.find(x=>normName(x.name)===normName(name))):"");return o&&o!==myName()?o:""};
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
+const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
+// 商品或設備的分類對應到報價品項
+const qcatOf=c=>{c=String(c||"");return /水冷|水濂/.test(c)?"水冷扇":/風機|通風|風扇/.test(c)?"風機":/魚池|過濾|水資源/.test(c)?"魚池過濾設備":c?"其他":""};
 function itemRow(i={}){
   return `<tr><td class="idx"></td>
-  <td style="width:110px"><input name="i_cat" list="catList" value="${esc(i.cat||"")}"></td>
+  <td style="width:130px"><select name="i_cat"><option value="">請選擇</option>${QCATS.map(v=>opt(v,v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
   <td><input name="i_spec" list="specList" value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:70px"><input name="i_days" type="number" min="0" step="1" inputmode="numeric" class="num" value="${esc(i.days??"")}" placeholder="天"></td>
@@ -2052,10 +2055,10 @@ function quoteForm(src,copy){
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
     if(pr){e.target.value=pr.name+(pr.spec?" "+pr.spec:"");cdI.value=pr.code;show.textContent=pr.code;
-      if(pr.cat)tr.querySelector("[name=i_cat]").value=pr.cat;if(pr.unit)tr.querySelector("[name=i_unit]").value=pr.unit;if(+pr.price)tr.querySelector("[name=i_price]").value=pr.price;calc();return}
+      {const k=qcatOf(pr.cat||pr.name);if(k)tr.querySelector("[name=i_cat]").value=k}if(pr.unit)tr.querySelector("[name=i_unit]").value=pr.unit;if(+pr.price)tr.querySelector("[name=i_price]").value=pr.price;calc();return}
     if(cdI.value&&!S.invProd.some(k=>k.code===cdI.value&&(k.name+(k.spec?" "+k.spec:""))===v)){cdI.value="";show.textContent=""}
     const eq=S.equipment.find(k=>k.name===v);if(!eq)return;
-    if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=eq.category;
+    if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=qcatOf(eq.category);
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
   /* 帶入客戶基本資料（客戶資料或過去報價單的客戶欄位） */
   const setCust=(k,keepName)=>{form.elements.q_exempt.checked=!!k.taxExempt;if(k.taxExempt)form.elements.q_exemptType.value=k.taxExempt;form.elements.q_exempt.dispatchEvent(new Event("change"));
