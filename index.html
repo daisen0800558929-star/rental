@@ -650,7 +650,7 @@ function customerForm(c,pre){
   async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
     const d={recorder:c?.recorder||myName(),name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email").toLowerCase(),website:normUrl(val(fd,"website")),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,note:val(fd,"note")};
     if(isNew&&!canRecord()){recDenied();return false}
-    if(!d.name){showErr({message:"請填寫客戶名稱。"});return false}
+    {const m=custMissing({...d,addr:a});if(m.length){showErr({message:missMsg(m,"客戶基本資料")});return false}}
     {const e=await taxGate("k");if(e){showErr({message:e});return false}}
     d.taxExempt=fd.get("k_exempt")?val(fd,"k_exemptType"):"";d.taxVerified=d.taxId&&!d.taxExempt?new Date().toISOString():"";
     if(!emailOk(d.email)){showErr({message:looksUrl(d.email)?"Email 欄位填的是網址，請改填到「公司網站」。":"Email 格式不正確，例如 service@daisencool.com.tw。"});return false}
@@ -1618,6 +1618,12 @@ function telOk(v){if(!v)return true;const[m,e]=v.split("#"),d=m.replace(/\D/g,""
 function fmtMobile(v){const d=String(v).replace(/\D/g,"").slice(0,10);return d.length>7?d.slice(0,4)+"-"+d.slice(4,7)+"-"+d.slice(7):d.length>4?d.slice(0,4)+"-"+d.slice(4):d}
 const mobileOk=v=>!v||/^09\d{2}-\d{3}-\d{3}$/.test(v);
 function nowLocal(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
+// 客戶基本資料最低要求：客戶名稱、聯絡人、公司電話或手機、完整地址
+const custMissing=({name,contact,phone,mobile,addr})=>{const m=[];if(!String(name||"").trim())m.push("客戶名稱");if(!String(contact||"").trim())m.push("聯絡人");
+  if(!String(phone||"").trim()&&!String(mobile||"").trim())m.push("公司電話或手機（至少一項）");
+  const a=addr||{},am=[["county","縣市"],["district","鄉鎮市區"],["road","路／街名"],["detail","巷弄號樓"]].filter(([k])=>!String(a[k]||"").trim()).map(x=>x[1]);
+  if(am.length)m.push("地址（"+am.join("、")+"）");return m};
+const missMsg=(m,what)=>`${what}需要以下資料才能存檔：${m.join("、")}。`;
 const fullAddr=c=>[c.zip,(c.county||"")+(c.district||"")+(c.road||"")+(c.detail||"")].filter(Boolean).join(" ");
 /* 地址防呆：縣市 → 鄉鎮市區（郵遞區號）→ 路名 → 巷弄號樓 */
 function parseAddr(str){
@@ -1860,6 +1866,8 @@ function callForm(src,focusTake){
     {const e=await taxGate("c");if(e){showErr({message:e});return false}}
     d.updatedAt=new Date().toISOString();d.updatedBy=me.email;
     const ex=S.customers.find(k=>k.name===d.company);
+    if(!ex&&d.company&&fd.get("saveCust")){const m=custMissing({name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,addr:d});
+      if(m.length){showErr({message:missMsg(m,"同時新增到客戶資料")+"資料還不完整的話，可以先取消勾選「同時新增到客戶資料」，只存通聯紀錄。"});return false}}
     if(ex)d.customerId=ex.id;
     else if(d.company&&fd.get("saveCust")){const ref=db.collection("customers").doc();
       await ref.set({recorder:d.recorder,name:d.company,contact:d.contact,phone:d.tel,mobile:d.mobile,address:fullAddr(d),addr:{county:d.county,district:d.district,zip:d.zip,road:d.road,detail:d.detail},taxId:d.taxId,taxExempt:d.taxExempt,taxVerified:d.taxId&&!d.taxExempt?new Date().toISOString():"",fax:"",email:"",delivery:"",note:"由客戶通聯建立"});d.customerId=ref.id}
@@ -2021,7 +2029,7 @@ function quoteForm(src,copy){
     const items=sp.map((v,i)=>({code:cd[i]||"",spec:v,volt:vo[i]||"",cat:ca[i],svc:sv[i],from:sv[i]==="出租"?fr[i]||"":"",to:sv[i]==="出租"?to[i]||"":"",days:sv[i]==="出租"&&+dy[i]?+dy[i]:"",unit:un[i],qty:+qt[i]||0,price:+pr[i]||0})).filter(i=>i.spec||i.price);
     const qa=addrRead("ca"),cdSame=!!fd.get("cd_same"),qd=cdSame?qa:addrRead("cd");
     const cust={name:val(fd,"c_name"),taxId:val(fd,"c_taxId"),phone:fmtTel(val(fd,"c_phone")),fax:fmtTel(val(fd,"c_fax")),contact:val(fd,"c_contact"),mobile:fmtMobile(val(fd,"c_mobile")),address:fullAddr(qa),addr:qa,delivery:fullAddr(qd),dlv:qd};
-    if(!cust.name){showErr({message:"請填寫客戶名稱。"});return false}
+    {const m=custMissing(cust);if(m.length){showErr({message:missMsg(m,"報價單的客戶基本資料")});return false}}
     {const e=await taxGate("q");if(e){showErr({message:e});return false}}
     cust.taxExempt=fd.get("q_exempt")?val(fd,"q_exemptType"):"";
     {const e=phoneErr([["公司電話",cust.phone,"tel"],["傳真",cust.fax,"tel"],["手機電話",cust.mobile,"mobile"],["業務手機",fmtMobile(val(fd,"salesMobile")),"mobile"]])||addrErr(qa,"通訊地址")||(cdSame?"":addrErr(qd,"安裝地址"));if(e){showErr({message:e});return false}}
