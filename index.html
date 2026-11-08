@@ -2006,8 +2006,6 @@ function quoteForm(src,copy){
     ${!isAdm()?`<label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" readonly tabindex="-1" style="opacity:.8"><span class="note">${x.salesMobile?"自動帶入登入者的手機":"員工資料尚未填手機，請管理員到人事管理補上"}</span></label>`:`<label>業務手機<input name="salesMobile" value="${esc(x.salesMobile||"")}" inputmode="tel"></label>`}
     <label>報價效期<select name="validDays">${[30,15,7].map(n=>opt(n,n+"日",+(x.validDays??30)===n)).join("")}${x.validDays&&![30,15,7].includes(+x.validDays)?opt(x.validDays,x.validDays+"日（舊設定）",true):""}</select></label>
     <label>付款方式<select name="pay">${opt("","— 未定 —",!x.pay)}${PAYS.map(v=>opt(v,v,x.pay===v)).join("")}${x.pay&&!PAYS.includes(x.pay)?opt(x.pay,x.pay+"（舊選項）",true):""}</select></label>
-    <label>電壓<select name="volt">${opt("","— 待確認 —",!x.volt)}${VOLTS.map(v=>opt(v,v,x.volt===v)).join("")}</select></label>
-    <label>其他電壓說明<input name="voltOther" value="${esc(x.voltOther||"")}" placeholder="選「其他」時填寫"></label>
   </div></fieldset>
   <fieldset><legend>報價內容</legend>
     <div class="tablewrap"><table class="items" style="min-width:1030px"><thead><tr><th>項次</th><th>品項</th><th>產品名稱 / 規格</th><th>電壓</th><th>服務</th><th class="num">出租天數</th><th>單位</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th><th></th></tr></thead>
@@ -2034,7 +2032,7 @@ function quoteForm(src,copy){
       if(o&&o!==myName()){showErr({message:`此客戶已由業務「${o}」接案，其他業務不能再報價。如需轉移，請聯絡管理員。`});return false}
       if(!o){showErr({message:k?"此客戶尚未接案。請先打開客戶資料或通聯紀錄，按「我要接案」後才能報價。":"新客戶請先在「客戶通聯」登錄，並按「我要接案」後才能報價。"});return false}}
     if(!customerId){const same=S.customers.find(k=>normName(k.name)===normName(cust.name));if(same)customerId=same.id;else if(fd.get("saveCust")){const ref=db.collection("customers").doc();await ref.set({...cust,email:"",note:""});customerId=ref.id}}
-    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:!!x.closed,closedAt:x.closedAt||"",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:val(fd,"volt"),voltOther:val(fd,"volt")==="其他"?val(fd,"voltOther"):"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const d={customerId,cust,date:val(fd,"date"),status:val(fd,"status"),sales:isNew&&!isAdm()?myName():(isAdm()?val(fd,"sales"):x.sales||myName()),salesMobile:isAdm()?fmtMobile(val(fd,"salesMobile")):(isNew?myMobile():x.salesMobile||""),taxMode:val(fd,"taxMode"),validDays:+val(fd,"validDays")||30,closed:!!x.closed,closedAt:x.closedAt||"",paid:val(fd,"paid"),pay:val(fd,"pay"),volt:"",voltOther:"",items,note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(isNew){
       const base="Q"+d.date.replace(/-/g,""),n=S.quotes.filter(k=>String(k.no).startsWith(base)).length+1;
       d.no=base+"-"+String(n).padStart(2,"0");d.createdAt=d.updatedAt;d.createdBy=me.email;
@@ -2056,7 +2054,6 @@ function quoteForm(src,copy){
     const t=quoteCalc({taxMode:form.elements.taxMode.value,items:[...body.querySelectorAll("tr")].map(tr=>({qty:tr.querySelector("[name=i_qty]").value,price:tr.querySelector("[name=i_price]").value}))});
     $("#totals").innerHTML=`<span>小計</span><span class="mono">${money(t.sum)}</span>${form.elements.taxMode.value==="excl"?`<span>稅額 5%</span><span class="mono">${money(t.tax)}</span>`:""}<span class="grand">總額${form.elements.taxMode.value==="incl"?"（含稅）":form.elements.taxMode.value==="none"?"（未稅）":""}</span><span class="grand mono">${money(t.total)}</span><span class="note">定金 50%</span><span class="note mono">${money(t.deposit)}</span>`;
     $("#saveCustWrap").hidden=!!form.elements.customerId.value;
-    form.elements.voltOther.disabled=form.elements.volt.value!=="其他";
   };
   form.oninput=calc;
   $("#addRow").onclick=()=>{body.insertAdjacentHTML("beforeend",itemRow());rowVoice(body.lastElementChild);calc();body.lastElementChild.querySelector("input").focus()};
@@ -2090,7 +2087,7 @@ function quoteForm(src,copy){
   const itemsEmpty=()=>[...body.querySelectorAll("tr")].every(tr=>!tr.querySelector("[name=i_spec]").value.trim()&&!tr.querySelector("[name=i_price]").value);
   const applyQuote=p=>{
     body.innerHTML=(p&&p.items?.length?p.items:[{}]).map(itemRow).join("");
-    if(p){const F=form.elements;F.taxMode.value=p.taxMode||"excl";F.pay.value=PAYS.includes(p.pay)?p.pay:"";F.volt.value=p.volt||"";F.voltOther.value=p.voltOther||"";
+    if(p){const F=form.elements;F.taxMode.value=p.taxMode||"excl";F.pay.value=PAYS.includes(p.pay)?p.pay:"";
       if([...F.validDays.options].some(o=>+o.value===+p.validDays))F.validDays.value=p.validDays;F.note.value=p.note||""}
     calc()};
   const qLabel=p=>{const t=quoteCalc(p),it=(p.items||[]).map(i=>i.spec).filter(Boolean);return `${p.date||""}　${p.no||""}　${(QSTATUS[p.status]||QSTATUS.draft)[0]}　${it.slice(0,2).join("、")}${it.length>2?" 等 "+it.length+" 項":""}　${money(t.total)}`};
@@ -2121,7 +2118,7 @@ function quoteForm(src,copy){
    form.elements.c_name.addEventListener("input",later);form.elements.c_name.addEventListener("change",later);form.elements.c_taxId.addEventListener("input",later)}
   bindAddr("ca");bindAddr("cd");bindPhones({c_phone:"tel",c_fax:"tel",c_mobile:"mobile",salesMobile:"mobile"});bindTax("q","c_name","c_taxId");
   {const sl=form.elements.sales;if(sl&&sl.tagName==="SELECT")sl.addEventListener("change",()=>{const mo=sl.selectedOptions[0]?.dataset.mobile;if(mo){form.elements.salesMobile.value=fmtMobile(mo);form.elements.salesMobile.dispatchEvent(new Event("input"))}})}
-  addVoice({c_taxId:"digits",c_name:"text",c_phone:"tel",c_fax:"tel",c_contact:"text",c_mobile:"tel",salesMobile:"tel",voltOther:"text",note:"append"},["ca","cd"]);
+  addVoice({c_taxId:"digits",c_name:"text",c_phone:"tel",c_fax:"tel",c_contact:"text",c_mobile:"tel",salesMobile:"tel",note:"append"},["ca","cd"]);
   $("#itemsBody").querySelectorAll("tr").forEach(rowVoice);
   calc();
 }
@@ -2164,7 +2161,7 @@ function quoteSheet(x,o={}){
       <tr><td class="lbl"><b>總額</b></td><td style="text-align:right"><b>${N(t.total)}</b></td></tr>
     </tbody></table>
     <table class="ct"><colgroup><col style="width:30px"><col><col style="width:22%"></colgroup><tbody>
-      <tr><td class="vt" rowspan="9">合約內容</td><td colspan="2">※請確認電壓：${VOLTS.map(v=>ck(x.volt===v)+v).join("　")}：${blank(x.volt==="其他"?esc(x.voltOther||""):"",90)}</td></tr>
+      <tr><td class="vt" rowspan="9">合約內容</td><td colspan="2">※請確認電壓：${(()=>{const v=[...new Set((x.items||[]).map(i=>i.volt).filter(Boolean))];return v.length?esc(v.join("、"))+"（依各報價項目所列）":x.volt?esc(x.volt==="其他"?x.voltOther||"其他":x.volt):blank("",120)})()}</td></tr>
       <tr><td colspan="2">＊產品保固壹年（不含耗材），但如遇下列情況，不包含在產品保固範圍內，客戶須自行負擔修護費用。</td></tr>
       <tr><td colspan="2">附註：凡因天災、遇不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。</td></tr>
       <tr><td colspan="2">＊付款方式：合約回傳並支付定金後，合約正式成立。${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}${x.pay&&!PAYS.includes(x.pay)?" "+ck(true)+esc(x.pay):""}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元<br>　定金部分公司不做退還，作為人員作業費用。</td></tr>
