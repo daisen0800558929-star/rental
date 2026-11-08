@@ -1691,6 +1691,30 @@ async function takeCall(c,confirmed){
 }
 setInterval(()=>{if((tab==="calls"||tab==="take")&&!dlg.open&&!document.hidden)render()},300000);
 let takeP="month",takeCat="";
+/* 業績目標：管理員設定每位業務的月／季／年目標；實績＝已簽回報價單金額（依簽回日，沒有則依報價日期） */
+const perfOf=(nm,from,to)=>S.quotes.filter(q=>q.sales===nm&&q.status==="signed").filter(q=>{const d=String(q.signedAt||q.date||"").slice(0,10);return d>=from&&d<=to}).reduce((a,q)=>a+quoteCalc(q).total,0);
+function periods(){const t=todayStr(),y=t.slice(0,4),m=+t.slice(5,7),qn=Math.ceil(m/3),qs=String((qn-1)*3+1).padStart(2,"0"),qe=String(qn*3).padStart(2,"0");
+  return[["m","本月目標","月",t.slice(0,7)+"-01",t.slice(0,7)+"-31",`${+t.slice(5,7)} 月`],["q","本季目標","季",`${y}-${qs}-01`,`${y}-${qe}-31`,`第 ${qn} 季`],["y","今年目標","年",`${y}-01-01`,`${y}-12-31`,`${y} 年`]]}
+function targetHtml(nm){
+  const tg=S.targets?.[nm]||{};
+  const rows=periods().map(([k,lab,u,from,to,pl])=>{const goal=+tg[k]||0,act=perfOf(nm,from,to),r=goal?act/goal:0,col=r>=1?"var(--ok)":r>=.6?"var(--accent)":"#f79646";
+    return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline">
+      <b>${pl}</b><span class="m">${u}業績目標 <b class="mono" style="color:var(--fg)">${goal?money(goal):"未設定"}</b></span><span class="m">實績 <b class="mono" style="color:var(--fg)">${money(act)}</b></span>
+      <span style="flex:1"></span><span class="m">${u}業績達成率</span><b class="mono" style="font-size:20px;color:${goal?col:"var(--muted)"}">${goal?Math.round(r*100)+"%":"—"}</b></div>
+      <div style="height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.min(100,r*100)}%;background:${col}"></div></div></div>`}).join("");
+  return `<div class="card" style="padding:10px 14px;margin-bottom:10px"><div style="display:flex;align-items:center;margin-bottom:4px"><h3 style="margin:0;flex:1">業績目標與達成率</h3>${isAdm()?'<button class="btn small" type="button" data-settarget>設定業績目標</button>':""}</div>${rows}
+    <div class="note" style="margin-top:6px">實績＝已簽回（成交）報價單金額。${isAdm()?"":"業績目標由管理員設定。"}</div></div>`;
+}
+function targetForm(){
+  const names=[...new Set([...S.hrEmp.filter(hrActive).map(e=>e.name),...S.staff.filter(u=>u.active!==false).map(u=>u.name||u.id),...Object.keys(S.targets||{})].filter(Boolean))];
+  openDlg(`<h3>設定業績目標</h3><div class="note">每位業務的月、季、年業績目標（新台幣）。空白表示未設定。</div>
+  <div style="overflow-x:auto"><table class="tbl" style="width:100%;min-width:420px"><thead><tr><th style="text-align:left">業務</th><th>月目標</th><th>季目標</th><th>年目標</th></tr></thead><tbody>
+  ${names.map((n,i)=>{const t=S.targets?.[n]||{};return `<tr><td>${esc(n)}<input type="hidden" name="tn_${i}" value="${esc(n)}"></td>${["m","q","y"].map(k=>`<td><input name="t${k}_${i}" inputmode="numeric" value="${t[k]||""}" style="width:100%;min-width:90px;text-align:right"></td>`).join("")}</tr>`}).join("")}
+  </tbody></table></div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
+  async fd=>{const o={};names.forEach((n,i)=>{const r={};["m","q","y"].forEach(k=>{const v=+String(fd.get(`t${k}_${i}`)||"").replace(/[^\d.]/g,"");if(v)r[k]=v});if(Object.keys(r).length)o[n]=r});
+    await setDoc(doc(fs,"hrSettings","salesTargets"),o);S.targets=o;toast("已儲存業績目標")},true);
+}
 /* 接案狀況：登入業務個人的接案分析 */
 function viewTake(loading){
   const nm=myName(),t=todayStr(),wk=addDaysStr(t,-6);
@@ -1733,7 +1757,7 @@ function viewTake(loading){
   return `<div class="note">業務：<b>${esc(nm)}</b></div>
   <div class="toolbar"><select id="takeP" style="flex:0 1 160px">${[["week","近 7 天"],["month","本月"],["year","今年"],["all","全部"]].map(([k,v])=>opt(k,v,k===takeP)).join("")}</select><span style="flex:1"></span>
     <button class="btn${open.length?" primary":""}" type="button" data-gocalls>可接案件 ${open.length} 筆${late?"（超時 "+late+"）":""}</button></div>
-  <h3 style="margin:14px 0 6px">我的接案明細</h3>${catBtns}${rates}${sumT}
+  <h3 style="margin:14px 0 6px">我的接案明細</h3>${catBtns}${rates}${targetHtml(nm)}${sumT}
   <div class="list" style="margin-bottom:14px">${emptyOr(rows,loading,cat?"這段期間沒有「"+cat[1]+"」的案件。":"這段期間還沒有你接案的通聯。按上方「可接案件」查看待接的案件。")}</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0">
     ${tile("接案數",N)}${tile("已報價",quoted,"報價率 "+pct(quoted,N))}${tile("已成交",signed,"成交率 "+pct(signed,N),"var(--ok)")}${tile("待報價",N-quoted,"",N-quoted?"var(--warn)":"")}
@@ -1744,7 +1768,7 @@ function viewTake(loading){
 `;
 }
 document.addEventListener("change",e=>{if(e.target.id==="takeP"){takeP=e.target.value;render()}});
-document.addEventListener("click",e=>{if(tab!=="take")return;{const b=e.target.closest("[data-takecat]");if(b){takeCat=takeCat===b.dataset.takecat?"":b.dataset.takecat;render();return}}if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
+document.addEventListener("click",e=>{if(tab!=="take")return;if(e.target.closest("[data-settarget]")){if(isAdm())targetForm();return}{const b=e.target.closest("[data-takecat]");if(b){takeCat=takeCat===b.dataset.takecat?"":b.dataset.takecat;render();return}}if(e.target.closest("[data-gocalls]")){tab="calls";callRange="all";render();return}
   const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
 document.addEventListener("keydown",e=>{if(tab!=="take"||e.key!=="Enter")return;const r=e.target.closest("[data-takeopen]");if(r)openTakeRow(r.dataset.takeopen)});
 // 我的接案明細：打開客戶資料（含成交狀態、接案業務、報價紀錄）；沒有客戶資料時才開通聯紀錄
@@ -2647,7 +2671,7 @@ function startData(){
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
