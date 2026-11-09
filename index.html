@@ -1142,6 +1142,25 @@ const codeLabels=(f,code)=>{let pos=1;return f.s.map(g=>{const c=String(code||""
 function subName(n,a,b){a.forEach((l,i)=>{const r=b[i];if(!l||!r||l===r||SKIP_LAB.test(r))return;
   if(n.includes(l)){n=n.split(l).join(r);return}
   const ta=l.split(/[／\/\s]+/),tb=r.split(/[／\/\s]+/);if(ta.length!==tb.length)return;ta.forEach((t,k)=>{if(t&&tb[k]&&t!==tb[k]&&n.includes(t))n=n.split(t).join(tb[k])})});return n}
+/* 自動去背（不需網路）：從照片四邊往內找相近顏色的背景，換成白色，邊緣柔化。
+   適合放在牆面、地板、桌面等單純背景前拍的商品；背景很雜時效果有限。 */
+async function autoCutout(dataUrl,strength=1){
+  const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("無法讀取圖片"));i.src=dataUrl});
+  const W=img.width,H=img.height,cv=document.createElement("canvas");cv.width=W;cv.height=H;const g=cv.getContext("2d",{willReadFrequently:true});g.drawImage(img,0,0);
+  const id=g.getImageData(0,0,W,H),d=id.data,N=W*H,bg=new Uint8Array(N),q=new Int32Array(N);let qh=0,qt=0;
+  // 邊框平均色
+  let r=0,gg=0,b=0,c=0;const add=i=>{r+=d[i*4];gg+=d[i*4+1];b+=d[i*4+2];c++};
+  for(let x=0;x<W;x++){add(x);add((H-1)*W+x)}for(let y=0;y<H;y++){add(y*W);add(y*W+W-1)}r/=c;gg/=c;b/=c;
+  const T1=14*strength,T2=70*strength,dist=(i,R,G,B)=>{const dr=d[i*4]-R,dg=d[i*4+1]-G,db=d[i*4+2]-B;return Math.sqrt(dr*dr*.3+dg*dg*.59+db*db*.11)*1.7};
+  const seed=i=>{if(!bg[i]&&dist(i,r,gg,b)<T2*1.2){bg[i]=1;q[qt++]=i}};
+  for(let x=0;x<W;x++){seed(x);seed((H-1)*W+x)}for(let y=0;y<H;y++){seed(y*W);seed(y*W+W-1)}
+  while(qh<qt){const i=q[qh++],x=i%W,y=(i-x)/W,R=d[i*4],G=d[i*4+1],B=d[i*4+2];
+    for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1]){if(j<0||bg[j])continue;if(dist(j,R,G,B)<T1&&dist(j,r,gg,b)<T2){bg[j]=1;q[qt++]=j}}}
+  const ratio=qt/N;if(ratio<.03||ratio>.95)return{ok:false,ratio};
+  // 柔化邊緣：alpha 做 3×3 平均
+  const a=new Float32Array(N);for(let y=0;y<H;y++)for(let x=0;x<W;x++){let s=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=H)continue;s+=bg[yy*W+xx]?0:1;n++}a[y*W+x]=s/n}
+  for(let i=0;i<N;i++){const k=a[i];d[i*4]=d[i*4]*k+255*(1-k);d[i*4+1]=d[i*4+1]*k+255*(1-k);d[i*4+2]=d[i*4+2]*k+255*(1-k)}
+  g.putImageData(id,0,0);return{ok:true,ratio,data:cv.toDataURL("image/jpeg",.8)}}
 const prodPrint=p=>p.printName||p.name||"";
 const isNoStock=pid=>!!prod(pid)?.noStock;
 function prodForm(p,copy){
@@ -1163,7 +1182,9 @@ function prodForm(p,copy){
   <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label>
    <div class="full" style="display:grid;gap:6px"><span style="color:var(--muted);font-size:13.5px">商品圖片</span>
      <div id="imgPrev">${p.img?`<img src="${p.img}" alt="商品圖片" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);background:#fff">`:'<span class="note">尚未上傳</span>'}</div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn small" style="cursor:pointer">${p.img?"更換圖片":"上傳圖片"}<input type="file" id="imgFile" accept="image/*" hidden></label>${'<button class="btn small" type="button" id="imgDel"'+(p.img?"":" hidden")+'>移除圖片</button>'}</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="btn small" style="cursor:pointer">${p.img?"更換圖片":"上傳圖片"}<input type="file" id="imgFile" accept="image/*" hidden></label>
+     <label style="display:flex;gap:4px;align-items:center;font-weight:400;font-size:13px"><input type="checkbox" id="imgAuto" style="width:auto" checked>自動去背</label>
+     <button class="btn small" type="button" id="bgMore" hidden>去背加強</button><button class="btn small" type="button" id="bgLess" hidden>去背減弱</button><button class="btn small" type="button" id="bgOrig" hidden>還原原圖</button>${'<button class="btn small" type="button" id="imgDel"'+(p.img?"":" hidden")+'>移除圖片</button>'}</div>
      <input type="hidden" name="img" value="${esc(p.img||"")}"><span class="note">可直接用手機拍照，系統會自動壓縮。</span></div></div>
   ${!isNew&&!invCan("edit")?'<div class="note">你沒有「進銷存：修改」權限，只能查看這個商品。</div>':""}
   <div class="actions">${!isNew&&invCan("del")?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${(isNew?invCan("add"):invCan("edit"))?"取消":"關閉"}</button>${(isNew?invCan("add"):invCan("edit"))?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
@@ -1221,9 +1242,15 @@ function prodForm(p,copy){
       try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("無法讀取這張圖片"));i.src=URL.createObjectURL(f)});
         let data="";for(const [mx,qq] of [[640,.72],[520,.65],[420,.6]]){const k=Math.min(1,mx/Math.max(img.width,img.height)),cv=document.createElement("canvas");cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
           const g=cv.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,cv.width,cv.height);g.drawImage(img,0,0,cv.width,cv.height);data=cv.toDataURL("image/jpeg",qq);if(data.length<150000)break}
-        F.img.value=data;pv.innerHTML=`<img src="${data}" alt="商品圖片" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);background:#fff">`;del.hidden=false;toast("圖片已壓縮（約 "+Math.round(data.length*.75/1024)+" KB），按儲存後生效")}
+        orig=data;str=1;await applyBg()}
       catch(e){showErr(e)}};
-    del.onclick=()=>{F.img.value="";pv.innerHTML='<span class="note">尚未上傳</span>';del.hidden=true;fi.value=""}}
+    let orig="",str=1;const show=v=>{F.img.value=v;pv.innerHTML=`<img src="${v}" alt="商品圖片" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);background:#fff">`;del.hidden=false};
+    const btns=on=>["#bgMore","#bgLess","#bgOrig"].forEach(k=>$(k).hidden=!on);
+    const applyBg=async()=>{if(!orig)return;if(!$("#imgAuto").checked){show(orig);btns(false);toast("圖片已壓縮（約 "+Math.round(orig.length*.75/1024)+" KB），按儲存後生效");return}
+      pv.insertAdjacentHTML("beforeend",'<div class="note">去背處理中…</div>');await new Promise(r=>setTimeout(r,30));
+      const r=await autoCutout(orig,str);if(r.ok){show(r.data);btns(true);toast("已自動去背（背景約 "+Math.round(r.ratio*100)+"%），按儲存後生效")}else{show(orig);btns(true);toast("這張照片背景太複雜，無法自動去背，已保留原圖；可按「去背加強」再試")}};
+    $("#imgAuto").onchange=applyBg;$("#bgMore").onclick=()=>{str=Math.min(2.5,str*1.35);applyBg()};$("#bgLess").onclick=()=>{str=Math.max(.4,str/1.35);applyBg()};$("#bgOrig").onclick=()=>{show(orig);toast("已還原原圖")};
+    del.onclick=()=>{F.img.value="";orig="";pv.innerHTML='<span class="note">尚未上傳</span>';del.hidden=true;btns(false);fi.value=""}}
    // 建議售價＝成本 ÷ 0.6，無條件進位到整數（可再手動修改）
    const div=()=>+S.priceDiv>0?+S.priceDiv:0.6;
    const sugg=()=>{const c=+F.cost.value;if(F.cost.value===""||!(c>=0))return;F.price.value=Math.ceil(Math.round(c/div()*1e6)/1e6)};
