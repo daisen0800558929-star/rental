@@ -1082,8 +1082,8 @@ function viewInv(t){
     const styles=[...new Set(S.invProd.map(fanOf).filter(Boolean).map(c=>c[1]))].sort().map(k=>[k,(fam1.s[0].o.find(o=>o[0]===k)||[])[1]||k]);
     const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pSize" style="flex:1 1 120px"><option value="">全部尺寸</option>${sizes.map(([k,v])=>opt(k,v+"吋",prodSize===k)).join("")}</select><select id="pStyle" style="flex:1 1 140px"><option value="">全部樣式</option>${styles.map(([k,v])=>opt(k,v,prodStyle===k)).join("")}</select>${prodSize||prodStyle?'<button class="btn small" type="button" id="pClr">清除</button>':""}</div>`;
     const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>{if(!prodSize&&!prodStyle)return true;const c=fanOf(p);return c&&(!prodSize||c[3]===prodSize)&&(!prodStyle||c[1]===prodStyle)}).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
-      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
-      <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div>
+      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
+      <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
     return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}</div>${quick}
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
@@ -1160,12 +1160,16 @@ function prodForm(p,copy){
   <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
   <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
   <label>狀態<select name="active">${opt("1","使用中",p.active!==false)}${opt("0","停用",p.active===false)}</select></label><label>條碼（選填）<input name="barcode" value="${esc(p.barcode||"")}" inputmode="numeric"></label>
-  <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label></div>
+  <label class="full">備註<textarea name="note">${esc(p.note||"")}</textarea></label>
+   <div class="full" style="display:grid;gap:6px"><span style="color:var(--muted);font-size:13.5px">商品圖片</span>
+     <div id="imgPrev">${p.img?`<img src="${p.img}" alt="商品圖片" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);background:#fff">`:'<span class="note">尚未上傳</span>'}</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn small" style="cursor:pointer">${p.img?"更換圖片":"上傳圖片"}<input type="file" id="imgFile" accept="image/*" hidden></label>${'<button class="btn small" type="button" id="imgDel"'+(p.img?"":" hidden")+'>移除圖片</button>'}</div>
+     <input type="hidden" name="img" value="${esc(p.img||"")}"><span class="note">可直接用手機拍照，系統會自動壓縮。</span></div></div>
   ${!isNew&&!invCan("edit")?'<div class="note">你沒有「進銷存：修改」權限，只能查看這個商品。</div>':""}
   <div class="actions">${!isNew&&invCan("del")?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${(isNew?invCan("add"):invCan("edit"))?"取消":"關閉"}</button>${(isNew?invCan("add"):invCan("edit"))?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
   async fd=>{if(!(isNew?invCan("add"):invCan("edit"))){showErr({message:"你沒有修改權限。"});return false}
     const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),spec:val(fd,"spec"),cat:val(fd,"cat"),unit:val(fd,"unit")||"台",safety:val(fd,"safety")===""?"":Math.max(0,parseInt(val(fd,"safety"),10)||0),
-      cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+      cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),img:String(fd.get("img")||""),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(!d.code||!d.name){showErr({message:"請填寫商品編號與名稱。"});return false}
     {const f=famOf(fd.get("fam"))||guessFam(d.code);if(!f){showErr({message:"請先選擇「編碼分類」，商品編號第 1 碼要是 1、2、3、4、6、7、8、9、A、B、C 或 R。"});return false}
      if(d.code[0]!==f.m){showErr({message:`「${f.l}」的商品編號第 1 碼要是 ${f.m}。`});return false}
@@ -1211,6 +1215,15 @@ function prodForm(p,copy){
     pick.onchange=()=>{const x=S.invProd.find(k=>k.id===pick.value);if(!x)return;let n=x.printName;const f=famOf(F.fam.value)||guessFam(F.code.value);
       if(f&&x.code&&x.code[0]===f.m)n=subName(n,codeLabels(f,x.code),codeLabels(f,F.code.value.toUpperCase()));
       F.printName.value=n;autoPN=false;pick.hidden=true;F.printName.focus();toast("已帶入，可再修改")}}
+   // 商品圖片：壓縮到長邊 640px、JPEG，約 30～80KB，足夠辨識
+   {const fi=$("#imgFile"),pv=$("#imgPrev"),del=$("#imgDel");
+    fi.onchange=async()=>{const f=fi.files[0];if(!f)return;if(!f.type.startsWith("image/")){toast("請選擇圖片檔");return}
+      try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("無法讀取這張圖片"));i.src=URL.createObjectURL(f)});
+        let data="";for(const [mx,qq] of [[640,.72],[520,.65],[420,.6]]){const k=Math.min(1,mx/Math.max(img.width,img.height)),cv=document.createElement("canvas");cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
+          const g=cv.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,cv.width,cv.height);g.drawImage(img,0,0,cv.width,cv.height);data=cv.toDataURL("image/jpeg",qq);if(data.length<150000)break}
+        F.img.value=data;pv.innerHTML=`<img src="${data}" alt="商品圖片" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);background:#fff">`;del.hidden=false;toast("圖片已壓縮（約 "+Math.round(data.length*.75/1024)+" KB），按儲存後生效")}
+      catch(e){showErr(e)}};
+    del.onclick=()=>{F.img.value="";pv.innerHTML='<span class="note">尚未上傳</span>';del.hidden=true;fi.value=""}}
    // 建議售價＝成本 ÷ 0.6，無條件進位到整數（可再手動修改）
    const div=()=>+S.priceDiv>0?+S.priceDiv:0.6;
    const sugg=()=>{const c=+F.cost.value;if(F.cost.value===""||!(c>=0))return;F.price.value=Math.ceil(Math.round(c/div()*1e6)/1e6)};
