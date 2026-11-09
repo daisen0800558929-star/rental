@@ -1126,7 +1126,9 @@ function prodForm(p){
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
   <div class="grid2"><label class="full">編碼分類（第 1 碼）<select name="fam"><option value="">請選擇</option>${CODE_GRP.map(g=>`<optgroup label="${esc(g)}">${CODE_FAMS.filter(f=>f.g===g).map(f=>opt(f.k,f.m+"　"+f.l+"（"+famLen(f)+" 碼）",(p.fam||guessFam(p.code)?.k)===f.k)).join("")}</optgroup>`).join("")}</select></label>
   <div class="full" id="segBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div>
-  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label><label class="full">列印名稱（銷貨單、報價單只顯示這個）<input name="printName" value="${esc(p.printName||"")}" placeholder="例：54吋喇叭扇／三相220V"><span class="note">可自行設定較短的名稱；空白時自動用商品名稱去掉廠商</span></label>
+  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label><div class="full" style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl" style="flex:1;color:var(--muted);font-size:13.5px">列印名稱（銷貨單、報價單只顯示這個）</span><button class="btn small" type="button" id="copyPN">複製類似名稱</button></div>
+  <select id="pnPick" hidden></select>
+  <input name="printName" value="${esc(p.printName||"")}" placeholder="例：54吋喇叭扇／三相220V" aria-label="列印名稱"><span class="note">可自行設定較短的名稱；空白時自動用商品名稱去掉廠商</span></div>
   <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
   <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
   <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
@@ -1170,6 +1172,16 @@ function prodForm(p){
    F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/[^0-9A-Z?]/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}
      const f=famOf(F.fam.value);if(!f||F.code.value[0]!==f.m){const g=guessFam(F.code.value);if(g)F.fam.value=g.k}segs()});
    segs();
+   // 複製類似名稱：從同類商品的列印名稱挑一個帶入，不同的碼（例如尺寸 46→42）自動換成目前所選
+   {const pick=$("#pnPick");$("#copyPN").onclick=()=>{const code=F.code.value.toUpperCase(),f=famOf(F.fam.value)||guessFam(code);
+      const sim=x=>{let n=0;for(let i=0;i<Math.min(code.length,x.length);i++)if(code[i]===x[i])n++;return n};
+      const list=S.invProd.filter(x=>x.id!==p.id&&x.printName&&(!f||x.code?.[0]===f.m)).sort((a,b)=>sim(b.code||"")-sim(a.code||"")).slice(0,30);
+      if(!list.length){toast("還沒有同類商品設定過列印名稱");return}
+      pick.innerHTML='<option value="">選一個類似的名稱帶入…</option>'+list.map(x=>`<option value="${esc(x.id)}">${esc(x.printName)}（${esc(x.code)}）</option>`).join("");
+      pick.hidden=false;pick.focus();try{pick.showPicker()}catch(e){}};
+    pick.onchange=()=>{const x=S.invProd.find(k=>k.id===pick.value);if(!x)return;let n=x.printName;const f=famOf(F.fam.value)||guessFam(F.code.value);
+      if(f&&x.code&&x.code[0]===f.m){const a=codeLabels(f,x.code),b=codeLabels(f,F.code.value.toUpperCase());a.forEach((l,i)=>{if(l&&b[i]&&l!==b[i]&&!SKIP_LAB.test(b[i])&&n.includes(l))n=n.split(l).join(b[i])})}
+      F.printName.value=n;autoPN=false;pick.hidden=true;F.printName.focus();toast("已帶入，可再修改")}}
    // 建議售價＝成本 ÷ 0.6，無條件進位到整數（可再手動修改）
    const sugg=()=>{const c=+F.cost.value;if(F.cost.value===""||!(c>=0))return;F.price.value=Math.ceil(Math.round(c/0.6*1e6)/1e6)};
    F.cost.addEventListener("input",sugg);
