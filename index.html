@@ -659,11 +659,14 @@ function customerForm(c,pre){
   <label>Email<input name="email" value="${esc(c.email||"")}" inputmode="email" placeholder="例：service@daisencool.com.tw" autocomplete="off"><span class="note" id="emailHint"></span></label>
   <label>公司網站<input name="website" value="${esc(c.website||"")}" inputmode="url" placeholder="例：www.daisencool.com.tw" autocomplete="off"></label>
   ${addrFields("a","公司地址",c.addr||parseAddr(c.address))}
-  ${addrFields("d","送貨地址",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address,{contact:c.dlvContact,phone:c.dlvPhone})}
+  ${addrFields("d","送貨地址 1",c.dlv||parseAddr(c.delivery),!c.delivery||c.delivery===c.address,{contact:c.dlvContact,phone:c.dlvPhone})}
+  <div class="full" id="dlvMore"></div>
+  <div class="full"><button class="btn small" type="button" id="dlvAdd">＋ 新增送貨地址</button></div>
   <label class="full">備註<textarea name="note">${esc(c.note||"")}</textarea></label></div>
   <div class="actions">${!isNew&&canWrite?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${canWrite?"取消":"關閉"}</button>${canWrite?`<button class="btn primary" type="submit">${isNew?"新增":"儲存"}</button>`:""}</div>`,
   async fd=>{const a=addrRead("a"),dSame=!!fd.get("d_same"),dv=dSame?a:addrRead("d");
     const d={recorder:c?.recorder||myName(),name:val(fd,"name"),taxId:val(fd,"taxId"),contact:val(fd,"contact"),phone:fmtTel(val(fd,"phone")),fax:fmtTel(val(fd,"fax")),mobile:fmtMobile(val(fd,"mobile")),email:val(fd,"email").toLowerCase(),website:normUrl(val(fd,"website")),address:fullAddr(a),addr:a,delivery:dSame?"":fullAddr(dv),dlv:dSame?null:dv,dlvContact:val(fd,"d_contact"),dlvPhone:fmtAnyPhone(val(fd,"d_phone")),note:val(fd,"note")};
+    d.dlvMore=[...form.querySelectorAll("[data-dlvblk]")].map(w=>{const P=w.dataset.dlvblk,a2=addrRead(P);return{addr:a2,address:fullAddr(a2),contact:val(fd,P+"_contact"),phone:fmtAnyPhone(val(fd,P+"_phone"))}}).filter(x=>x.address||x.contact||x.phone);
     if(isNew&&!canRecord()){recDenied();return false}
     {const m=custMissing({...d,addr:a});if(m.length){showErr({message:missMsg(m,"客戶基本資料")});return false}}
     {const e=await taxGate("k");if(e){showErr({message:e});return false}}
@@ -673,6 +676,14 @@ function customerForm(c,pre){
     {const e=phoneErr([["公司電話",d.phone,"tel"],["傳真",d.fax,"tel"],["手機",d.mobile,"mobile"]])||addrErr(a,"公司地址")||(dSame?"":addrErr(dv,"送貨地址"));if(e){showErr({message:e});return false}}
     if(isNew)await db.collection("customers").doc().set(d);else await db.doc("customers/"+c.id).set(d);toast(isNew?"已新增客戶":"已儲存")});
   bindAddr("a");bindAddr("d");bindPhones({phone:"tel",fax:"tel",mobile:"mobile"});bindTax("k","name","taxId");
+  // 多組送貨地址
+  {let seq=0;const box=$("#dlvMore");
+   const addBlk=x=>{const P="x"+(seq++);const w=document.createElement("div");w.dataset.dlvblk=P;w.style.cssText="position:relative";
+     w.innerHTML=addrFields(P,"送貨地址 "+(box.children.length+2),x?.addr||parseAddr(x?.address||""),undefined,{contact:x?.contact,phone:x?.phone})+`<button class="btn small danger" type="button" data-dlvdel style="position:absolute;top:6px;right:6px">刪除</button>`;
+     box.appendChild(w);bindAddr(P);addDial()};
+   (c.dlvMore||[]).forEach(addBlk);
+   $("#dlvAdd").onclick=()=>addBlk(null);
+   box.addEventListener("click",e=>{const b=e.target.closest("[data-dlvdel]");if(!b)return;b.closest("[data-dlvblk]").remove();[...box.children].forEach((w,i)=>{const t=w.querySelector(".addr-t");if(t&&t.firstChild)t.firstChild.textContent="送貨地址 "+(i+2)})})}
   {const F=form.elements,em=F.email,ws=F.website,hint=$("#emailHint");
    const fix=()=>{const v=em.value.trim();if(v&&looksUrl(v)){if(!ws.value.trim())ws.value=normUrl(v);em.value="";hint.textContent="已把網址移到「公司網站」";hint.style.color="var(--ok)";return}
      hint.textContent=v&&!emailOk(v)?"Email 格式不正確，需要有 @，例如 name@company.com.tw":"";hint.style.color="var(--bad)"};
@@ -1108,7 +1119,7 @@ function viewInv(t){
   const docs=S.invDocs.filter(d=>d.type===type&&(!qq||nz([d.no,d.party,d.reason,d.note,...(d.items||[]).map(i=>prodLabel(i.pid))].join(" ")).includes(qq))).sort((a,b)=>String(b.date).localeCompare(a.date)||String(b.no).localeCompare(a.no));
   const rows=docs.map(d=>{const its=d.items||[],sum=its.reduce((a,i)=>a+(+i.qty||0),0),ls=type==="lend"?lendState(d):null;
     return `<div class="row" data-invdoc="${esc(d.id)}" tabindex="0"><div><div class="t">${type==="lend"?`<span class="pill" style="margin-right:6px">${esc(d.kind||"借出")}</span>`:""}${esc(d.party||(type==="scrap"?d.reason||"報廢":T.nm))}　<span class="mono m">${esc(d.no)}</span></div>
-    <div class="m">${esc(d.date)}${type==="lend"&&d.due?" → 預計 "+esc(d.due)+" 歸還":""} · ${esc(its.slice(0,3).map(i=>prodLabel(i.pid)+" ×"+i.qty).join("、"))}${its.length>3?" 等 "+its.length+" 項":""}</div></div>
+    <div class="m">${esc(d.date)}${d.shipAddr?" · 送貨 "+esc(d.shipAddr):""}${type==="lend"&&d.due?" → 預計 "+esc(d.due)+" 歸還":""} · ${esc(its.slice(0,3).map(i=>prodLabel(i.pid)+" ×"+i.qty).join("、"))}${its.length>3?" 等 "+its.length+" 項":""}</div></div>
     <div class="r">${ls?`<span class="pill ${ls[1]}">${esc(ls[0])}</span>`:`<span class="pill">${sum} 件</span>`}${T.price?`<span class="mono m">${money(invTotal(d))}</span>`:""}</div></div>`});
   const outN=type==="lend"?S.invDocs.filter(d=>d.type==="lend"&&lendState(d)[1]!=="mute").length:0;
   return N+(type==="lend"&&outN?`<div class="note">目前有 ${outN} 筆借出／試吹／展覽尚未歸還。</div>`:"")+`<div class="toolbar"><input id="q" placeholder="搜尋單號、${T.party||"原因"}、商品">${invCan("add")?`<button class="btn primary" type="button" data-inv="${type}">＋ 新增${type==="lend"?"借出／試吹／展覽":T.nm}單</button>`:""}</div>
@@ -1290,6 +1301,9 @@ function invDocForm(type,d,pre){
     ${type==="lend"?`<label>預計歸還日<input type="date" name="due" value="${esc(d.due||"")}" required></label>`:""}
     ${T.party?`<label class="${type==="lend"?"":"full"}">${type==="lend"?"借用對象（客戶或展覽名稱）":T.party}<input name="party" list="invParty" value="${esc(d.party||"")}" required></label>`:""}
     ${type!=="scrap"&&type!=="adj"?`<label>聯絡人／電話<input name="contact" value="${esc(d.contact||"")}"></label>`:""}
+    ${type==="out"||type==="lend"?`<label class="full">送貨地址<select name="shipPick"><option value="">— 選擇客戶的地址 —</option></select></label>
+    <label class="full">送貨地址（可修改）<input name="shipAddr" value="${esc(d.shipAddr||"")}" placeholder="選上面的地址，或直接輸入"></label>
+    <label>送貨聯絡人<input name="shipContact" value="${esc(d.shipContact||"")}"></label><label>送貨聯絡電話<input name="ship_phone" value="${esc(d.shipPhone||"")}" inputmode="tel"></label>`:""}
     ${type==="lend"?`<label class="full">地點（試吹或展覽地點）<input name="place" value="${esc(d.place||"")}"></label>`:""}
     ${type==="in"?`<label>發票／單據號碼<input name="invNo" value="${esc(d.invNo||"")}"></label>`:""}
     ${type==="out"?`<label>相關報價單號（選填）<input name="quoteNo" value="${esc(d.quoteNo||"")}" placeholder="例：Q20261104-01"></label>`:""}
@@ -1307,7 +1321,8 @@ function invDocForm(type,d,pre){
     if(!items.length){showErr({message:"請至少選擇一項商品並填寫數量。"});return false}
     if(type!=="adj"&&items.some(i=>i.qty<0)){showErr({message:"數量不能是負數。"});return false}
     if(new Set(items.map(i=>i.pid)).size!==items.length){showErr({message:"同一個商品請合併成一列。"});return false}
-    const o={type,date:val(fd,"date"),party:val(fd,"party"),contact:val(fd,"contact"),note:val(fd,"note"),items,updatedAt:new Date().toISOString(),updatedBy:me.email};
+    const o={type,date:val(fd,"date"),party:val(fd,"party"),contact:val(fd,"contact"),note:val(fd,"note"),items,
+       ...(type==="out"||type==="lend"?{shipAddr:val(fd,"shipAddr"),shipContact:val(fd,"shipContact"),shipPhone:fmtAnyPhone(val(fd,"ship_phone"))}:{}),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(type==="lend"){o.kind=val(fd,"kind");o.due=val(fd,"due");o.place=val(fd,"place");o.status=d.status||"借出中";if(o.due<o.date){showErr({message:"預計歸還日不能早於借出日期。"});return false}}
     if(type==="in")o.invNo=val(fd,"invNo");if(type==="out"){o.quoteNo=val(fd,"quoteNo");o.customerId=S.customers.find(k=>k.name===o.party)?.id||""}
     if(type==="scrap"){o.reason=val(fd,"reason");o.approver=val(fd,"approver")}
@@ -1318,6 +1333,15 @@ function invDocForm(type,d,pre){
     if(pre?.fromLend){const L=S.invDocs.find(x=>x.id===pre.fromLend);if(L)await updateDoc(doc(fs,"invDocs",L.id),{status:"轉銷貨",items:clean(L.items.map(i=>({...i,ret:+i.qty||0}))),soldNo:o.no})}
     toast((isNew?"已建立 ":"已儲存 ")+(o.no||d.no));
   },true);
+  // 送貨地址：依客戶列出公司地址與各組送貨地址
+  {const F=form.elements,pk=F.shipPick;if(pk){
+    const opts=()=>{const k=S.customers.find(x=>x.name===String(F.party.value||"").trim());if(!k)return[];
+      const L=[];if(k.address)L.push({lb:"公司地址",a:k.address,c:k.contact||"",p:k.mobile||k.phone||""});
+      if(k.delivery)L.push({lb:"送貨地址 1",a:k.delivery,c:k.dlvContact||"",p:k.dlvPhone||""});
+      (k.dlvMore||[]).forEach((x,j)=>x.address&&L.push({lb:"送貨地址 "+(j+2),a:x.address,c:x.contact||"",p:x.phone||""}));return L};
+    const fill=()=>{const L=opts();pk.innerHTML=`<option value="">${L.length?"— 選擇客戶的地址 —":"（找不到這個客戶的地址，請直接輸入）"}</option>`+L.map((x,j)=>`<option value="${j}"${x.a===F.shipAddr.value?" selected":""}>${esc(x.lb)}：${esc(x.a)}${x.c?"（"+esc(x.c)+"）":""}</option>`).join("");pk._L=L};
+    fill();F.party.addEventListener("change",fill);F.party.addEventListener("input",()=>{if(S.customers.some(x=>x.name===F.party.value.trim()))fill()});
+    pk.addEventListener("change",()=>{const x=pk._L?.[+pk.value];if(!x)return;F.shipAddr.value=x.a;F.shipContact.value=x.c;F.ship_phone.value=x.p;F.ship_phone.dispatchEvent(new Event("input"))})}}
   const body=$("#invBody");
   const calc=()=>{const st=invStock(isNew?null:d.id);let sum=0;body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;const pid=tr.querySelector("[name=r_pid]").value,qn=+tr.querySelector("[name=r_qty]").value||0;
     const sc=tr.querySelector("[data-stock]");sc.textContent=pid?"現有 "+(st[pid]?.qty||0):"";sc.style.color=pid&&T.sign<0&&qn>(st[pid]?.qty||0)?"var(--bad)":"";
