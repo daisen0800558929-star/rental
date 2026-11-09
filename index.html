@@ -1203,7 +1203,7 @@ function prodForm(p,copy){
    F.cost.addEventListener("input",sugg);
    if(F.cost.value!==""&&F.price.value==="")sugg();
    // 公式只有管理員看得到、改得到
-   if(isAdm()){const n=F.price.closest("label");n.insertAdjacentHTML("beforeend",`<span class="note">管理員：建議售價＝成本 ÷ <b id="divShow">${div()}</b>，無條件進位　<button class="btn small" type="button" id="divEdit">修改公式</button></span>`);
+   if(isAdm()){const n=F.price.closest("label");n.insertAdjacentHTML("beforeend",`<span class="note"><button class="btn small" type="button" id="divEdit">修改公式</button><b id="divShow" hidden>${div()}</b></span>`);
      $("#divEdit").onclick=async e=>{e.preventDefault();const v=prompt("建議售價＝成本 ÷ ？（例如 0.6 代表毛利 40%）",div());if(v===null)return;const x=+v;if(!(x>0&&x<=1)){toast("請輸入 0～1 之間的數字，例如 0.6");return}
        try{await setDoc(doc(fs,"hrSettings","invPricing"),{div:x,updatedAt:new Date().toISOString(),updatedBy:me.email});S.priceDiv=x;$("#divShow").textContent=x;sugg();toast("已更新建議售價公式")}catch(err){showErr(err)}}}}
   {const b=$("#editRule");if(b)b.onclick=()=>{const keep=p.id?p:null;dlg.close();openDlg(`<h3>編輯品編說明</h3><div class="note">這段說明會顯示在新增商品的「商品編號」上方，讓同仁照同一套規則編號。</div>
