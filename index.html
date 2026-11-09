@@ -1057,6 +1057,13 @@ function invStock(exceptId){
   for(const k in st){const r=st[k];r.qty=r.in-r.out-r.scrap+r.adj-r.lent}
   return st;
 }
+/* 商品排序：成品-風機依「尺寸大→小、風扇樣式、AC 先於 DC、不調速先於調速、電壓」；其他依編號 */
+const FAN_DRIVE={"1":0,"2":1,"3":2,"4":3,"7":4,"6":5,"5":6};
+function prodKey(p){const c=String(p.code||"").toUpperCase();
+  if(c.length===10&&c[0]==="1"){const f=famOf("1"),lab=codeLabels(f,c),size=parseFloat(lab[2])||0;
+    return["1",String(999-size).padStart(4,"0"),c[1],FAN_DRIVE[c[4]]??9,c[7],c].join("|")}
+  return c[0]+"|"+c}
+const prodSort=(a,b)=>prodKey(a).localeCompare(prodKey(b));
 const invLow=()=>{const st=invStock();return S.invProd.filter(p=>p.active!==false&&!p.noStock&&(+p.safety||0)>0&&(st[p.id]?.qty||0)<(+p.safety||0))};
 function lendState(d){if(d.status==="轉銷貨")return["已轉銷貨","mute"];if(d.status==="已歸還")return["已歸還","mute"];
   const left=(d.items||[]).reduce((a,i)=>a+Math.max(0,(+i.qty||0)-(+i.ret||0)),0);
@@ -1067,7 +1074,7 @@ function viewInv(t){
   const N=S.hrErr==="permission-denied"?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
-    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.spec,p.cat].join(" ")).includes(qq)).sort((a,b)=>String(a.code).localeCompare(b.code)).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
+    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.spec,p.cat].join(" ")).includes(qq)).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
@@ -1075,7 +1082,7 @@ function viewInv(t){
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
   }
   if(t==="inv_stock"){
-    const list=S.invProd.filter(p=>p.active!==false&&!p.noStock&&(!qq||nz([p.code,p.name,p.spec].join(" ")).includes(qq))).sort((a,b)=>String(a.code).localeCompare(b.code));
+    const list=S.invProd.filter(p=>p.active!==false&&!p.noStock&&(!qq||nz([p.code,p.name,p.spec].join(" ")).includes(qq))).sort(prodSort);
     const val=list.reduce((a,p)=>a+(st[p.id]?.qty||0)*(+p.cost||0),0),low=invLow().length;
     return N+`<div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><span class="k">商品項數</span><span class="v">${list.length}</span></div><div class="stat"><span class="k">庫存總值（成本）</span><span class="v">${short(val)}</span></div><div class="stat ${low?"warn":""}"><span class="k">低於安全庫存</span><span class="v">${low}</span></div></div>
     <div class="toolbar"><input id="q" placeholder="搜尋商品">${invCan("add")?'<button class="btn" type="button" data-inv="adj">盤點調整</button>':""}</div>
