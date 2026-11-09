@@ -338,7 +338,7 @@ const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
-const COMPANY={name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
+const COMPANY={en:"Daisen Energy Saving Undertakings Co.,Ltd.",taxId:"42950678",addr:"彰化縣彰化市自強南路537號",northTel:"03-3818478",southTel:"07-6952951",name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -2156,10 +2156,15 @@ function quoteSheet(x,o={}){
   const COLS=`<colgroup><col style="width:6%"><col style="width:31%"><col style="width:22%"><col style="width:11%"><col style="width:14%"><col style="width:16%"></colgroup>`;
   return `<div class="sheet">
   <div class="frame">
-    <table class="hd"><colgroup><col style="width:24%"><col><col style="width:96px"></colgroup><tbody><tr>
+    <table class="hd"><colgroup><col style="width:21%"><col><col style="width:96px"></colgroup><tbody><tr>
       <td class="logo"><img src="logo.png" alt="大森節能"><div class="w">${esc(COMPANY.web)}</div></td>
-      <td class="mid"><div class="co">${esc(COMPANY.name)}</div><div class="tt">報價單&amp;合約書</div><div class="tel">${esc(COMPANY.hotline)}</div><div class="no">單號 ${esc(x.no||"")}</div></td>
+      <td class="lh"><div class="r1"><span class="co">${esc(COMPANY.name)}</span><span class="tax">統編:${esc(COMPANY.taxId)}</span></div>
+        <div class="en">${esc(COMPANY.en)}</div>
+        <div class="ln">${esc(COMPANY.addr)}　${esc(COMPANY.email)}</div>
+        <div class="ln">TEL:${esc(COMPANY.tel)}　FAX:${esc(COMPANY.fax)}　服務專線:${esc(COMPANY.hotline)}</div>
+        <div class="ln sm">桃園/台北服務專線 TEL:${esc(COMPANY.northTel)}　高雄/台南服務專線 TEL:${esc(COMPANY.southTel)}</div></td>
       <td class="qr">${qr}</td></tr></tbody></table>
+    <table class="ttl"><tbody><tr><td><span class="tt">報價單&amp;合約書</span><span class="no">單號 ${esc(x.no||"")}</span></td></tr></tbody></table>
     <table class="info"><colgroup><col style="width:12%"><col style="width:23%"><col style="width:8%"><col style="width:22%"><col style="width:35%"></colgroup><tbody>
       <tr><td class="lb">客戶名稱：</td><td colspan="3">${esc(c.name||"")}</td><td class="co-side">報價日期：${esc(x.date||"")}</td></tr>
       <tr><td class="lb">聯絡電話：</td><td>${esc(c.phone||"")}</td><td class="lb">傳真：</td><td>${esc(c.fax||"")}</td><td class="co-side">業務手機：${esc(x.salesMobile||"")}</td></tr>

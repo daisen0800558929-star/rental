@@ -13,11 +13,16 @@
 .sheet .hd td{border:0;padding:8px 10px;vertical-align:middle}
 .sheet .hd .logo img{height:62px;width:auto;display:block;background:#fff;border-radius:3px}
 .sheet .hd .logo .w{font-size:10.5px;margin-top:2px;letter-spacing:.02em}
-.sheet .hd .mid{text-align:center}
-.sheet .hd .co{font-size:22px;font-weight:700;letter-spacing:.32em;margin-right:-.32em}
-.sheet .hd .tt{font-size:17px;font-weight:700;letter-spacing:.3em;margin:2px -.3em 0 0}
-.sheet .hd .tel{font-size:15px;letter-spacing:.12em;font-variant-numeric:tabular-nums}
-.sheet .hd .no{font-size:11px;margin-top:2px}
+.sheet .hd .lh{padding:6px 8px;line-height:1.35}
+.sheet .hd .r1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.sheet .hd .co{font-size:23px;font-weight:700;letter-spacing:.28em}
+.sheet .hd .tax{font-size:12px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sheet .hd .en{font-size:13.5px;letter-spacing:.02em}
+.sheet .hd .ln{font-size:12px;font-variant-numeric:tabular-nums}
+.sheet .hd .ln.sm{font-size:11px}
+.sheet .ttl td{text-align:center;padding:5px 10px;position:relative}
+.sheet .ttl .tt{font-size:17px;font-weight:700;letter-spacing:.3em;margin-right:-.3em}
+.sheet .ttl .no{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px}
 .sheet .hd .qr{text-align:center;width:96px}
 .sheet .hd .qr img{width:78px;height:78px;image-rendering:pixelated;display:block;margin:0 auto;background:#fff}
 .sheet .hd .qr div{font-size:10px;margin-top:2px;white-space:nowrap}
