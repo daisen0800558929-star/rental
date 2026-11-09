@@ -1108,6 +1108,15 @@ function guessFam(code){code=String(code||"").toUpperCase();let best=null,bs=-1;
     for(const g of f.s){const c=code.slice(pos,pos+g.w);if(c.length<g.w)break;if(g.o.some(o=>o[0]===c))sc++;else if(pos===1)sc-=5;pos+=g.w}
     if(code.length===famLen(f))sc+=1;if(sc>bs){bs=sc;best=f}}
   return best}
+/* 商品名稱＝次類別（第2碼）－其餘所選規格；列印用名稱不含廠商／廠牌 */
+const SKIP_LAB=/^預留|無管制|不管制/,BRAND_SEG=/廠商|廠牌/;
+function prodNames(f,labels){
+  const sub=labels[0]||"",parts=f.s.map((g,i)=>({g,i,t:labels[i]||""})).filter(x=>x.i>0&&x.t&&!SKIP_LAB.test(x.t));
+  const j=a=>sub?(sub+(a.length?"-"+a.join("／"):"")):a.join("／");
+  return{name:j(parts.map(x=>x.t)),printName:j(parts.filter(x=>!BRAND_SEG.test(x.g.n)).map(x=>x.t))}}
+// 由商品編號推回各碼名稱（同碼有多個名稱時取第一個）
+const codeLabels=(f,code)=>{let pos=1;return f.s.map(g=>{const c=String(code||"").slice(pos,pos+g.w);pos+=g.w;return(g.o.find(o=>o[0]===c)||[])[1]||""})};
+const prodPrint=p=>p.printName||p.name||"";
 const isNoStock=pid=>!!prod(pid)?.noStock;
 function prodForm(p){
   const isNew=!p;p=p||{unit:"台",active:true};
@@ -1135,7 +1144,10 @@ function prodForm(p){
      if(!/^[0-9A-Z]+$/.test(d.code)){showErr({message:"商品編號只能用數字和英文字母，不要加「-」或空白。"});return false}
      if(d.code.length!==famLen(f)){showErr({message:`「${f.l}」的商品編號要剛好 ${famLen(f)} 碼，目前是 ${d.code.length} 碼。`});return false}
      let pos=1;for(const g of f.s){const c=d.code.slice(pos,pos+g.w);if(!g.o.some(o=>o[0]===c)&&CODE_BAD.test(c)){showErr({message:`第 ${pos+1} 碼「${c}」用到了不使用的字母（I、O、Q、S、V），請換一個。`});return false}pos+=g.w}
-     d.fam=f.k;d.noStock=!!f.ns}
+     d.fam=f.k;d.noStock=!!f.ns;
+     {const auto=prodNames(f,codeLabels(f,d.code));
+      // 名稱若是系統自動產生（含廠商），列印名稱自動去掉廠商；手動改過的名稱就照原樣
+      d.printName=d.name===auto.name?auto.printName:(()=>{let n=d.name;f.s.forEach((g,i)=>{if(!BRAND_SEG.test(g.n))return;const l=codeLabels(f,d.code)[i];if(l)n=n.replace(l+"／","").replace("／"+l,"").replace("-"+l,"-")});return n})()}}
     if(S.invProd.some(x=>x.code===d.code&&x.id!==p.id)){showErr({message:"商品編號 "+d.code+" 已經存在，請換一個編號。"});return false}
     await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
   addVoice({name:"text",spec:"text",cat:"text",note:"append"});
@@ -1149,7 +1161,8 @@ function prodForm(p){
    const build=()=>{const f=famOf(F.fam.value);if(!f)return;const sel=[...box.querySelectorAll("select")];
      F.code.value=f.m+f.s.map((g,i)=>sel[i].value||"?".repeat(g.w)).join("");
      const picks=f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}).filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0));
-     if(autoSpec)F.spec.value=picks.join("／");if(autoCat)F.cat.value=f.l;if(autoName)F.name.value=f.l.replace(/^成品-/,"").split("－").pop();
+     if(autoSpec)F.spec.value=picks.join("／");if(autoCat)F.cat.value=f.l;
+     if(autoName){const nm=prodNames(f,f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}));if(nm.name)F.name.value=nm.name}
      cnt()};
    F.fam.addEventListener("change",()=>{const f=famOf(F.fam.value);if(f){const keep=F.code.value[0]===f.m?F.code.value:"";F.code.value=keep||f.m;
        if(!keep){let pos=1;const fill=f.s.map(g=>g.o.length===1||g.o.every(o=>o[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w)).join("");F.code.value=f.m+fill}}
@@ -2114,9 +2127,9 @@ function quoteForm(src,copy){
     if(t.tagName==="SELECT"&&t.name!=="i_cat")nextField(t)});
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
-    if(pr){e.target.value=pr.name+(pr.spec?" "+pr.spec:"");cdI.value=pr.code;show.textContent=pr.code;
+    if(pr){e.target.value=prodPrint(pr);cdI.value=pr.code;show.textContent=pr.code;
       {const k=qcatOf(pr.cat||pr.name);if(k)tr.querySelector("[name=i_cat]").value=k}if(pr.unit)tr.querySelector("[name=i_unit]").value=pr.unit;if(+pr.price)tr.querySelector("[name=i_price]").value=pr.price;calc();return}
-    if(cdI.value&&!S.invProd.some(k=>k.code===cdI.value&&(k.name+(k.spec?" "+k.spec:""))===v)){cdI.value="";show.textContent=""}
+    if(cdI.value&&!S.invProd.some(k=>k.code===cdI.value&&prodPrint(k)===v)){cdI.value="";show.textContent=""}
     const eq=S.equipment.find(k=>k.name===v);if(!eq)return;
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=qcatOf(eq.category);
     if(eq.rate&&!tr.querySelector("[name=i_price]").value)tr.querySelector("[name=i_price]").value=eq.rate;calc()});
