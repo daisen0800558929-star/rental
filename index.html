@@ -1060,7 +1060,7 @@ function viewInv(t){
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
     const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.spec,p.cat].join(" ")).includes(qq)).sort((a,b)=>String(a.code).localeCompare(b.code)).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
-      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
+      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div>
       <div class="r"><span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
     return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}</div>
