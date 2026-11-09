@@ -1156,7 +1156,12 @@ function prodForm(p){
      segs();build()});
    F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/[^0-9A-Z?]/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}
      const f=famOf(F.fam.value);if(!f||F.code.value[0]!==f.m){const g=guessFam(F.code.value);if(g)F.fam.value=g.k}segs()});
-   segs()}
+   segs();
+   // 建議售價＝成本 ÷ 0.6，無條件進位到整數（可再手動修改）
+   const sugg=()=>{const c=+F.cost.value;if(F.cost.value===""||!(c>=0))return;F.price.value=Math.ceil(Math.round(c/0.6*1e6)/1e6)};
+   F.cost.addEventListener("input",sugg);
+   if(F.cost.value!==""&&F.price.value==="")sugg();
+   {const n=F.price.closest("label");if(n&&!n.querySelector(".note"))n.insertAdjacentHTML("beforeend",'<span class="note">輸入成本後自動帶出：成本 ÷ 0.6，無條件進位</span>')}}
   {const b=$("#editRule");if(b)b.onclick=()=>{const keep=p.id?p:null;dlg.close();openDlg(`<h3>編輯品編說明</h3><div class="note">這段說明會顯示在新增商品的「商品編號」上方，讓同仁照同一套規則編號。</div>
     <label>品編說明<textarea name="text" style="min-height:200px">${esc(S.invRule||INV_RULE_DEFAULT)}</textarea></label>
     <div class="actions"><button class="btn" type="button" id="ruleReset">恢復預設</button><span class="spacer"></span><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">儲存</button></div>`,
