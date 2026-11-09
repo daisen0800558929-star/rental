@@ -546,7 +546,7 @@ function contractForm(c){
   <div class="actions">${!isNew?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立租約":"儲存"}</button></div>`,
   async fd=>{
     const d={customerId:val(fd,"customerId"),equipmentId:val(fd,"equipmentId"),start:val(fd,"start"),end:val(fd,"end"),unit:val(fd,"unit"),
-      rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,remindDays:Math.max(0,Math.min(90,parseInt(val(fd,"remindDays"),10)||0)),site:val(fd,"site"),sitePhone:val(fd,"sitePhone"),note:val(fd,"note")};
+      rate:+val(fd,"rate")||0,deposit:+val(fd,"deposit")||0,remindDays:Math.max(0,Math.min(90,parseInt(val(fd,"remindDays"),10)||0)),site:val(fd,"site"),sitePhone:val(fd,"sitePhone"),terms:QTERMS.filter(q=>fd.get("term_"+q.k)).map(q=>q.k),note:val(fd,"note")};
     if(!d.customerId||!d.equipmentId||!d.start||!d.end){showErr({message:"請填寫客戶、設備、起租日與到期日。"});return false}
     if(d.end<d.start){showErr({message:"到期日不能早於起租日。"});return false}
     if(isNew){
@@ -1951,6 +1951,21 @@ const custOwner=k=>k?.owner||"";
 const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?custOwner(S.customers.find(x=>normName(x.name)===normName(name))):"");return o&&o!==myName()?o:""};
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
 const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
+/* 報價單合約條件：k=代碼，t=文字，a=自動勾選規則（依報價項目） */
+const QTERMS=[
+ {k:"volt",t:"請確認電壓是否正確",a:()=>true},
+ {k:"warr",t:"銷售之產品保固一年（不含耗材），但如遇下列情況，不包含產品保固範圍內，客戶需自行負擔維修費用。<br>備註：凡因天災、不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。",a:it=>it.some(i=>i.svc==="銷售")},
+ {k:"rentcare",t:"產品租賃期間，請客戶愛惜使用，如為自然損壞，則由本公司負責免費維修，若因客戶人為因素或遇不可抗力天災或客戶自行拆解導致損壞，將由客戶負擔維修費用。",a:it=>it.some(i=>i.svc==="出租")},
+ {k:"rentown",t:"租賃合約起訖，設備所有權仍屬本公司所有，在合約到期，客戶未續約時，本公司有權收回，客戶不得阻攔。",a:it=>it.some(i=>i.svc==="出租")},
+ {k:"fish10",t:"本魚池過濾系統濾材保固十年。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
+ {k:"fish1",t:"本魚池過濾系統電子機件、控制箱、水泵、蝶閥、殺菌燈保固一年。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
+ {k:"fishsvc",t:"魚池過濾設備建議年度實施小保養一次。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
+ {k:"own",t:"貨款未付清前，設備所有權仍屬本公司所有。",a:()=>true},
+ {k:"pay",t:"付款方式：合約回傳並支付定金後，合約正式成立，貨品送貨抵達時，請支付所有尾款，開立支票部分，請開立即期票據，並註明禁止背書轉讓。",a:()=>true},
+ {k:"sign",t:"以上敘述如沒有問題請於下方客戶欄位簽章，以利本公司安排出貨。",a:()=>true},
+ {k:"seven",t:"本產品不適合七日鑑賞期。",a:()=>true},
+ {k:"remit",t:"匯款後，請來電告知匯款帳號末五碼，或將匯款單據傳真拍照至本公司，無此動作將視為訂單未完成。",a:()=>true}];
+const autoTerms=items=>QTERMS.filter(q=>q.a(items||[])).map(q=>q.k);
 const IVOLTS=["單相110V","單相220V","三相220V","三相380V","三相440V","無電壓管制"];
 // 各品項的產品名稱下拉選單
 const QPROD={"水冷扇":["36吋DC水冷扇／無段變速","L150水冷扇","L120水冷扇","L105水冷扇","L100水冷扇","L80水冷扇","L60水冷扇","L40水冷扇","L20水冷扇","Ju50水冷扇","106水冷扇","1203水冷扇","2201水冷扇","2203水冷扇","DS120水冷扇","環保空調"],
@@ -2020,6 +2035,9 @@ function quoteForm(src,copy){
       <label style="flex:0 1 200px">稅別<select name="taxMode">${Object.entries(TAX).map(([k,v])=>opt(k,v,k===(x.taxMode||"excl"))).join("")}</select></label></div>
     <div class="totals" id="totals" style="margin-top:10px"></div>
   </fieldset>
+  <fieldset><legend>合約條件（勾選要印在報價單上的條款）</legend>
+    <div class="note">會依報價項目自動勾選（例如有出租就勾租賃條款、有魚池過濾設備就勾魚池保固），也可以自己調整。<button class="btn small" type="button" id="termsAuto">依項目重新自動勾選</button></div>
+    <div id="termsBox" style="display:grid;gap:6px;margin-top:6px">${QTERMS.map(q=>`<label style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="checkbox" name="term_${q.k}" style="width:auto;margin-top:4px" ${(x.terms||autoTerms(x.items)).includes(q.k)?"checked":""}><span>${q.t}</span></label>`).join("")}</div></fieldset>
   <label>注意事項<textarea name="note" placeholder="例：交貨方式、安裝位置、特殊需求">${esc(x.note||"")}</textarea></label>
   <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">${isNew?"建立報價單":"儲存"}</button></div>`,
   async fd=>{
@@ -2053,7 +2071,12 @@ function quoteForm(src,copy){
   },true);
   {const se=form.elements.sales;if(se?.tagName==="SELECT")se.addEventListener("change",()=>{const m=se.selectedOptions[0]?.dataset.mobile||mobileOf(se.value);if(m)form.elements.salesMobile.value=fmtMobile(m)})}
   const body=$("#itemsBody");
-  const calc=()=>{
+  let termsTouched=!!x.terms&&!isNew;
+  const curItems=()=>[...body.querySelectorAll("tr")].map(tr=>({svc:tr.querySelector("[name=i_svc]").value,cat:tr.querySelector("[name=i_cat]").value}));
+  const applyTerms=()=>{const on=autoTerms(curItems());QTERMS.forEach(q=>{const b=form.elements["term_"+q.k];if(b)b.checked=on.includes(q.k)})};
+  $("#termsBox").addEventListener("change",()=>termsTouched=true);
+  $("#termsAuto").onclick=()=>{applyTerms();termsTouched=false};
+  const calc=()=>{if(!termsTouched)applyTerms();
     $("#itemsTbl").classList.toggle("norent",![...body.querySelectorAll("[name=i_svc]")].some(x=>x.value==="出租"));
     body.querySelectorAll("tr").forEach((tr,i)=>{tr.querySelector(".idx").textContent=i+1;
       const v=n=>+tr.querySelector(`[name=${n}]`).value||0;tr.querySelector("[data-sub]").textContent=Math.round(v("i_qty")*v("i_price")).toLocaleString("zh-TW");
@@ -2180,15 +2203,14 @@ function quoteSheet(x,o={}){
       <tr><td class="lbl"><b>總額</b></td><td style="text-align:right"><b>${N(t.total)}</b></td></tr>
     </tbody></table>
     <table class="ct"><colgroup><col style="width:30px"><col><col style="width:22%"></colgroup><tbody>
-      <tr><td class="vt" rowspan="9">合約內容</td><td colspan="2">※請確認電壓：${(()=>{const v=[...new Set((x.items||[]).map(i=>i.volt).filter(Boolean))];return v.length?esc(v.join("、"))+"（依各報價項目所列）":x.volt?esc(x.volt==="其他"?x.voltOther||"其他":x.volt):blank("",120)})()}</td></tr>
-      <tr><td colspan="2">＊產品保固壹年（不含耗材），但如遇下列情況，不包含在產品保固範圍內，客戶須自行負擔修護費用。</td></tr>
-      <tr><td colspan="2">附註：凡因天災、遇不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。</td></tr>
-      <tr><td colspan="2">＊付款方式：合約回傳並支付定金後，合約正式成立。${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}${x.pay&&!PAYS.includes(x.pay)?" "+ck(true)+esc(x.pay):""}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元<br>　定金部分公司不做退還，作為人員作業費用。</td></tr>
-      <tr><td colspan="2">＊貨款未付清前，設備仍屬${esc(COMPANY.name)}所有。</td></tr>
-      <tr><td colspan="2">　送貨抵達，請支付所有尾款。開立支票部份，請開立即期票據，並註明禁止背書轉讓。</td></tr>
-      <tr><td colspan="2">＊以上敘述如沒有問題請簽名，以便安排出貨及安裝期程。</td></tr>
-      <tr><td rowspan="2">　匯款後請來電告知帳號後五碼，或將匯款單據傳真拍照至公司，無此動作將視為訂單未成立。</td><td>定金50%　${t.total?N(t.deposit):""}</td></tr>
-      <tr><td>尾款50%　${t.total?N(t.balance):""}</td></tr>
+${(()=>{const sel=QTERMS.filter(q=>(x.terms||autoTerms(x.items)).includes(q.k));
+        const volts=[...new Set((x.items||[]).map(i=>i.volt).filter(Boolean))];
+        const txt=q=>q.k==="volt"?`請確認電壓是否正確：${volts.length?esc(volts.join("、"))+"（依各報價項目所列）":x.volt?esc(x.volt==="其他"?x.voltOther||"其他":x.volt):blank("",120)}`
+          :q.k==="pay"?q.t+`<br>${PAYS.map(v=>ck(x.pay===v)+v).join(" ")}${x.pay&&!PAYS.includes(x.pay)?" "+ck(true)+esc(x.pay):""}；定金：${blank(t.total?N(t.deposit):"")}元；尾款：${blank(t.total?N(t.balance):"")}元`:q.t;
+        const rows=sel.map((q,i)=>`<td colspan="2">＊${txt(q)}</td>`);
+        const n=Math.max(rows.length,1)+1;
+        return `<tr><td class="vt" rowspan="${n}">合約內容</td>${rows[0]||'<td colspan="2"></td>'}</tr>${rows.slice(1).map(r=>`<tr>${r}</tr>`).join("")}
+      <tr><td style="text-align:right">付款金額</td><td>定金50%　${t.total?N(t.deposit):""}<br>尾款50%　${t.total?N(t.balance):""}</td></tr>`})()}
     </tbody></table>
     <table class="bank"><tbody><tr><td>戶名：${esc(COMPANY.bankName)}　銀行：${esc(COMPANY.bank)}　帳號：${esc(COMPANY.bankAcct)}</td></tr></tbody></table>
     <table class="sg"><colgroup><col style="width:60%"><col></colgroup><tbody><tr>
