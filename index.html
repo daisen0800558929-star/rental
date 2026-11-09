@@ -331,10 +331,15 @@ html,body{margin:0}
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import {getFirestore,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc,query,where,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,onSnapshot,setDoc,updateDoc,deleteDoc,getDoc,query,where,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail,createUserWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 const firebaseConfig={apiKey:"AIzaSyA-lXRTR38AeFMgSwYCD91Akywgxgb5ZB4",authDomain:"daisen-rental.firebaseapp.com",projectId:"daisen-rental",storageBucket:"daisen-rental.firebasestorage.app",messagingSenderId:"687274188760",appId:"1:687274188760:web:41035f0278d21ebd99dcad"};
-const fbApp=initializeApp(firebaseConfig),fs=getFirestore(fbApp),auth=getAuth(fbApp);
+const fbApp=initializeApp(firebaseConfig),auth=getAuth(fbApp);
+// 資料存一份在手機／電腦本機，第二次開啟不用等網路就能先顯示；連線不穩時自動改用長輪詢
+const fs=(()=>{try{return initializeFirestore(fbApp,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()}),experimentalAutoDetectLongPolling:true})}catch(e){try{return initializeFirestore(fbApp,{experimentalAutoDetectLongPolling:true})}catch(e2){return getFirestore(fbApp)}}})();
+// 發生錯誤時顯示在畫面上，方便回報
+window.addEventListener("error",e=>{try{toast("系統錯誤："+(e.message||"未知錯誤"))}catch(_){}});
+window.addEventListener("unhandledrejection",e=>{const m=e.reason?.message||String(e.reason||"");if(/permission|offline|network/i.test(m))return;try{toast("系統錯誤："+m.slice(0,80))}catch(_){}});
 /* 系統擁有者：永遠是管理員，用來開通第一批帳號 */
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
