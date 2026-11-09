@@ -521,7 +521,13 @@ function viewCustomers(loading){
 /* ---------- dialogs ---------- */
 const dlg=$("#dlg"),form=$("#dlgForm");
 let onSubmit=null;
-function openDlg(html,submit,wide){form._cf=null;dlg.classList.toggle("wide",!!wide);form.oninput=null;form.innerHTML=html;onSubmit=submit;dlg.showModal();const f=form.querySelector("input,select,textarea");if(f)f.focus()}
+function openDlg(html,submit,wide){form._cf=null;dlg.classList.toggle("wide",!!wide);form.oninput=null;form.innerHTML=html;onSubmit=submit;dlg.showModal();const f=form.querySelector("input,select,textarea");if(f)f.focus();setTimeout(addDial,0)}
+/* 電話欄位旁加「撥打」：手機上點了直接撥號（分機 #12 會自動在接通後撥出） */
+const telHref=v=>{v=String(v||"").trim();if(!v)return"";const m=v.split(/[#＃轉]|分機|ext/i),main=m[0].replace(/[^\d+]/g,""),ext=(m[1]||"").replace(/\D/g,"");return main.length>=6?"tel:"+main+(ext?","+ext:""):""};
+function addDial(){form.querySelectorAll('input[name=tel],input[name=mobile],input[name=phone],input[name=c_phone],input[name=c_mobile],input[name=salesMobile]').forEach(inp=>{
+  if(inp.dataset.dial)return;inp.dataset.dial=1;const a=document.createElement("a");a.className="btn small";a.textContent="📞 撥打";a.style.cssText="justify-self:start;margin-top:4px;text-decoration:none";
+  const up=()=>{const h=telHref(inp.value);a.hidden=!h;if(h)a.href=h};up();inp.addEventListener("input",up);inp.addEventListener("change",up);
+  const host=inp.closest(".micbox")||inp;host.insertAdjacentElement("afterend",a)})}
 form.addEventListener("submit",async e=>{e.preventDefault();if(!onSubmit)return;const btn=form.querySelector("[type=submit]");if(btn)btn.disabled=true;
   try{const ok=await onSubmit(new FormData(form));if(ok!==false)dlg.close()}catch(err){showErr(err)}finally{if(btn)btn.disabled=false}});
 form.addEventListener("click",e=>{if(e.target.closest("[data-close]"))dlg.close()});
