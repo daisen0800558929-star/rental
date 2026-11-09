@@ -1039,7 +1039,7 @@ const INV_T={in:{nm:"進貨",pre:"PI",party:"供應商",price:"進貨單價",sig
 const INV_TAB={inv_in:"in",inv_out:"out",inv_lend:"lend",inv_scrap:"scrap"};
 const LEND_KINDS=["借出","試吹","展覽"];
 const prod=id=>S.invProd.find(p=>p.id===id);
-const prodLabel=id=>{const p=prod(id);return p?(p.code?p.code+" ":"")+p.name:"（商品已刪除）"};
+const prodLabel=id=>{const p=prod(id);return p?(p.code?p.code+" ":"")+(p.printName||p.name):"（商品已刪除）"};
 const invTotal=d=>(d.items||[]).reduce((a,i)=>a+(+i.qty||0)*(+i.price||0),0);
 function invStock(exceptId){
   const st={};const g=id=>st[id]||(st[id]={in:0,out:0,lent:0,scrap:0,adj:0,qty:0});
@@ -1060,7 +1060,7 @@ function viewInv(t){
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
     const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.spec,p.cat].join(" ")).includes(qq)).sort((a,b)=>String(a.code).localeCompare(b.code)).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
-      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="t"><span class="mono m">${esc(p.code)}</span>　${esc(p.name)}　<span class="m">${esc(p.spec||"")}</span></div>
+      return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div><div class="t"><span class="mono m">${esc(p.code)}</span>　${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div>
       <div class="r"><span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
     return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}</div>
@@ -1073,7 +1073,7 @@ function viewInv(t){
     <div class="toolbar"><input id="q" placeholder="搜尋商品">${invCan("add")?'<button class="btn" type="button" data-inv="adj">盤點調整</button>':""}</div>
     ${list.length?`<div class="tablewrap"><table class="grid" style="min-width:720px"><thead><tr><th>商品</th><th class="n">進貨</th><th class="n">銷貨</th><th class="n">借出中</th><th class="n">報廢</th><th class="n">盤點調整</th><th class="n">現有庫存</th><th class="n">安全庫存</th></tr></thead><tbody>
     ${list.map(p=>{const r=st[p.id]||{in:0,out:0,lent:0,scrap:0,adj:0,qty:0},low=(+p.safety||0)>0&&r.qty<(+p.safety||0);
-      return `<tr><td><span class="mono m">${esc(p.code)}</span> ${esc(p.name)}</td><td class="n">${r.in}</td><td class="n">${r.out}</td><td class="n">${r.lent}</td><td class="n">${r.scrap}</td><td class="n">${r.adj>0?"+":""}${r.adj}</td><td class="n"><b style="color:${r.qty<0?"var(--bad)":low?"var(--warn)":"var(--fg)"}">${r.qty}</b></td><td class="n">${esc(p.safety||"—")}</td></tr>`}).join("")}</tbody></table></div>
+      return `<tr><td><span class="mono m">${esc(p.code)}</span> ${esc(prodPrint(p))}</td><td class="n">${r.in}</td><td class="n">${r.out}</td><td class="n">${r.lent}</td><td class="n">${r.scrap}</td><td class="n">${r.adj>0?"+":""}${r.adj}</td><td class="n"><b style="color:${r.qty<0?"var(--bad)":low?"var(--warn)":"var(--fg)"}">${r.qty}</b></td><td class="n">${esc(p.safety||"—")}</td></tr>`}).join("")}</tbody></table></div>
     <div class="note">現有庫存 = 進貨 − 銷貨 − 借出中 − 報廢 ± 盤點調整。借出的商品歸還後會自動加回。</div>`:'<div class="card"><div class="empty">還沒有商品資料。</div></div>'}`;
   }
   const type=INV_TAB[t],T=INV_T[type];
@@ -1126,7 +1126,7 @@ function prodForm(p){
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
   <div class="grid2"><label class="full">編碼分類（第 1 碼）<select name="fam"><option value="">請選擇</option>${CODE_GRP.map(g=>`<optgroup label="${esc(g)}">${CODE_FAMS.filter(f=>f.g===g).map(f=>opt(f.k,f.m+"　"+f.l+"（"+famLen(f)+" 碼）",(p.fam||guessFam(p.code)?.k)===f.k)).join("")}</optgroup>`).join("")}</select></label>
   <div class="full" id="segBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div>
-  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label>
+  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label><label class="full">列印名稱（銷貨單、報價單只顯示這個）<input name="printName" value="${esc(p.printName||"")}" placeholder="例：54吋喇叭扇／三相220V"><span class="note">可自行設定較短的名稱；空白時自動用商品名稱去掉廠商</span></label>
   <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
   <label>單位<input name="unit" value="${esc(p.unit||"台")}"></label><label>安全庫存（低於會提醒）<input type="number" name="safety" min="0" step="1" inputmode="numeric" value="${esc(p.safety??"")}"></label>
   <label>成本單價（NT$）<input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(p.cost??"")}"></label><label>建議售價（NT$）<input type="number" name="price" min="0" step="any" inputmode="decimal" value="${esc(p.price??"")}"></label>
@@ -1147,12 +1147,12 @@ function prodForm(p){
      d.fam=f.k;d.noStock=!!f.ns;
      {const auto=prodNames(f,codeLabels(f,d.code));
       // 名稱若是系統自動產生（含廠商），列印名稱自動去掉廠商；手動改過的名稱就照原樣
-      d.printName=d.name===auto.name?auto.printName:(()=>{let n=d.name;f.s.forEach((g,i)=>{if(!BRAND_SEG.test(g.n))return;const l=codeLabels(f,d.code)[i];if(l)n=n.replace(l+"／","").replace("／"+l,"").replace("-"+l,"-")});return n})()}}
+      d.printName=val(fd,"printName")?val(fd,"printName"):d.name===auto.name?auto.printName:(()=>{let n=d.name;f.s.forEach((g,i)=>{if(!BRAND_SEG.test(g.n))return;const l=codeLabels(f,d.code)[i];if(l)n=n.replace(l+"／","").replace("／"+l,"").replace("-"+l,"-")});return n})()}}
     if(S.invProd.some(x=>x.code===d.code&&x.id!==p.id)){showErr({message:"商品編號 "+d.code+" 已經存在，請換一個編號。"});return false}
     await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
   addVoice({name:"text",spec:"text",cat:"text",note:"append"});
   {const F=form.elements,box=$("#segBox");let autoSpec=!p.spec,autoName=!p.name,autoCat=!p.cat;
-   F.spec.addEventListener("input",()=>autoSpec=false);F.name.addEventListener("input",()=>autoName=false);F.cat.addEventListener("input",()=>autoCat=false);
+   F.spec.addEventListener("input",()=>autoSpec=false);let autoPN=!p.printName;F.printName.addEventListener("input",()=>autoPN=false);F.name.addEventListener("input",()=>autoName=false);F.cat.addEventListener("input",()=>autoCat=false);
    const cnt=()=>{const f=famOf(F.fam.value),n=F.code.value.length,L=f?famLen(f):0;$("#codeCnt").textContent=f?`已輸入 ${n}／${L} 碼${f.ns?"　・此類不計庫存":""}`:`已輸入 ${n} 碼`;$("#codeCnt").style.color=f&&n!==L?"var(--warn)":"var(--ok)"};
    const segs=()=>{const f=famOf(F.fam.value);if(!f){box.innerHTML="";cnt();return}let pos=1;
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
@@ -1162,7 +1162,7 @@ function prodForm(p){
      F.code.value=f.m+f.s.map((g,i)=>sel[i].value||"?".repeat(g.w)).join("");
      const picks=f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}).filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0));
      if(autoSpec)F.spec.value=picks.join("／");if(autoCat)F.cat.value=f.l;
-     if(autoName){const nm=prodNames(f,f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}));if(nm.name)F.name.value=nm.name}
+     {const nm=prodNames(f,f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}));if(autoName&&nm.name)F.name.value=nm.name;if(autoPN&&nm.printName)F.printName.value=nm.printName}
      cnt()};
    F.fam.addEventListener("change",()=>{const f=famOf(F.fam.value);if(f){const keep=F.code.value[0]===f.m?F.code.value:"";F.code.value=keep||f.m;
        if(!keep){let pos=1;const fill=f.s.map(g=>g.o.length===1||g.o.every(o=>o[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w)).join("");F.code.value=f.m+fill}}
