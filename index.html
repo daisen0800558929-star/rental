@@ -1079,9 +1079,11 @@ var prodMain="";
 const MAIN_NAMES={"1":"成品-風機","2":"成品-水冷扇","3":"其他設備","4":"成品-水資源","6":"風機原件","7":"水冷扇&水濂牆零配件","8":"水資源零配件","9":"電控類","A":"產品加工項目","B":"一般服務項目","C":"贈品","R":"租賃設備"};
 document.addEventListener("change",e=>{if(e.target.id==="pMain"){prodMain=e.target.value;render()}});
 const FAN_DIMS=["166×116×60","145×145×60","145×145×62","144×94×63","140×172×72","138×138×40","130×75×55","128×82×51","126×126×60","124×124×46","110×156×72","115×128×60","116×116×90","108×108×60","108×108×55","108×108×52","100×100×60","79×79×50"];
-const fanDims=()=>S.fanDims||FAN_DIMS;
+// 各分類的尺寸（cm）清單：風機預設一組，其他分類（如水冷扇）一開始是空的
+const DIM_FAMS=["1","2"];
+const dimsFor=k=>S.dimLists?.[k]||(k==="1"?FAN_DIMS:[]);
 const normDim=v=>String(v||"").trim().replace(/\s+/g,"").replace(/[xX*＊✕╳]/g,"×");
-const saveDims=async l=>{await setDoc(doc(fs,"invProducts","_opt_fanDims"),{list:l,updatedAt:new Date().toISOString(),updatedBy:me.email});S.fanDims=l};
+const saveDims=async(k,l)=>{await setDoc(doc(fs,"invProducts",k==="1"?"_opt_fanDims":"_opt_dims_"+k),{list:l,updatedAt:new Date().toISOString(),updatedBy:me.email});(S.dimLists=S.dimLists||{})[k]=l};
 const FAN_DRIVE={"1":0,"2":1,"3":2,"4":3,"7":4,"6":5,"5":6};
 function prodKey(p){const c=String(p.code||"").toUpperCase();
   if(c.length===10&&c[0]==="1"){const f=famOf("1"),lab=codeLabels(f,c),size=parseFloat(lab[2])||0;
@@ -1242,7 +1244,7 @@ function prodForm(p,copy){
    const cnt=()=>{const f=famOf(F.fam.value),n=F.code.value.length,L=f?famLen(f):0;$("#codeCnt").textContent=f?`已輸入 ${n}／${L} 碼${f.ns?"　・此類不計庫存":""}`:`已輸入 ${n} 碼`;$("#codeCnt").style.color=f&&n!==L?"var(--warn)":"var(--ok)"};
    const segs=()=>{const f=famOf(F.fam.value);if(!f){box.innerHTML="";cnt();return}let pos=1;
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
-       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(f.k==="1"&&i===2?dimSel():"")}).join("");
+       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
      box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);cnt()};
    // 成品-風機：第 4 碼右邊加「尺寸 cm」（不進編碼，存在商品資料）
    // 尺寸（cm）：自訂下拉清單，最上方可自行輸入，每個尺寸後面有刪除
@@ -1251,21 +1253,21 @@ function prodForm(p,copy){
    const pop=document.createElement("div");pop.id="dimPop";pop.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;background:rgba(0,0,0,.45);top:0";
    dlg.appendChild(pop);
    const setDim=v=>{dimV=v;const h=form.elements.dimCm;if(h)h.value=v;const t=$("#dimTxt");if(t)t.textContent=v||"請選擇"};
-   const draw=()=>{const L=fanDims();pop.innerHTML=`<div style="position:absolute;left:0;right:0;bottom:0;max-height:75vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 0 16px;box-shadow:0 -6px 24px rgba(0,0,0,.35)">
+   const curK=()=>famOf(F.fam.value)?.k||"1";const draw=()=>{const L=dimsFor(curK());pop.innerHTML=`<div style="position:absolute;left:0;right:0;bottom:0;max-height:75vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 0 16px;box-shadow:0 -6px 24px rgba(0,0,0,.35)">
       <div style="display:flex;align-items:center;padding:6px 16px 8px"><b style="flex:1">尺寸（cm）</b><button type="button" class="btn small" data-dimx>關閉</button></div>
       <button type="button" data-dimnew style="display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid var(--line);background:none;color:var(--accent);font:inherit;font-size:16px;font-weight:600">＋ 自行輸入新尺寸…</button>
       <button type="button" data-dimpick="" style="display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:16px">（不選）</button>
-      ${L.map(v=>`<div style="display:flex;align-items:center;border-top:1px solid var(--line)"><button type="button" data-dimpick="${esc(v)}" style="flex:1;text-align:left;padding:14px 18px;border:0;background:none;color:var(--fg);font:inherit;font-size:16px">${v===dimV?"✓ ":""}${esc(v)}</button><button type="button" data-dimdel="${esc(v)}" aria-label="刪除 ${esc(v)}" style="border:0;background:none;color:var(--bad);font-size:18px;padding:12px 18px">✕</button></div>`).join("")}</div>`};
+      ${L.length?"":`<div class="note" style="padding:12px 18px;border-top:1px solid var(--line)">這個分類還沒有尺寸，請按上方「＋ 自行輸入新尺寸」新增。</div>`}${L.map(v=>`<div style="display:flex;align-items:center;border-top:1px solid var(--line)"><button type="button" data-dimpick="${esc(v)}" style="flex:1;text-align:left;padding:14px 18px;border:0;background:none;color:var(--fg);font:inherit;font-size:16px">${v===dimV?"✓ ":""}${esc(v)}</button><button type="button" data-dimdel="${esc(v)}" aria-label="刪除 ${esc(v)}" style="border:0;background:none;color:var(--bad);font-size:18px;padding:12px 18px">✕</button></div>`).join("")}</div>`};
    box.addEventListener("click",e=>{if(e.target.closest("#dimBtn")){e.preventDefault();draw();pop.style.display="block"}});
    pop.addEventListener("click",async e=>{const t=e.target;
      if(t===pop||t.closest("[data-dimx]")){pop.style.display="none";return}
      const pk=t.closest("[data-dimpick]");if(pk){setDim(pk.dataset.dimpick);pop.style.display="none";return}
      if(t.closest("[data-dimnew]")){const v=normDim(prompt("輸入尺寸（cm），例如 120×120×60\n可以用 x 代替 ×",""));if(!v)return;
        if(!/^\d+(\.\d+)?(×\d+(\.\d+)?){1,2}$/.test(v)){toast("格式請用 長×寬×高，例如 120×120×60");return}
-       const L=fanDims();if(!L.includes(v)){try{await saveDims([...L,v]);toast("已加入尺寸清單："+v)}catch(err){showErr(err);return}}
+       const L=dimsFor(curK());if(!L.includes(v)){try{await saveDims(curK(),[...L,v]);toast("已加入尺寸清單："+v)}catch(err){showErr(err);return}}
        setDim(v);pop.style.display="none";return}
      const d=t.closest("[data-dimdel]");if(d){const v=d.dataset.dimdel;if(!confirm("要從清單刪除「"+v+"」嗎？已經選用這個尺寸的商品不受影響。"))return;
-       try{await saveDims(fanDims().filter(x=>x!==v));if(dimV===v)setDim("");draw();toast("已刪除："+v)}catch(err){showErr(err)}}});
+       try{await saveDims(curK(),dimsFor(curK()).filter(x=>x!==v));if(dimV===v)setDim("");draw();toast("已刪除："+v)}catch(err){showErr(err)}}});
    dlg.addEventListener("close",()=>pop.remove(),{once:true});
    const build=()=>{const f=famOf(F.fam.value);if(!f)return;const sel=[...box.querySelectorAll("select[data-seg]")];
      F.code.value=f.m+f.s.map((g,i)=>sel[i].value||"?".repeat(g.w)).join("");
@@ -2951,7 +2953,7 @@ function startData(){
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
-   hrSub("invProducts",d=>{S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));const o=d.find(x=>x.id==="_opt_fanDims");S.fanDims=o?(o.data().list||[]):null});
+   hrSub("invProducts",d=>{S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
