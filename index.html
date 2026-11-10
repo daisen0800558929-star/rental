@@ -1102,7 +1102,7 @@ function viewInv(t){
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
-    return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}</div>${quick}
+    return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}${invCan("edit")?'<button class="btn" type="button" id="regenNames">依編碼更新名稱</button>':""}</div>${quick}
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
   }
   if(t==="inv_stock"){
@@ -1178,6 +1178,18 @@ async function autoCutout(dataUrl,strength=1){
   const a=new Float32Array(N);for(let y=0;y<H;y++)for(let x=0;x<W;x++){let s=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=H)continue;s+=bg[yy*W+xx]?0:1;n++}a[y*W+x]=s/n}
   for(let i=0;i<N;i++){const k=a[i];d[i*4]=d[i*4]*k+255*(1-k);d[i*4+1]=d[i*4+1]*k+255*(1-k);d[i*4+2]=d[i*4+2]*k+255*(1-k)}
   g.putImageData(id,0,0);return{ok:true,ratio,data:cv.toDataURL("image/jpeg",.8)}}
+// 依商品編號重新產生商品名稱與型號／規格（與逐碼選擇時的規則相同）
+function genFromCode(code){const c=String(code||"").toUpperCase(),f=guessFam(c);if(!f||c.length!==famLen(f))return null;
+  const lab=codeLabels(f,c);if(lab.some((t,i)=>!t&&f.s[i]))return null;
+  const spec=lab.filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0)).join("／");
+  return{f,spec,...prodNames(f,lab)}}
+async function regenAllNames(){
+  const list=S.invProd.map(p=>({p,g:genFromCode(p.code)})).filter(x=>x.g&&(x.g.name!==x.p.name||x.g.spec!==x.p.spec));
+  if(!list.length){toast("所有商品的名稱和規格都已經跟編碼一致");return}
+  if(!confirm(`有 ${list.length} 個商品的「商品名稱」或「型號／規格」跟目前的編碼不一致（例如第 9 碼改成馬力後還寫著 12p）。\n\n要依編碼統一更新嗎？列印名稱不會被改動。`))return;
+  let n=0;for(const {p,g} of list){try{await updateDoc(doc(fs,"invProducts",p.id),{name:g.name,spec:g.spec,updatedAt:new Date().toISOString(),updatedBy:me.email});n++}catch(e){}}
+  toast(`已更新 ${n} 個商品的名稱與規格`)}
+document.addEventListener("click",e=>{if(e.target.id==="regenNames"){regenAllNames();return}if(e.target.id==="regenOne"){const g=genFromCode(form.elements.code.value);if(!g){toast("商品編號不完整，無法更新");return}form.elements.name.value=g.name;form.elements.spec.value=g.spec;toast("已依編碼更新名稱與規格，按儲存後生效")}});
 const prodPrint=p=>p.printName||p.name||"";
 const isNoStock=pid=>!!prod(pid)?.noStock;
 function prodForm(p,copy){
@@ -1189,7 +1201,7 @@ function prodForm(p,copy){
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
   <div class="grid2"><label class="full">編碼分類（第 1 碼）<select name="fam"><option value="">請選擇</option>${CODE_GRP.map(g=>`<optgroup label="${esc(g)}">${CODE_FAMS.filter(f=>f.g===g).map(f=>opt(f.k,f.m+"　"+f.l+"（"+famLen(f)+" 碼）",(p.fam||guessFam(p.code)?.k)===f.k)).join("")}</optgroup>`).join("")}</select></label>
   <div class="full" id="segBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div>
-  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required></label><div class="full" style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl" style="flex:1;color:var(--muted);font-size:13.5px">列印名稱（銷貨單、報價單只顯示這個）</span><button class="btn small" type="button" id="copyPN">複製類似名稱</button></div>
+  <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required>${!isNew&&(()=>{const g=genFromCode(p.code);return g&&(g.name!==p.name||g.spec!==p.spec)})()?'<span class="note" style="color:var(--warn)">名稱或規格跟編碼不一致　<button class="btn small" type="button" id="regenOne">依編碼更新</button></span>':""}</label><div class="full" style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl" style="flex:1;color:var(--muted);font-size:13.5px">列印名稱（銷貨單、報價單只顯示這個）</span><button class="btn small" type="button" id="copyPN">複製類似名稱</button></div>
   <select id="pnPick" hidden></select>
   <input name="printName" value="${esc(p.printName||"")}" placeholder="例：54吋喇叭扇／三相220V" aria-label="列印名稱"><span class="note">可自行設定較短的名稱；空白時自動用商品名稱去掉廠商</span></div>
   <label>型號／規格<input name="spec" value="${esc(p.spec||"")}" placeholder="例：L105 / 單相 220V"></label><label>類別<input name="cat" list="pcats" value="${esc(p.cat||"")}" placeholder="例：水冷扇"></label>
