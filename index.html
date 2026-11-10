@@ -237,6 +237,7 @@ html,body{margin:0}
 .dept-btn{appearance:none;border:2px solid var(--c);background:var(--surface);color:var(--text);border-radius:14px;min-height:118px;font:inherit;font-size:22px;font-weight:700;letter-spacing:.12em;cursor:pointer;display:grid;place-items:center;gap:4px;padding:14px;transition:transform .12s,background .12s}
 .dept-btn small{font-size:12.5px;font-weight:400;letter-spacing:0;color:var(--muted)}
 .dept-btn:hover,.dept-btn:focus-visible{background:color-mix(in srgb,var(--c) 14%,var(--surface));transform:translateY(-2px)}
+.dept-btn.off{opacity:.38;border-style:dashed;cursor:not-allowed}
 .dept-btn.on{background:color-mix(in srgb,var(--c) 18%,var(--surface))}
 @media (max-width:420px){.dept-btn{min-height:104px;font-size:20px}}
 /* 功能選單 */
@@ -387,7 +388,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    if(soloTab&&soloTab===tab)T[tab]=MODULES.find(m=>m.solo&&m.go===tab)?.nm||T[tab];
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
@@ -406,6 +407,7 @@ function render(){
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
   if(tab==="take")h=viewTake(loading);
+  if(tab==="dept_perm")h=viewDeptPerm();
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
   const grp=SEG.find(g=>g.some(([k])=>k===tab));
@@ -1460,7 +1462,7 @@ function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">�
 /* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
 /* 報價權限：管理員，或員工資料權限為 2 且已連結登入帳號的在職員工 */
 /* 權限等級：1 一般職員／2 報價／3 進銷存查看與新增／4 加修改／5 加刪除；系統管理員視為 5 */
-const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"],["call_rec","可登錄客戶（廠務部需另外開啟）"]];
+const PERMS=[["quote","報價系統"],["inv_view","進銷存：查看"],["inv_add","進銷存：新增"],["inv_edit","進銷存：修改"],["inv_del","進銷存：刪除"],["call_rec","可登錄客戶（廠務部需另外開啟）"],["dept_admin","部門：行政部門"],["dept_sales","部門：業務部門"],["dept_plant","部門：廠務"],["dept_acct","部門：會計"],["dept_mgmt","部門：管理部"],["dept_buy","部門：採購"]];
 const PERM_ALL=PERMS.map(p=>p[0]);
 /* 權限可複選；舊資料的等級 1～5 自動換算 */
 const permsOf=e=>{if(Array.isArray(e?.perms))return e.perms.filter(p=>PERM_ALL.includes(p));const n=parseInt(e?.perm,10)||1;
@@ -2791,7 +2793,8 @@ const MODULES=[
   {k:"prodcode",lb:"商品|編號",nm:"商品編號",ds:"大森 10 碼商品編號的查詢與建立",go:"inv_prod",dept:"admin",solo:true},
   {k:"jobadm",lb:"行政工作|說明書",nm:"行政工作說明書",ds:"行政部門的職責、日常工作與作業規範",go:"job_admin",dept:"admin"},
   {k:"take",lb:"接案|狀況",nm:"接案狀況",ds:"登入業務個人的接案、報價與成交分析",go:"take",dept:"sales"},
-  {k:"jobsales",lb:"業務工作|說明書",nm:"業務工作說明書",ds:"業務部門的職責、日常工作與作業規範",go:"job_sales",dept:"sales"}
+  {k:"jobsales",lb:"業務工作|說明書",nm:"業務工作說明書",ds:"業務部門的職責、日常工作與作業規範",go:"job_sales",dept:"sales"},
+  {k:"deptperm",lb:"部門|權限",nm:"部門權限設定",ds:"設定每位員工可以進入哪些部門（管理員勾選）",go:"dept_perm",dept:"mgmt"}
 ];
 function moduleStat(m){
   if(!db)return"";
@@ -2889,6 +2892,18 @@ function viewJobs(){
   return `<div class="chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${DEPTS.map(([d,n,c])=>`<button type="button" class="btn small${d===k?" primary":""}" data-jobdept="${d}" style="border-color:${c}">${esc(n)}${S.jobs?.[d]?"":"（範本）"}</button>`).join("")}</div>`+viewJobDesc(k);
 }
 function jobData(k){const v=S.jobs?.[k];if(!v||!v.sections)return JOB_DEFAULT[k];return{...v,sections:v.sections.map(x=>Array.isArray(x)?x:[x.t||"",x.b||""])}}
+function viewDeptPerm(){
+  const adm=isAdm(),L=S.hrEmp.filter(hrActive).sort((a,b)=>String(a.code).localeCompare(b.code));
+  const head=DEPTS.map(([k,n,c])=>`<th style="text-align:center;white-space:nowrap"><span style="border-bottom:3px solid ${c}">${esc(n)}</span></th>`).join("");
+  const rows=L.map(e=>{const set=deptSetOf(permsOf(e));return `<tr><td style="white-space:nowrap;position:sticky;left:0;z-index:1;background:var(--surface)"><b>${esc(e.name)}</b><div class="m" style="font-size:12px">${esc([e.code,e.dept,e.title].filter(Boolean).join("・"))}${e.account?"":"・<span style='color:var(--warn)'>未連結帳號</span>"}</div>${set.length?"":`<div class="m" style="font-size:12px">尚未設定（暫依部門）</div>`}</td>${DEPTS.map(([k])=>`<td style="text-align:center"><input type="checkbox" data-dp="${esc(e.id)}" value="${k}"${set.includes(k)?" checked":""}${adm?"":" disabled"} style="width:22px;height:22px;scroll-margin-left:140px" aria-label="${esc(e.name+" "+deptName(k))}"></td>`).join("")}</tr>`}).join("");
+  return `<div class="note">${adm?"勾選每位員工可以進入的部門，勾選後立即生效。系統管理員可進入全部部門。":"只有系統管理員可以修改部門權限，這裡僅供查看。"}尚未勾選任何部門的員工，暫時依員工資料的「部門」開放。</div>
+  ${L.length?`<div class="tablewrap"><table class="grid" style="min-width:640px"><thead><tr><th style="position:sticky;left:0;z-index:2;background:var(--surface)">員工</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="card"><div class="empty">還沒有在職員工資料，請先到「人事管理 → 員工資料」新增。</div></div>'}`}
+document.addEventListener("change",async ev=>{const cb=ev.target.closest("[data-dp]");if(!cb)return;if(!isAdm()){cb.checked=!cb.checked;return}
+  const e=S.hrEmp.find(x=>x.id===cb.dataset.dp);if(!e)return;const k="dept_"+cb.value;
+  const ps=permsOf(e).filter(p=>p!==k).concat(cb.checked?[k]:[]),perms=PERM_ALL.filter(p=>ps.includes(p));
+  try{await updateDoc(doc(fs,"hrEmployees",e.id),{perms,updatedAt:new Date().toISOString(),updatedBy:me.email});e.perms=perms;
+    if(e.account)await setDoc(doc(fs,"staff",e.account),{perms},{merge:true});toast(`${e.name}：${cb.checked?"已開放":"已關閉"}「${deptName(cb.value)}」`)}
+  catch(er){cb.checked=!cb.checked;toast("儲存失敗："+(er?.message||er))}});
 function viewJobDesc(k,ro){
   const d=jobData(k),adm=canJobEdit()&&!ro,isTpl=!S.jobs?.[k];
   return `<div class="toolbar"><span style="flex:1"></span><button class="btn" type="button" data-jobprint>列印</button>${adm?`<button class="btn primary" type="button" data-jobedit="${k}">編輯說明書</button>`:""}</div>
@@ -2924,10 +2939,16 @@ const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.i
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
 const deptName=k=>(DEPTS.find(d=>d[0]===k)||[])[1]||"";
+// 部門權限：管理員全部；員工依「部門權限設定」勾選；尚未設定者依員工資料的部門，仍無法判斷則全部開放
+const DEPT_KEY={admin:"行政",sales:"業務",plant:"廠務",acct:"會計",mgmt:"管理",buy:"採購"};
+const deptSetOf=ps=>DEPTS.map(d=>d[0]).filter(k=>ps.includes("dept_"+k));
+function myDepts(){if(isAdm())return DEPTS.map(d=>d[0]);const ps=myPerms(),set=deptSetOf(ps);if(set.length)return set;
+  const e=myEmp(),dp=String(e?.dept||"");const g=Object.keys(DEPT_KEY).filter(k=>dp.includes(DEPT_KEY[k]));return g.length?g:DEPTS.map(d=>d[0])}
+function drawDept(){const ok=myDepts();
+  $("#deptGrid").innerHTML=DEPTS.map(([k,n,c])=>{const on=ok.includes(k);return `<button class="dept-btn${k===curDept&&on?" on":""}${on?"":" off"}" type="button" data-dept="${k}" style="--c:${c}"${on?"":' aria-disabled="true"'}>${esc(n)}${!on?"<small>未開放</small>":k===curDept?"<small>上次選擇</small>":""}</button>`}).join("")}
 function showDept(){$("#appView").hidden=true;$("#menuView").hidden=true;$("#deptView").hidden=false;if(dlg.open)dlg.close();
-  $("#deptGrid").innerHTML=DEPTS.map(([k,n,c])=>`<button class="dept-btn${k===curDept?" on":""}" type="button" data-dept="${k}" style="--c:${c}">${esc(n)}${k===curDept?"<small>上次選擇</small>":""}</button>`).join("");
-  window.scrollTo(0,0)}
-function pickDept(k){curDept=k;try{localStorage.setItem("daisenDept",k)}catch(e){}
+  drawDept();window.scrollTo(0,0)}
+function pickDept(k){if(!myDepts().includes(k)){toast("你沒有「"+deptName(k)+"」的權限，請管理員到「管理部 → 部門權限」勾選");return}curDept=k;try{localStorage.setItem("daisenDept",k)}catch(e){}
   $("#deptBtn").textContent=deptName(k)+"　切換部門";$("#deptView").hidden=true;showMenu()}
 $("#deptGrid").addEventListener("click",e=>{const b=e.target.closest("[data-dept]");if(b)pickDept(b.dataset.dept)});
 $("#deptBtn").onclick=showDept;
@@ -2971,7 +2992,7 @@ function startData(){
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
    hrSub("invProducts",d=>{S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrEmployees",d=>S.hrEmp=d.map(x=>({id:x.id,...x.data()})));
+   hrSub("hrEmployees",d=>{S.hrEmp=d.map(x=>({id:x.id,...x.data()}));if(!$("#deptView").hidden)drawDept()});
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
