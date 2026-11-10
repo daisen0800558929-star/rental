@@ -1222,7 +1222,7 @@ function prodForm(p,copy){
     if(S.invProd.some(x=>x.code===d.code&&x.id!==p.id)){showErr({message:"商品編號 "+d.code+" 已經存在，請換一個編號。"});return false}
     await setDoc(doc(fs,"invProducts",isNew?doc(collection(fs,"invProducts")).id:p.id),clean(d));toast(isNew?"已新增商品 "+d.code:"已儲存")});
   addVoice({name:"text",spec:"text",cat:"text",note:"append"});
-  {const F=form.elements,box=$("#segBox");let autoSpec=!p.spec||!!src,autoName=!p.name||!!src,autoCat=!p.cat;
+  {const F=form.elements,box=$("#segBox");let autoSpec=true,autoName=true,autoCat=!p.cat;const base=src||(isNew?null:{...p});
    F.spec.addEventListener("input",()=>autoSpec=false);let autoPN=!p.printName,pnManual=false;F.printName.addEventListener("input",()=>{autoPN=false;pnManual=true});F.name.addEventListener("input",()=>autoName=false);F.cat.addEventListener("input",()=>autoCat=false);
    const cnt=()=>{const f=famOf(F.fam.value),n=F.code.value.length,L=f?famLen(f):0;$("#codeCnt").textContent=f?`已輸入 ${n}／${L} 碼${f.ns?"　・此類不計庫存":""}`:`已輸入 ${n} 碼`;$("#codeCnt").style.color=f&&n!==L?"var(--warn)":"var(--ok)"};
    const segs=()=>{const f=famOf(F.fam.value);if(!f){box.innerHTML="";cnt();return}let pos=1;
@@ -1235,7 +1235,7 @@ function prodForm(p,copy){
      if(autoSpec)F.spec.value=picks.join("／");if(autoCat)F.cat.value=f.l;
      {const nm=prodNames(f,f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}));if(autoName&&nm.name)F.name.value=nm.name;if(autoPN&&nm.printName)F.printName.value=nm.printName;
        // 複製新增：列印名稱依「不同的碼」自動替換（例如 54→42、220V→380V）
-       if(src&&!autoPN&&!pnManual&&src.printName&&src.code&&src.code[0]===f.m){F.printName.value=subName(src.printName,codeLabels(f,src.code),codeLabels(f,F.code.value.toUpperCase()))}}
+       if(base&&!autoPN&&!pnManual&&base.printName&&base.code&&base.code[0]===f.m){F.printName.value=subName(base.printName,codeLabels(f,base.code),codeLabels(f,F.code.value.toUpperCase()))}}
      cnt()};
    F.fam.addEventListener("change",()=>{const f=famOf(F.fam.value);if(f){const keep=F.code.value[0]===f.m?F.code.value:"";F.code.value=keep||f.m;
        if(!keep){let pos=1;const fill=f.s.map(g=>g.o.length===1||g.o.every(o=>o[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w)).join("");F.code.value=f.m+fill}}
