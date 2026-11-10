@@ -1075,9 +1075,9 @@ function invStock(exceptId){
   return st;
 }
 /* 商品排序：成品-風機依「尺寸大→小、風扇樣式、AC 先於 DC、不調速先於調速、電壓」；其他依編號 */
-var prodSize="",prodStyle="";
-document.addEventListener("change",e=>{if(e.target.id==="pSize"){prodSize=e.target.value;render()}else if(e.target.id==="pStyle"){prodStyle=e.target.value;render()}});
-document.addEventListener("click",e=>{if(e.target.id==="pClr"){prodSize=prodStyle="";render()}});
+var prodMain="";
+const MAIN_NAMES={"1":"成品-風機","2":"成品-水冷扇","3":"其他設備","4":"成品-水資源","6":"風機原件","7":"水冷扇&水濂牆零配件","8":"水資源零配件","9":"電控類","A":"產品加工項目","B":"一般服務項目","C":"贈品","R":"租賃設備"};
+document.addEventListener("change",e=>{if(e.target.id==="pMain"){prodMain=e.target.value;render()}});
 const FAN_DIMS=["166×116×60","145×145×60","145×145×62","144×94×63","140×172×72","138×138×40","130×75×55","128×82×51","126×126×60","124×124×46","110×156×72","115×128×60","116×116×90","108×108×60","108×108×55","108×108×52","100×100×60","79×79×50"];
 const fanDims=()=>S.fanDims||FAN_DIMS;
 const normDim=v=>String(v||"").trim().replace(/\s+/g,"").replace(/[xX*＊✕╳]/g,"×");
@@ -1098,11 +1098,10 @@ function viewInv(t){
   const N=S.hrErr==="permission-denied"?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
-    const fam1=famOf("1"),fanOf=p=>{const c=String(p.code||"").toUpperCase();return c.length===10&&c[0]==="1"?c:""};
-    const sizes=[...new Set(S.invProd.map(fanOf).filter(Boolean).map(c=>c[3]))].map(k=>[k,(fam1.s[2].o.find(o=>o[0]===k)||[])[1]||k]).sort((a,b)=>(parseFloat(b[1])||0)-(parseFloat(a[1])||0));
-    const styles=[...new Set(S.invProd.map(fanOf).filter(Boolean).map(c=>c[1]))].sort().map(k=>[k,(fam1.s[0].o.find(o=>o[0]===k)||[])[1]||k]);
-    const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pSize" style="flex:1 1 120px"><option value="">全部尺寸</option>${sizes.map(([k,v])=>opt(k,v+"吋",prodSize===k)).join("")}</select><select id="pStyle" style="flex:1 1 140px"><option value="">全部樣式</option>${styles.map(([k,v])=>opt(k,v,prodStyle===k)).join("")}</select>${prodSize||prodStyle?'<button class="btn small" type="button" id="pClr">清除</button>':""}</div>`;
-    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>{if(!prodSize&&!prodStyle)return true;const c=fanOf(p);return c&&(!prodSize||c[3]===prodSize)&&(!prodStyle||c[1]===prodStyle)}).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
+    const mainOf=p=>{const c=String(p.code||"").toUpperCase();return MAIN_NAMES[c[0]]&&guessFam(c)?c[0]:"_"};
+    const cnt={};S.invProd.forEach(p=>{const k=mainOf(p);cnt[k]=(cnt[k]||0)+1});
+    const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pMain" style="flex:1 1 100%"><option value="">全部類別（${S.invProd.length}）</option>${Object.entries(MAIN_NAMES).map(([k,v])=>`<option value="${k}"${prodMain===k?" selected":""}>${k}　${esc(v)}（${cnt[k]||0}）</option>`).join("")}${cnt._?`<option value="_"${prodMain==="_"?" selected":""}>其他／舊編號（${cnt._}）</option>`:""}</select></div>`;
+    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>!prodMain||mainOf(p)===prodMain).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")}${p.dimCm?" · 尺寸 "+esc(p.dimCm)+" cm":""} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
