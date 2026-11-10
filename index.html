@@ -1246,19 +1246,28 @@ function prodForm(p,copy){
        return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(f.k==="1"&&i===2?dimSel():"")}).join("");
      box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);cnt()};
    // 成品-風機：第 4 碼右邊加「尺寸 cm」（不進編碼，存在商品資料）
-   let dimV=p.dimCm||"";const dimOpts=()=>{const L=fanDims();return `<option value="">請選擇</option>${L.map(v=>opt(v,v,v===dimV)).join("")}${dimV&&!L.includes(dimV)?opt(dimV,dimV,true):""}<option value="__new">＋ 自行輸入新尺寸…</option><option value="__mgr">管理尺寸清單（刪除）…</option>`};
-   const dimSel=()=>`<label style="font-size:12.5px">尺寸（cm）<select name="dimCm">${dimOpts()}</select><div id="dimMgr" style="margin-top:6px;display:none;flex-wrap:wrap;gap:6px"></div></label>`;
-   const mgr=()=>{const m=$("#dimMgr");if(!m)return;m.innerHTML=fanDims().map(v=>`<span class="pill" style="display:inline-flex;gap:4px;align-items:center">${esc(v)}<button type="button" class="btn small" data-dimdel="${esc(v)}" style="padding:0 6px;min-height:22px" aria-label="刪除 ${esc(v)}">✕</button></span>`).join("")+'<button type="button" class="btn small" data-dimclose>完成</button>'};
-   box.addEventListener("change",async e=>{const t=e.target;if(t.name!=="dimCm")return;
-     if(t.value==="__new"){const v=normDim(prompt("輸入尺寸（cm），例如 120×120×60\n可以用 x 代替 ×",""));
-       if(!v){t.innerHTML=dimOpts();return}
-       if(!/^\d+(\.\d+)?(×\d+(\.\d+)?){1,2}$/.test(v)){toast("格式請用 長×寬×高，例如 120×120×60");t.innerHTML=dimOpts();return}
-       const L=fanDims();if(!L.includes(v)){try{await saveDims([...L,v]);toast("已加入尺寸清單："+v)}catch(err){showErr(err)}}dimV=v;t.innerHTML=dimOpts();return}
-     if(t.value==="__mgr"){t.innerHTML=dimOpts();const m=$("#dimMgr");m.style.display="flex";mgr();return}
-     dimV=t.value});
-   box.addEventListener("click",async e=>{const d=e.target.closest("[data-dimdel]");if(d){e.preventDefault();const v=d.dataset.dimdel;if(!confirm("要從清單刪除「"+v+"」嗎？已經選用這個尺寸的商品不受影響。"))return;
-       try{await saveDims(fanDims().filter(x=>x!==v));mgr();const sel=form.elements.dimCm;if(sel)sel.innerHTML=dimOpts();toast("已刪除："+v)}catch(err){showErr(err)}return}
-     if(e.target.closest("[data-dimclose]")){e.preventDefault();$("#dimMgr").style.display="none"}});
+   // 尺寸（cm）：自訂下拉清單，最上方可自行輸入，每個尺寸後面有刪除
+   let dimV=p.dimCm||"";
+   const dimSel=()=>`<label style="font-size:12.5px">尺寸（cm）<button type="button" id="dimBtn" class="dimbtn" style="display:flex;justify-content:space-between;align-items:center;width:100%;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);font:inherit;font-size:15px;text-align:left"><span id="dimTxt">${esc(dimV||"請選擇")}</span><span aria-hidden="true">▾</span></button><input type="hidden" name="dimCm" value="${esc(dimV)}"></label>`;
+   const pop=document.createElement("div");pop.id="dimPop";pop.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;background:rgba(0,0,0,.45);top:0";
+   dlg.appendChild(pop);
+   const setDim=v=>{dimV=v;const h=form.elements.dimCm;if(h)h.value=v;const t=$("#dimTxt");if(t)t.textContent=v||"請選擇"};
+   const draw=()=>{const L=fanDims();pop.innerHTML=`<div style="position:absolute;left:0;right:0;bottom:0;max-height:75vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 0 16px;box-shadow:0 -6px 24px rgba(0,0,0,.35)">
+      <div style="display:flex;align-items:center;padding:6px 16px 8px"><b style="flex:1">尺寸（cm）</b><button type="button" class="btn small" data-dimx>關閉</button></div>
+      <button type="button" data-dimnew style="display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid var(--line);background:none;color:var(--accent);font:inherit;font-size:16px;font-weight:600">＋ 自行輸入新尺寸…</button>
+      <button type="button" data-dimpick="" style="display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:16px">（不選）</button>
+      ${L.map(v=>`<div style="display:flex;align-items:center;border-top:1px solid var(--line)"><button type="button" data-dimpick="${esc(v)}" style="flex:1;text-align:left;padding:14px 18px;border:0;background:none;color:var(--fg);font:inherit;font-size:16px">${v===dimV?"✓ ":""}${esc(v)}</button><button type="button" data-dimdel="${esc(v)}" aria-label="刪除 ${esc(v)}" style="border:0;background:none;color:var(--bad);font-size:18px;padding:12px 18px">✕</button></div>`).join("")}</div>`};
+   box.addEventListener("click",e=>{if(e.target.closest("#dimBtn")){e.preventDefault();draw();pop.style.display="block"}});
+   pop.addEventListener("click",async e=>{const t=e.target;
+     if(t===pop||t.closest("[data-dimx]")){pop.style.display="none";return}
+     const pk=t.closest("[data-dimpick]");if(pk){setDim(pk.dataset.dimpick);pop.style.display="none";return}
+     if(t.closest("[data-dimnew]")){const v=normDim(prompt("輸入尺寸（cm），例如 120×120×60\n可以用 x 代替 ×",""));if(!v)return;
+       if(!/^\d+(\.\d+)?(×\d+(\.\d+)?){1,2}$/.test(v)){toast("格式請用 長×寬×高，例如 120×120×60");return}
+       const L=fanDims();if(!L.includes(v)){try{await saveDims([...L,v]);toast("已加入尺寸清單："+v)}catch(err){showErr(err);return}}
+       setDim(v);pop.style.display="none";return}
+     const d=t.closest("[data-dimdel]");if(d){const v=d.dataset.dimdel;if(!confirm("要從清單刪除「"+v+"」嗎？已經選用這個尺寸的商品不受影響。"))return;
+       try{await saveDims(fanDims().filter(x=>x!==v));if(dimV===v)setDim("");draw();toast("已刪除："+v)}catch(err){showErr(err)}}});
+   dlg.addEventListener("close",()=>pop.remove(),{once:true});
    const build=()=>{const f=famOf(F.fam.value);if(!f)return;const sel=[...box.querySelectorAll("select[data-seg]")];
      F.code.value=f.m+f.s.map((g,i)=>sel[i].value||"?".repeat(g.w)).join("");
      const picks=f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}).filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0));
