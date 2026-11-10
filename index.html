@@ -1078,6 +1078,7 @@ function invStock(exceptId){
 var prodSize="",prodStyle="";
 document.addEventListener("change",e=>{if(e.target.id==="pSize"){prodSize=e.target.value;render()}else if(e.target.id==="pStyle"){prodStyle=e.target.value;render()}});
 document.addEventListener("click",e=>{if(e.target.id==="pClr"){prodSize=prodStyle="";render()}});
+const FAN_DIMS=["166×116×60","145×145×60","145×145×62","144×94×63","140×172×72","138×138×40","130×75×55","128×82×51","126×126×60","124×124×46","110×156×72","115×128×60","116×116×90","108×108×60","108×108×55","108×108×52","100×100×60","79×79×50"];
 const FAN_DRIVE={"1":0,"2":1,"3":2,"4":3,"7":4,"6":5,"5":6};
 function prodKey(p){const c=String(p.code||"").toUpperCase();
   if(c.length===10&&c[0]==="1"){const f=famOf("1"),lab=codeLabels(f,c),size=parseFloat(lab[2])||0;
@@ -1100,7 +1101,7 @@ function viewInv(t){
     const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pSize" style="flex:1 1 120px"><option value="">全部尺寸</option>${sizes.map(([k,v])=>opt(k,v+"吋",prodSize===k)).join("")}</select><select id="pStyle" style="flex:1 1 140px"><option value="">全部樣式</option>${styles.map(([k,v])=>opt(k,v,prodStyle===k)).join("")}</select>${prodSize||prodStyle?'<button class="btn small" type="button" id="pClr">清除</button>':""}</div>`;
     const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>{if(!prodSize&&!prodStyle)return true;const c=fanOf(p);return c&&(!prodSize||c[3]===prodSize)&&(!prodStyle||c[1]===prodStyle)}).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
-      <div class="m">${esc(p.cat||"未分類")} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
+      <div class="m">${esc(p.cat||"未分類")}${p.dimCm?" · 尺寸 "+esc(p.dimCm)+" cm":""} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
     return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}${invCan("edit")?'<button class="btn" type="button" id="regenNames">依編碼更新名稱</button>':""}</div>${quick}
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
@@ -1219,7 +1220,7 @@ function prodForm(p,copy){
   <div class="actions">${!isNew&&invCan("del")?'<button class="btn danger" type="button" id="del">刪除</button><span class="spacer"></span>':""}<button class="btn" type="button" data-close>${(isNew?invCan("add"):invCan("edit"))?"取消":"關閉"}</button>${(isNew?invCan("add"):invCan("edit"))?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,
   async fd=>{if(!(isNew?invCan("add"):invCan("edit"))){showErr({message:"你沒有修改權限。"});return false}
     const d={code:val(fd,"code").toUpperCase(),name:val(fd,"name"),spec:val(fd,"spec"),cat:val(fd,"cat"),unit:val(fd,"unit")||"台",safety:val(fd,"safety")===""?"":Math.max(0,parseInt(val(fd,"safety"),10)||0),
-      cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),img:String(fd.get("img")||""),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
+      cost:val(fd,"cost")===""?"":+val(fd,"cost"),price:val(fd,"price")===""?"":+val(fd,"price"),active:fd.get("active")==="1",barcode:val(fd,"barcode"),dimCm:fd.get("dimCm")!=null?val(fd,"dimCm"):(p.dimCm||""),img:String(fd.get("img")||""),note:val(fd,"note"),updatedAt:new Date().toISOString(),updatedBy:me.email};
     if(!d.code||!d.name){showErr({message:"請填寫商品編號與名稱。"});return false}
     {const f=famOf(fd.get("fam"))||guessFam(d.code);if(!f){showErr({message:"請先選擇「編碼分類」，商品編號第 1 碼要是 1、2、3、4、6、7、8、9、A、B、C 或 R。"});return false}
      if(d.code[0]!==f.m){showErr({message:`「${f.l}」的商品編號第 1 碼要是 ${f.m}。`});return false}
@@ -1239,9 +1240,12 @@ function prodForm(p,copy){
    const cnt=()=>{const f=famOf(F.fam.value),n=F.code.value.length,L=f?famLen(f):0;$("#codeCnt").textContent=f?`已輸入 ${n}／${L} 碼${f.ns?"　・此類不計庫存":""}`:`已輸入 ${n} 碼`;$("#codeCnt").style.color=f&&n!==L?"var(--warn)":"var(--ok)"};
    const segs=()=>{const f=famOf(F.fam.value);if(!f){box.innerHTML="";cnt();return}let pos=1;
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
-       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`}).join("");
-     box.querySelectorAll("select").forEach(x=>x.onchange=build);cnt()};
-   const build=()=>{const f=famOf(F.fam.value);if(!f)return;const sel=[...box.querySelectorAll("select")];
+       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(f.k==="1"&&i===2?dimSel():"")}).join("");
+     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);cnt()};
+   // 成品-風機：第 4 碼右邊加「尺寸 cm」（不進編碼，存在商品資料）
+   let dimV=p.dimCm||"";const dimSel=()=>`<label style="font-size:12.5px">尺寸（cm）<select name="dimCm" onchange="this.dataset.v=this.value"><option value="">請選擇</option>${FAN_DIMS.map(v=>opt(v,v,v===dimV)).join("")}${dimV&&!FAN_DIMS.includes(dimV)?opt(dimV,dimV,true):""}</select></label>`;
+   box.addEventListener("change",e=>{if(e.target.name==="dimCm")dimV=e.target.value});
+   const build=()=>{const f=famOf(F.fam.value);if(!f)return;const sel=[...box.querySelectorAll("select[data-seg]")];
      F.code.value=f.m+f.s.map((g,i)=>sel[i].value||"?".repeat(g.w)).join("");
      const picks=f.s.map((g,i)=>{const o=sel[i].selectedOptions[0];return sel[i].value&&o?.dataset.j!=null?g.o[+o.dataset.j][1]:""}).filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0));
      if(autoSpec)F.spec.value=picks.join("／");if(autoCat)F.cat.value=f.l;
