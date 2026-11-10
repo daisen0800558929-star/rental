@@ -1107,7 +1107,7 @@ function viewInv(t){
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")}${p.dimCm?" · 尺寸 "+esc(p.dimCm)+" cm":""} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
-    return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}${invCan("edit")?'<button class="btn" type="button" id="regenNames">依編碼更新名稱</button>':""}</div>${quick}
+    return N+`<div class="toolbar"><input id="q" placeholder="搜尋商品編號、名稱、規格">${invCan("add")?'<button class="btn primary" type="button" data-inv="prod">＋ 新增商品</button>':""}${invCan("edit")?'<button class="btn" type="button" id="regenNames">依編碼更新名稱</button>':""}${(isAdm()||invCan("del"))&&oldProds().length?`<button class="btn" type="button" id="oldClean" style="color:var(--bad)">清除舊編碼商品（${oldProds().length}）</button>`:""}</div>${quick}
     <div class="list">${rows.length?rows.join(""):`<div class="empty">${S.invProd.length?"沒有符合的商品":"還沒有商品。先建立商品編號，進貨、銷貨、借出和報廢都會用到。"}</div>`}</div>`;
   }
   if(t==="inv_stock"){
@@ -1188,13 +1188,29 @@ function genFromCode(code){const c=String(code||"").toUpperCase(),f=guessFam(c);
   const lab=codeLabels(f,c);if(lab.some((t,i)=>!t&&f.s[i]))return null;
   const spec=lab.filter((t,i)=>t&&!/^預留|無管制|不管制/.test(t)&&!(f.s[i].o.length===1&&i===0)).join("／");
   return{f,spec,...prodNames(f,lab)}}
+// 舊編碼商品：編號不符合目前編碼原則（長度或任一碼不存在）
+const oldProds=()=>S.invProd.filter(p=>!genFromCode(p.code));
+const prodUsed=id=>S.invDocs.some(d=>(d.items||[]).some(i=>i.pid===id));
+function oldCleanDlg(){
+  const L=oldProds().sort(prodSort);
+  if(!L.length){toast("目前沒有舊編碼的商品");return}
+  const newCodes=new Set(S.invProd.filter(p=>genFromCode(p.code)).map(p=>nz(prodPrint(p))));
+  openDlg(`<h3>清除舊編碼商品</h3><p class="note">以下 ${L.length} 個商品的編號不符合目前的編碼原則。已用新編碼重建的舊商品，勾選後按「刪除勾選」即可刪除。有進銷存紀錄的商品不能刪除，會改成「停用」。標示「已有新編碼」表示有名稱相同的新編碼商品。</p>
+  <div class="toolbar"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="ocAll" style="width:18px;height:18px;flex:none"> 全選</label></div>
+  <div class="list" style="max-height:55vh;overflow:auto">${L.map(p=>{const used=prodUsed(p.id),dup=newCodes.has(nz(prodPrint(p)));return `<label class="row" style="cursor:pointer"><div style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" name="oc" value="${esc(p.id)}"${dup?" checked":""} style="width:18px;height:18px;flex:none;margin-top:2px"><div><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t">${esc(prodPrint(p))}</div></div></div><div class="r">${dup?'<span class="pill ok">已有新編碼</span>':""}${used?'<span class="pill warn">有紀錄→停用</span>':""}</div></label>`}).join("")}</div>
+  <div class="actions"><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit" style="background:var(--bad);border-color:var(--bad)">刪除勾選</button></div>`,async fd=>{
+    const ids=fd.getAll("oc");if(!ids.length)throw{message:"請先勾選要刪除的商品"};
+    if(!confirm(`確定刪除 ${ids.length} 個舊編碼商品？刪除後無法復原（有紀錄的會改成停用）。`))return false;
+    let del=0,off=0;for(const id of ids){try{if(prodUsed(id)){await updateDoc(doc(fs,"invProducts",id),{active:false,updatedAt:new Date().toISOString(),updatedBy:me.email});off++}else{await deleteDoc(doc(fs,"invProducts",id));del++}}catch(e){}}
+    toast(`已刪除 ${del} 個${off?`，${off} 個有紀錄已改為停用`:""}`)},true);
+  const all=form.querySelector("#ocAll");all.onchange=()=>form.querySelectorAll('input[name=oc]').forEach(c=>c.checked=all.checked)}
 async function regenAllNames(){
   const list=S.invProd.map(p=>({p,g:genFromCode(p.code)})).filter(x=>x.g&&(x.g.name!==x.p.name||x.g.spec!==x.p.spec));
   if(!list.length){toast("所有商品的名稱和規格都已經跟編碼一致");return}
   if(!confirm(`有 ${list.length} 個商品的「商品名稱」或「型號／規格」跟目前的編碼不一致（例如第 9 碼改成馬力後還寫著 12p）。\n\n要依編碼統一更新嗎？列印名稱不會被改動。`))return;
   let n=0;for(const {p,g} of list){try{await updateDoc(doc(fs,"invProducts",p.id),{name:g.name,spec:g.spec,updatedAt:new Date().toISOString(),updatedBy:me.email});n++}catch(e){}}
   toast(`已更新 ${n} 個商品的名稱與規格`)}
-document.addEventListener("click",e=>{if(e.target.id==="regenNames"){regenAllNames();return}if(e.target.id==="regenOne"){const g=genFromCode(form.elements.code.value);if(!g){toast("商品編號不完整，無法更新");return}form.elements.name.value=g.name;form.elements.spec.value=g.spec;toast("已依編碼更新名稱與規格，按儲存後生效")}});
+document.addEventListener("click",e=>{if(e.target.id==="regenNames"){regenAllNames();return}if(e.target.id==="oldClean"){oldCleanDlg();return}if(e.target.id==="regenOne"){const g=genFromCode(form.elements.code.value);if(!g){toast("商品編號不完整，無法更新");return}form.elements.name.value=g.name;form.elements.spec.value=g.spec;toast("已依編碼更新名稱與規格，按儲存後生效")}});
 const prodPrint=p=>p.printName||p.name||"";
 const isNoStock=pid=>!!prod(pid)?.noStock;
 function prodForm(p,copy){
