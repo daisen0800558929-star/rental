@@ -2151,16 +2151,20 @@ const mobileOf=name=>{if(!name)return"";const e=S.hrEmp.find(k=>k.name===name&&k
 const custOwner=k=>k?.owner||"";
 const ownerBlock=(k,name)=>{if(isAdm())return"";const o=custOwner(k)||(name?custOwner(S.customers.find(x=>normName(x.name)===normName(name))):"");return o&&o!==myName()?o:""};
 const prodOpt=p=>`${p.code}｜${p.name}${p.spec?" "+p.spec:""}`;
-const QCATS=["水冷扇","風機","魚池過濾設備","其他"];
+// 報價品項＝商品編號第 1 碼大類；舊報價單的品項自動對應
+const QCATS=Object.values(MAIN_NAMES);
+const QCAT_OLD={"水冷扇":"成品-水冷扇","風機":"成品-風機","魚池過濾設備":"成品-過濾設備","其他":"其他設備"};
+const qcatKey=n=>Object.keys(MAIN_NAMES).find(k=>MAIN_NAMES[k]===n)||"";
+const qcatProds=n=>{const k=qcatKey(n);return k?S.invProd.filter(p=>p.active!==false&&String(p.code||"").toUpperCase()[0]===k&&guessFam(String(p.code).toUpperCase())).sort(prodSort):[]};
 /* 報價單合約條件：k=代碼，t=文字，a=自動勾選規則（依報價項目） */
 const QTERMS=[
  {k:"volt",t:"請確認電壓是否正確",a:()=>true},
  {k:"warr",t:"銷售之產品保固一年（不含耗材），但如遇下列情況，不包含產品保固範圍內，客戶需自行負擔維修費用。<br>備註：凡因天災、不可抗拒外力、不正當操作、人為造成損壞（含自行拆解設備）。",a:it=>it.some(i=>i.svc==="銷售")},
  {k:"rentcare",t:"產品租賃期間，請客戶愛惜使用，如為自然損壞，則由本公司負責免費維修，若因客戶人為因素或遇不可抗力天災或客戶自行拆解導致損壞，將由客戶負擔維修費用。",a:it=>it.some(i=>i.svc==="出租")},
  {k:"rentown",t:"租賃合約起訖，設備所有權仍屬本公司所有，在合約到期，客戶未續約時，本公司有權收回，客戶不得阻攔。",a:it=>it.some(i=>i.svc==="出租")},
- {k:"fish10",t:"本魚池過濾系統濾材保固十年。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
- {k:"fish1",t:"本魚池過濾系統電子機件、控制箱、水泵、蝶閥、殺菌燈保固一年。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
- {k:"fishsvc",t:"魚池過濾設備建議年度實施小保養一次。",a:it=>it.some(i=>i.cat==="魚池過濾設備")},
+ {k:"fish10",t:"本魚池過濾系統濾材保固十年。",a:it=>it.some(i=>i.cat==="魚池過濾設備"||i.cat==="成品-過濾設備")},
+ {k:"fish1",t:"本魚池過濾系統電子機件、控制箱、水泵、蝶閥、殺菌燈保固一年。",a:it=>it.some(i=>i.cat==="魚池過濾設備"||i.cat==="成品-過濾設備")},
+ {k:"fishsvc",t:"魚池過濾設備建議年度實施小保養一次。",a:it=>it.some(i=>i.cat==="魚池過濾設備"||i.cat==="成品-過濾設備")},
  {k:"own",t:"貨款未付清前，設備所有權仍屬本公司所有。",a:()=>true},
  {k:"pay",t:"付款方式：合約回傳並支付定金後，合約正式成立，貨品送貨抵達時，請支付所有尾款，開立支票部分，請開立即期票據，並註明禁止背書轉讓。",a:()=>true},
  {k:"nodep",t:"如中途取消訂單，不退定金。",a:()=>true},
@@ -2173,15 +2177,21 @@ const IVOLTS=["單相110V","單相220V","三相220V","三相380V","三相440V","
 const QPROD={"水冷扇":["36吋DC水冷扇／無段變速","L150水冷扇","L120水冷扇","L105水冷扇","L100水冷扇","L80水冷扇","L60水冷扇","L40水冷扇","L20水冷扇","Ju50水冷扇","106水冷扇","1203水冷扇","2201水冷扇","2203水冷扇","DS120水冷扇","環保空調"],
   "風機":["54吋喇叭扇／七葉塑鋼／1.5HP","46吋喇叭扇／七葉塑鋼／1.5HP","42吋喇叭扇七葉塑鋼／1HP","54吋方型扇／七葉塑鋼／1.5HP","54吋方型扇／七葉塑鋼／1HP","42吋方型扇七葉塑鋼／1HP"],
   "魚池過濾設備":["GC-H-01-1手動","GC-E-01-1全自動","300-580M手動","300-1000M手動","300-1270A半自動","300-1270A全自動","400-1220M手動","400-1800A半自動","400-1800A全自動","555-2000A半自動","555-2000A全自動","680-2000A半自動","680-2000A全自動","860-2185A半自動","860-2185A全自動","1200-2145A半自動","1200-2145A全自動"]};
-const pickSel=(c,v)=>{const a=QPROD[c];if(!a)return'<select name="i_pick" style="display:none"></select>';const own=v&&!a.includes(v);
-  return `<select name="i_pick"><option value="">請選擇產品</option>${a.map(x=>opt(x,x,x===v)).join("")}<option value="__other"${own?" selected":""}>其他（自行輸入）</option></select>`};
-const specListOf=c=>QPROD[c]?"specList_"+QCATS.indexOf(c):"specList";
+const pickSel=(c,v,code)=>{const a=QPROD[c];
+  if(a){const own=v&&!a.includes(v);return `<select name="i_pick"><option value="">請選擇產品</option>${a.map(x=>opt(x,x,x===v)).join("")}<option value="__other"${own?" selected":""}>其他（自行輸入）</option></select>`}
+  if(!qcatKey(c))return'<select name="i_pick" style="display:none"></select>';
+  const L=qcatProds(c),hit=L.some(p=>p.code===code),own=!!v&&!hit;
+  return `<select name="i_pick"><option value="">${L.length?"請選擇產品（"+L.length+"）":"此類尚無商品"}</option>${L.map(p=>`<option value="${esc(p.code)}"${p.code===code?" selected":""}>${esc(prodPrint(p))}</option>`).join("")}<option value="__other"${own?" selected":""}>其他（自行輸入）</option></select>`};
+const pickHide=(c,v,code)=>QPROD[c]?(!v||QPROD[c].includes(v)):qcatKey(c)?(!v||qcatProds(c).some(p=>p.code===code)):false;
+const specListOf=c=>QPROD[c]?"specList_"+Object.keys(QPROD).indexOf(c):"specList";
 // 商品或設備的分類對應到報價品項
-const qcatOf=c=>{c=String(c||"");return /水冷|水濂/.test(c)?"水冷扇":/風機|通風|風扇/.test(c)?"風機":/魚池|過濾|水資源/.test(c)?"魚池過濾設備":c?"其他":""};
+const qcatOf=c=>{c=String(c||"");return /水冷|水濂/.test(c)?"成品-水冷扇":/風機|通風|風扇/.test(c)?"成品-風機":/魚池|過濾|水資源/.test(c)?"成品-過濾設備":c?"其他設備":""};
 function itemRow(i={}){
+  if(QCAT_OLD[i.cat]&&!(QPROD[i.cat]||[]).includes(i.spec)&&!i.code)i={...i,cat:QCAT_OLD[i.cat]};
+  else if(QCAT_OLD[i.cat]&&i.code)i={...i,cat:QCAT_OLD[i.cat]};
   return `<tr><td class="idx"></td>
-  <td style="width:130px"><select name="i_cat"><option value="">請選擇</option>${QCATS.map(v=>opt(v,v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
-  <td>${pickSel(i.cat,i.spec)}<input name="i_spec" list="${specListOf(i.cat)}" ${QPROD[i.cat]&&(!i.spec||QPROD[i.cat].includes(i.spec))?'style="display:none"':""} value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
+  <td style="width:170px"><select name="i_cat"><option value="">請選擇</option>${Object.entries(MAIN_NAMES).map(([k,v])=>opt(v,k+"　"+v,i.cat===v)).join("")}${i.cat&&!QCATS.includes(i.cat)?opt(i.cat,i.cat+"（舊）",true):""}</select></td>
+  <td style="min-width:240px">${pickSel(i.cat,i.spec,i.code)}<input name="i_spec" list="${specListOf(i.cat)}" ${pickHide(i.cat,i.spec,i.code)?'style="display:none"':""} value="${esc(i.spec||"")}" placeholder="輸入商品編號或名稱，可從清單選"><input type="hidden" name="i_code" value="${esc(i.code||"")}">${i.code?`<div class="note mono" data-codeshow>${esc(i.code)}</div>`:'<div class="note mono" data-codeshow></div>'}</td>
   <td style="width:130px"><select name="i_volt">${opt("","請選擇",!i.volt)}${IVOLTS.map(v=>opt(v,v,i.volt===v)).join("")}</select></td>
   <td style="width:92px"><select name="i_svc">${opt("","—",!i.svc)}${SVCS.map(v=>opt(v,v,i.svc===v)).join("")}</select></td>
   <td style="width:150px"><div class="rentbox" ${i.svc==="出租"?"":'style="display:none"'}><input type="date" name="i_from" value="${esc(i.from||"")}" style="width:100%" aria-label="租期起"><input type="date" name="i_to" value="${esc(i.to||"")}" style="width:100%;margin-top:4px" aria-label="租期迄"></div>${i.svc==="出租"?"":'<span class="note rentna">—</span>'}</td>
@@ -2201,7 +2211,7 @@ function quoteForm(src,copy){
   const c=x.cust||{};
   const cats=[...new Set(S.equipment.map(e=>e.category).filter(Boolean))];
   openDlg(`<h3>${isNew?(copy===true?"複製報價單":"新增報價單"):"編輯報價單 "+esc(x.no)}</h3>
-  ${Object.entries(QPROD).map(([c,a])=>`<datalist id="specList_${QCATS.indexOf(c)}">${a.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>`).join("")}
+  ${Object.entries(QPROD).map(([c,a])=>`<datalist id="specList_${Object.keys(QPROD).indexOf(c)}">${a.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>`).join("")}
   <datalist id="specList">${S.invProd.filter(p=>p.active!==false&&p.code).map(p=>`<option value="${esc(prodOpt(p))}">`).join("")}${S.equipment.map(e=>`<option value="${esc(e.name)}">`).join("")}</datalist>
   <datalist id="catList">${cats.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
   <fieldset><legend>客戶資料</legend><div class="grid2">
@@ -2295,7 +2305,7 @@ function quoteForm(src,copy){
     n.focus();n.scrollIntoView({block:"nearest",inline:"center"});if(n.tagName==="SELECT")try{n.showPicker()}catch(e){}};
   body.addEventListener("change",e=>{const t=e.target,tr=t.closest("tr");if(!tr)return;
     if(t.name==="i_cat"){const sp=tr.querySelector("[name=i_spec]"),old=tr.querySelector("[name=i_pick]");sp.setAttribute("list",specListOf(t.value));
-      old.outerHTML=pickSel(t.value,"");const a=QPROD[t.value];if(a&&(!sp.value||!a.includes(sp.value))){sp.value="";sp.style.display="none"}else if(!a)sp.style.display="";nextField(t);return}
+      old.outerHTML=pickSel(t.value,"","");if(pickHide(t.value,"","")){sp.value="";tr.querySelector("[name=i_code]").value="";tr.querySelector("[data-codeshow]").textContent="";sp.style.display="none"}else sp.style.display="";nextField(t);return}
     if(t.name==="i_pick"){const sp=tr.querySelector("[name=i_spec]");if(t.value==="__other"){sp.style.display="";sp.value="";sp.focus();return}
       sp.style.display="none";sp.value=t.value;sp.dispatchEvent(new Event("change",{bubbles:true}));nextField(t);return}
     if(t.name==="i_svc"){const rb=tr.querySelector(".rentbox"),na=tr.querySelector(".rentna"),on=t.value==="出租";rb.style.display=on?"":"none";if(na)na.style.display=on?"none":"";calc();
@@ -2309,7 +2319,7 @@ function quoteForm(src,copy){
   body.addEventListener("change",e=>{if(e.target.name!=="i_spec")return;const tr=e.target.closest("tr"),v=e.target.value.trim(),cdI=tr.querySelector("[name=i_code]"),show=tr.querySelector("[data-codeshow]");
     const pc=v.split("｜")[0].trim().toUpperCase(),pr=S.invProd.find(k=>k.code&&(k.code===pc||prodOpt(k)===v));
     if(pr){e.target.value=prodPrint(pr);cdI.value=pr.code;show.textContent=pr.code;
-      {const k=qcatOf(pr.cat||pr.name);if(k)tr.querySelector("[name=i_cat]").value=k}if(pr.unit)tr.querySelector("[name=i_unit]").value=pr.unit;if(+pr.price)tr.querySelector("[name=i_price]").value=pr.price;calc();return}
+      {const k=MAIN_NAMES[String(pr.code).toUpperCase()[0]]||qcatOf(pr.cat||pr.name),ci=tr.querySelector("[name=i_cat]");if(k&&ci.value!==k){ci.value=k;const pk=tr.querySelector("[name=i_pick]");pk.outerHTML=pickSel(k,prodPrint(pr),pr.code);e.target.style.display="none"}}if(pr.unit)tr.querySelector("[name=i_unit]").value=pr.unit;if(+pr.price)tr.querySelector("[name=i_price]").value=pr.price;calc();return}
     if(cdI.value&&!S.invProd.some(k=>k.code===cdI.value&&prodPrint(k)===v)){cdI.value="";show.textContent=""}
     const eq=S.equipment.find(k=>k.name===v);if(!eq)return;
     if(eq.category&&!tr.querySelector("[name=i_cat]").value)tr.querySelector("[name=i_cat]").value=qcatOf(eq.category);
