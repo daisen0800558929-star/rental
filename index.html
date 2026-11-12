@@ -2945,7 +2945,7 @@ document.addEventListener("click",e=>{const jd=e.target.closest("[data-jobdept]"
 
 /* ---------- 選擇部門 ---------- */
 // 各部門在圓形選單看得到的功能（沒列的部門顯示全部）
-const DEPT_MODS={admin:["cust","prodcode","jobadm"],sales:["cust","take","jobsales"]};
+const DEPT_MODS={admin:["cust","prodcode","jobadm"],sales:["cust","take","jobsales"],plant:["rental","car","cal"]};
 const deptMods=()=>{const ks=DEPT_MODS[curDept];return ks?MODULES.filter(m=>ks.includes(m.k)):MODULES.filter(m=>!m.dept||m.dept===curDept)};
 const DEPTS=[["admin","行政部門","#c0504d"],["sales","業務部門","#4bacc6"],["plant","廠務","#9bbb59"],["acct","會計","#f79646"],["mgmt","管理部","#8064a2"],["buy","採購","#2a78d6"]];
 let curDept="";try{curDept=localStorage.getItem("daisenDept")||""}catch(e){}
