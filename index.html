@@ -2946,8 +2946,10 @@ function viewCar(){const td=S.carTasks.filter(t=>t.date===todayStr()&&t.status!=
 document.addEventListener("click",e=>{const b=e.target.closest("[data-car]");if(!b)return;const x=CAR_ITEMS.find(i=>i.k===b.dataset.car);
   if(!x.go){toast("「"+x.nm+"」建置中，敬請期待");return}tab=x.go;q="";carF="todo";render();window.scrollTo(0,0)});
 /* ---------- 後勤行事曆（類似 TimeTree 的共用月曆） ---------- */
-const CAL_LABELS=[["公司","#2f9e6e"],["會議","#4b8fe5"],["出貨","#f08c00"],["安裝","#9c36b5"],["維修","#e5534b"],["休假","#d6336c"],["個人","#0ca678"],["其他","#868e96"]];
-const calColor=l=>(CAL_LABELS.find(x=>x[0]===l)||CAL_LABELS[0])[1];
+// 標籤（同 TimeTree）：管理員可在「標籤管理」修改名稱、顏色、順序
+const CAL_LABELS_DEF=[["打雜","#2e9e5b"],["成品／半成品組裝","#2a9d9f"],["銷貨","#3a7fc1"],["施工工程","#7a6a64"],["水冷扇出租","#6b6b6b"],["採購/取貨","#c0282d"],["水冷扇試吹","#c94a6e"],["出租收機子","#c96060"],["開會","#d4a017"],["維修","#8e6bb8"]];
+const calLabels=()=>S.calLabels?.length?S.calLabels:CAL_LABELS_DEF;
+const calColor=l=>(calLabels().find(x=>x[0]===l)||["","#868e96"])[1];
 const LUNAR=new Intl.DateTimeFormat("zh-TW-u-ca-chinese",{month:"numeric",day:"numeric"});
 let calYM=todayStr().slice(0,7),calSel=todayStr(),calCar=true;
 const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -2978,25 +2980,51 @@ function viewCal(){
     const sub=x.t==="car"?[e.addr,e.car,e.driver&&"駕駛 "+e.driver,e.status].filter(Boolean):[e.label,e.place,(e.who||[]).join("、"),e.byName&&"建立 "+e.byName].filter(Boolean);
     return `<div class="row" ${x.t==="car"?`data-calcar="${esc(x.id)}"`:`data-calev="${esc(x.id)}"`} tabindex="0"><div><div class="t"><span class="dot" style="--c:${x.c}"></span><span class="mono m" style="font-size:12.5px">${esc(when)}</span>　${esc(x.title)}</div><div class="m">${sub.map(esc).join(" · ")}</div>${e.memo?`<div class="m" style="font-size:12.5px">${esc(e.memo)}</div>`:""}</div><div class="r">${x.t==="car"?'<span class="pill mute">派車</span>':""}</div></div>`}).join("");
   return `<div class="cal-head"><button class="btn" type="button" data-calnav="-1" aria-label="上個月">‹</button><h3>${y} 年 ${m} 月</h3><button class="btn" type="button" data-calnav="1" aria-label="下個月">›</button><button class="btn small" type="button" data-calnav="0">今天</button>
-    <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;white-space:nowrap"><input type="checkbox" id="calCar" ${calCar?"checked":""} style="width:18px;height:18px"> 顯示派車</label></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;white-space:nowrap"><input type="checkbox" id="calCar" ${calCar?"checked":""} style="width:18px;height:18px"> 顯示派車</label>${isAdm()?'<button class="btn small" type="button" data-callab>標籤管理</button>':""}</div>
   <div class="cal-grid"><div class="cal-wds">${["日","一","二","三","四","五","六"].map((w,i)=>`<div class="wd${i===0?" sun":i===6?" sat":""}">週${w}</div>`).join("")}</div>${grid}</div>
   <div class="cal-head" style="margin-top:14px"><h3 style="text-align:left;min-width:0;font-size:17px">${sd.getMonth()+1}月${sd.getDate()}日（${"日一二三四五六"[sd.getDay()]}）</h3>${canWrite?'<button class="btn primary" type="button" data-calnew style="margin-left:auto">＋ 新增行程</button>':""}</div>
   <div class="card list cal-agenda">${ag||'<div class="empty">這天沒有行程</div>'}</div>
   ${canWrite?'<button class="cal-fab" type="button" data-calnew aria-label="新增行程">＋</button>':""}
-  <div class="note" style="margin-top:10px">標籤：${CAL_LABELS.map(([n,c])=>`<span style="white-space:nowrap"><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c}"></span> ${n}</span>`).join("　")}</div>`}
+  <div class="note" style="margin-top:10px">標籤：${calLabels().map(([n,c])=>`<span style="white-space:nowrap"><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c}"></span> ${n}</span>`).join("　")}</div>`}
 document.addEventListener("click",e=>{if(tab!=="cal")return;
   const nv=e.target.closest("[data-calnav]");if(nv){const n=+nv.dataset.calnav;if(!n){calYM=todayStr().slice(0,7);calSel=todayStr()}else{const [y,m]=calYM.split("-").map(Number),d=new Date(y,m-1+n,1);calYM=ymd(d).slice(0,7)}render();return}
   const dy=e.target.closest("[data-calday]");if(dy){const ds=dy.dataset.calday;if(calSel===ds&&canWrite&&!calItemsOn(ds).length){calForm(null,ds);return}calSel=ds;if(ds.slice(0,7)!==calYM)calYM=ds.slice(0,7);render();return}
   if(e.target.closest("[data-calnew]")){calForm(null,calSel);return}
+  if(e.target.closest("[data-callab]")){calLabelDlg();return}
   const ev=e.target.closest("[data-calev]");if(ev){calForm(S.calEvents.find(x=>x.id===ev.dataset.calev));return}
   const cr=e.target.closest("[data-calcar]");if(cr){carTaskForm(S.carTasks.find(x=>x.id===cr.dataset.calcar));return}});
 document.addEventListener("change",e=>{if(e.target.id==="calCar"){calCar=e.target.checked;render()}});
+function calLabelDlg(){
+  let L=calLabels().map(x=>[...x]);
+  const used=n=>S.calEvents.filter(e=>e.label===n).length;
+  const draw=()=>{form.querySelector("#clList").innerHTML=L.map(([n,c],i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+    <input type="color" data-clc="${i}" value="${esc(c)}" style="width:44px;height:40px;padding:2px;flex:none" aria-label="顏色">
+    <input data-cln="${i}" value="${esc(n)}" style="flex:1;color:${esc(c)};font-weight:600" aria-label="標籤名稱">
+    <button class="btn small" type="button" data-clu="${i}" ${i?"":"disabled"} aria-label="上移">↑</button><button class="btn small" type="button" data-cld="${i}" ${i<L.length-1?"":"disabled"} aria-label="下移">↓</button>
+    <button class="btn small" type="button" data-clx="${i}" style="color:var(--bad)" aria-label="刪除">✕</button></div>`).join("")};
+  openDlg(`<h3>標籤的管理</h3><p class="note">修改名稱、顏色和順序後按「保存」。改名時，已使用這個標籤的行程會一起更新。</p><div id="clList"></div>
+  <button class="btn" type="button" id="clAdd">＋ 新增標籤</button>
+  <div class="actions"><button class="btn" type="button" id="clReset" style="margin-right:auto">恢復預設</button><button class="btn" type="button" data-close>取消</button><button class="btn primary" type="submit">保存</button></div>`,async()=>{
+    const old=calLabels(),list=L.map(([n,c])=>({n:n.trim(),c})).filter(x=>x.n);
+    if(!list.length)throw{message:"至少要有一個標籤"};if(new Set(list.map(x=>x.n)).size!==list.length)throw{message:"標籤名稱不能重複"};
+    await setDoc(doc(fs,"hrSettings","calLabels"),{list,updatedAt:new Date().toISOString(),updatedBy:me.email});
+    // 改名：依原本位置對應
+    const ren={};L.forEach((x,i)=>{if(x._o&&x._o!==x[0].trim())ren[x._o]=x[0].trim()});
+    for(const e of S.calEvents)if(ren[e.label])await updateDoc(doc(fs,"calEvents",e.id),{label:ren[e.label]});
+    S.calLabels=list.map(x=>[x.n,x.c]);toast("已保存標籤")},false);
+  L.forEach(x=>x._o=x[0]);draw();
+  form.querySelector("#clList").addEventListener("input",e=>{const t=e.target;if(t.dataset.cln!=null)L[+t.dataset.cln][0]=t.value;if(t.dataset.clc!=null){L[+t.dataset.clc][1]=t.value;form.querySelector(`[data-cln="${t.dataset.clc}"]`).style.color=t.value}});
+  form.querySelector("#clList").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const sw=(i,j)=>{[L[i],L[j]]=[L[j],L[i]];draw()};
+    if(b.dataset.clu)sw(+b.dataset.clu,+b.dataset.clu-1);else if(b.dataset.cld)sw(+b.dataset.cld,+b.dataset.cld+1);
+    else if(b.dataset.clx){const i=+b.dataset.clx,n=used(L[i]._o||L[i][0]);if(n&&!confirm(`「${L[i][0]}」已有 ${n} 個行程使用，刪除後這些行程會顯示為灰色，確定刪除？`))return;L.splice(i,1);draw()}});
+  form.querySelector("#clAdd").onclick=()=>{L.push(["新標籤","#4b8fe5"]);draw();const ins=form.querySelectorAll("[data-cln]");ins[ins.length-1].select()};
+  form.querySelector("#clReset").onclick=()=>{if(!confirm("恢復成預設的 10 個標籤？"))return;L=CAL_LABELS_DEF.map(x=>[...x]);draw()}}
 function calForm(src,day){
-  const isNew=!src,d=src?{...src}:{start:day||todayStr(),end:day||todayStr(),allDay:true,label:"公司",who:[]};
+  const isNew=!src,d=src?{...src}:{start:day||todayStr(),end:day||todayStr(),allDay:true,label:calLabels()[0][0],who:[]};
   const emps=S.hrEmp.filter(hrActive).map(e=>e.name).filter(Boolean),canDel=!isNew&&(isAdm()||d.by===me.email);
   openDlg(`<h3>${isNew?"新增行程":"行程"}</h3>
   <label>標題<input name="title" value="${esc(d.title||"")}" required placeholder="例如：台中客戶安裝、月會、王小明休假"></label>
-  <div class="cal-labels" style="margin:10px 0">${CAL_LABELS.map(([n,c])=>`<label style="--c:${c}"><input type="radio" name="label" value="${n}"${(d.label||"公司")===n?" checked":""}><i></i>${n}</label>`).join("")}</div>
+  <div class="cal-labels" style="margin:10px 0">${(calLabels().some(x=>x[0]===d.label)||!d.label?calLabels():[...calLabels(),[d.label,"#868e96"]]).map(([n,c])=>`<label style="--c:${c}"><input type="radio" name="label" value="${esc(n)}"${(d.label||calLabels()[0][0])===n?" checked":""}><i></i>${n}</label>`).join("")}</div>
   <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="allDay" ${d.allDay?"checked":""} style="width:20px;height:20px"> 全天</label>
   <div class="grid2">
     <label>開始日期<input type="date" name="start" value="${esc(d.start||"")}" required></label>
@@ -3009,7 +3037,7 @@ function calForm(src,day){
   <label>備註<textarea name="memo" rows="3">${esc(d.memo||"")}</textarea></label>
   ${d.by?`<div class="note">建立：${esc(d.byName||d.by)}　${esc(String(d.createdAt||"").slice(0,16).replace("T"," "))}</div>`:""}
   <div class="actions">${canDel?'<button class="btn" type="button" id="calDel" style="margin-right:auto;color:var(--bad)">刪除</button>':""}<button class="btn" type="button" data-close>取消</button>${canWrite?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,async fd=>{
-    const o={title:val(fd,"title"),label:val(fd,"label")||"公司",allDay:fd.get("allDay")==="on",start:val(fd,"start"),end:val(fd,"end")||val(fd,"start"),sTime:val(fd,"sTime"),eTime:val(fd,"eTime"),place:val(fd,"place"),who:fd.getAll("who"),memo:val(fd,"memo")};
+    const o={title:val(fd,"title"),label:val(fd,"label")||calLabels()[0][0],allDay:fd.get("allDay")==="on",start:val(fd,"start"),end:val(fd,"end")||val(fd,"start"),sTime:val(fd,"sTime"),eTime:val(fd,"eTime"),place:val(fd,"place"),who:fd.getAll("who"),memo:val(fd,"memo")};
     if(!o.title)throw{message:"請填寫標題"};if(o.end<o.start)throw{message:"結束日期不能早於開始日期"};
     if(o.allDay){o.sTime="";o.eTime=""}else if(o.start===o.end&&o.sTime&&o.eTime&&o.eTime<o.sTime)throw{message:"結束時間不能早於開始時間"};
     const now=new Date().toISOString();
@@ -3200,7 +3228,7 @@ function startData(){
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());{const cl=d.find(x=>x.id==="calLabels");S.calLabels=cl?cl.data().list?.map(x=>[x.n,x.c]):null}const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
