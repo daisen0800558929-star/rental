@@ -235,6 +235,11 @@ html,body{margin:0}
 .dept-main{padding-block:26px 48px;display:grid;gap:18px;justify-items:center}
 .dept-main h2{margin:0;font-size:20px;text-align:center}
 .dept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(560px,100%)}
+.car-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:720px;margin:8px auto 0}
+.car-tile{appearance:none;border:2px solid var(--c);background:var(--surface);color:var(--text);border-radius:16px;min-height:150px;font:inherit;cursor:pointer;display:grid;place-items:center;align-content:center;gap:8px;padding:16px;text-align:center}
+.car-tile b{font-size:21px;letter-spacing:.06em}.car-tile small{color:var(--muted);font-size:13px;line-height:1.5}
+.car-tile .ic{font-size:34px;line-height:1}.car-tile.soon{opacity:.45;border-style:dashed}
+.car-tile:active{transform:scale(.98)}
 .dept-btn{appearance:none;border:2px solid var(--c);background:var(--surface);color:var(--text);border-radius:14px;min-height:118px;font:inherit;font-size:22px;font-weight:700;letter-spacing:.12em;cursor:pointer;display:grid;place-items:center;gap:4px;padding:14px;transition:transform .12s,background .12s}
 .dept-btn small{font-size:12.5px;font-weight:400;letter-spacing:0;color:var(--muted)}
 .dept-btn:hover,.dept-btn:focus-visible{background:color-mix(in srgb,var(--c) 14%,var(--surface));transform:translateY(-2px)}
@@ -389,7 +394,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={car:"派車任務管理",dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    if(soloTab&&soloTab===tab)T[tab]=MODULES.find(m=>m.solo&&m.go===tab)?.nm||T[tab];
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
@@ -408,6 +413,7 @@ function render(){
   if(tab==="analysis")h=viewAnalysis(loading);
   if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
   if(tab==="take")h=viewTake(loading);
+  if(tab==="car")h=viewCar();
   if(tab==="dept_perm")h=viewDeptPerm();
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
@@ -2798,7 +2804,7 @@ const MODULES=[
   {k:"acct",lb:"財會|稅務",nm:"財會稅務",ds:"應收應付、發票與稅務"},
   {k:"hr",lb:"人事|管理",nm:"人事管理",ds:"企業願景、組織圖、員工資料、編制與契約",go:"hr_vision"},
   {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"公司行程與後勤排程"},
-  {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"派車、出勤任務與回報"},
+  {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"保養維修、里程登錄、公務車配置",go:"car",solo:true},
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
   {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
   {k:"prodcode",lb:"商品|編號",nm:"商品編號",ds:"大森 10 碼商品編號的查詢與建立",go:"inv_prod",dept:"admin",solo:true},
@@ -2903,6 +2909,14 @@ function viewJobs(){
   return `<div class="chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${DEPTS.map(([d,n,c])=>`<button type="button" class="btn small${d===k?" primary":""}" data-jobdept="${d}" style="border-color:${c}">${esc(n)}${S.jobs?.[d]?"":"（範本）"}</button>`).join("")}</div>`+viewJobDesc(k);
 }
 function jobData(k){const v=S.jobs?.[k];if(!v||!v.sections)return JOB_DEFAULT[k];return{...v,sections:v.sections.map(x=>Array.isArray(x)?x:[x.t||"",x.b||""])}}
+// 派車任務管理：四大項目（內容依需求陸續建置）
+const CAR_ITEMS=[
+  {k:"maint",ic:"🔧",nm:"保養維修管理",ds:"定期保養、維修紀錄與費用",c:"#c0504d"},
+  {k:"mile",ic:"🛣️",nm:"里程登錄",ds:"每日出車里程、用途與加油",c:"#4bacc6"},
+  {k:"fleet",ic:"🚚",nm:"公務車配置",ds:"車輛資料與使用人配置",c:"#9bbb59"},
+  {k:"tbd",ic:"＋",nm:"待規劃",ds:"第四項功能規劃中",c:"#8064a2",soon:true}];
+function viewCar(){return `<div class="note" style="text-align:center">請選擇要使用的項目</div><div class="car-grid">${CAR_ITEMS.map(x=>`<button class="car-tile${x.soon?" soon":""}" type="button" data-car="${x.k}" style="--c:${x.c}"><span class="ic" aria-hidden="true">${x.ic}</span><b>${esc(x.nm)}</b><small>${esc(x.ds)}</small></button>`).join("")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-car]");if(!b)return;const x=CAR_ITEMS.find(i=>i.k===b.dataset.car);toast("「"+x.nm+"」建置中，敬請期待")});
 function viewDeptPerm(){
   const adm=isAdm(),L=S.hrEmp.filter(hrActive).sort((a,b)=>String(a.code).localeCompare(b.code));
   const head=DEPTS.map(([k,n,c])=>`<th style="text-align:center;white-space:nowrap"><span style="border-bottom:3px solid ${c}">${esc(n)}</span></th>`).join("");
