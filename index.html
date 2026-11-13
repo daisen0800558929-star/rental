@@ -235,6 +235,29 @@ html,body{margin:0}
 .dept-main{padding-block:26px 48px;display:grid;gap:18px;justify-items:center}
 .dept-main h2{margin:0;font-size:20px;text-align:center}
 .dept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(560px,100%)}
+.cal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.cal-head h3{margin:0;font-size:20px;min-width:7.5em;text-align:center}
+.cal-grid{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.cal-wds{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.cal-grid .wd{font-size:12px;text-align:center;padding:6px 0;color:var(--muted)}
+.cal-grid .wd.sun,.cal-day.sun .dn{color:#e5534b}.cal-grid .wd.sat,.cal-day.sat .dn{color:#4b8fe5}
+.cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:40px repeat(3,20px) 16px;row-gap:2px;border-bottom:1px solid var(--line);position:relative;padding-bottom:3px}
+.cal-week:last-child{border-bottom:0}
+.cal-day{appearance:none;border:0;border-right:1px solid var(--line);background:none;color:var(--text);font:inherit;padding:3px 0 0;display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:0}
+.cal-day:nth-child(7){border-right:0}
+.cal-day.out{opacity:.38}.cal-day.sel{background:color-mix(in srgb,#4b8fe5 18%,transparent)}
+.cal-day .dn{font-size:14px;font-weight:600;border-radius:999px;min-width:24px;height:22px;line-height:22px;text-align:center}
+.cal-day .lun{font-size:9.5px;color:var(--muted);line-height:1.2}
+.cal-day.today .dn{background:#e5534b;color:#fff!important}
+.cal-ev{pointer-events:none;align-self:stretch;margin:0 2px;font-size:11px;line-height:20px;border-radius:4px;padding:0 4px;color:#fff;white-space:nowrap;overflow:hidden;font-weight:600;background:var(--c);min-width:0;z-index:1}
+.cal-ev.span{text-align:center}
+.cal-ev.car{background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--text);font-weight:500}
+.cal-more{pointer-events:none;font-size:10.5px;color:var(--muted);text-align:center;z-index:1;line-height:16px}
+.cal-agenda .row .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:middle}
+.cal-fab{position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;border:0;background:#2f9e6e;color:#fff;font-size:30px;line-height:1;box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer;z-index:20}
+.cal-labels{display:flex;flex-wrap:wrap;gap:6px}.cal-labels label{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 6px;cursor:pointer;font-size:14px}
+.cal-labels input{width:auto;margin:0}.cal-labels i{width:14px;height:14px;border-radius:50%;background:var(--c);display:inline-block}
+@media (max-width:520px){.cal-ev{font-size:10px;padding:0 2px;margin:0 1px}}
 .car-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:720px;margin:8px auto 0}
 .car-tile{appearance:none;border:2px solid var(--c);background:var(--surface);color:var(--text);border-radius:16px;min-height:150px;font:inherit;cursor:pointer;display:grid;place-items:center;align-content:center;gap:8px;padding:16px;text-align:center}
 .car-tile b{font-size:21px;letter-spacing:.06em}.car-tile small{color:var(--muted);font-size:13px;line-height:1.5}
@@ -351,7 +374,7 @@ window.addEventListener("unhandledrejection",e=>{const m=e.reason?.message||Stri
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],carTasks:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],carTasks:[],calEvents:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={en:"Daisen Energy Saving Undertakings Co.,Ltd.",taxId:"42950678",addr:"彰化縣彰化市自強南路537號",northTel:"03-3818478",southTel:"07-6952951",name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -394,7 +417,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={car:"派車任務管理",car_task:"派車任務登記",dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={cal:"後勤行事曆",car:"派車任務管理",car_task:"派車任務登記",dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    if(soloTab&&soloTab===tab)T[tab]=MODULES.find(m=>m.solo&&m.go===tab)?.nm||T[tab];
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
@@ -414,6 +437,7 @@ function render(){
   if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
   if(tab==="take")h=viewTake(loading);
   if(tab==="car")h=viewCar();
+  if(tab==="cal")h=viewCal();
   if(tab==="car_task")h=viewCarTask();
   if(tab==="dept_perm")h=viewDeptPerm();
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
@@ -2805,7 +2829,7 @@ const MODULES=[
   {k:"inv",lb:"進銷存",nm:"進銷存",ds:"商品、進貨、銷貨、庫存、借出與報廢",go:"inv_prod"},
   {k:"acct",lb:"財會|稅務",nm:"財會稅務",ds:"應收應付、發票與稅務"},
   {k:"hr",lb:"人事|管理",nm:"人事管理",ds:"企業願景、組織圖、員工資料、編制與契約",go:"hr_vision"},
-  {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"公司行程與後勤排程"},
+  {k:"cal",lb:"後勤|行事曆",nm:"後勤行事曆",ds:"共用行事曆：行程、休假、會議與派車",go:"cal",solo:true},
   {k:"car",lb:"派車任務|管理",nm:"派車任務管理",ds:"保養維修、里程登錄、公務車配置",go:"car",solo:true},
   {k:"remind",lb:"溫馨|提醒",nm:"溫馨提醒",ds:"租約到期與逾期提醒",go:"remind"},
   {k:"news",lb:"公告區",nm:"公告區",ds:"公司公告與通知"},
@@ -2921,6 +2945,80 @@ function viewCar(){const td=S.carTasks.filter(t=>t.date===todayStr()&&t.status!=
   return `<div class="note" style="text-align:center">請選擇要使用的項目</div><div class="car-grid">${CAR_ITEMS.map(x=>`<button class="car-tile${x.go?"":" soon"}" type="button" data-car="${x.k}" style="--c:${x.c}"><span class="ic" aria-hidden="true">${x.ic}</span><b>${esc(x.nm)}</b><small>${esc(x.ds)}${x.k==="task"?`<br>今日 ${td} 趟`:x.go?"":"<br>建置中"}</small></button>`).join("")}</div>`}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-car]");if(!b)return;const x=CAR_ITEMS.find(i=>i.k===b.dataset.car);
   if(!x.go){toast("「"+x.nm+"」建置中，敬請期待");return}tab=x.go;q="";carF="todo";render();window.scrollTo(0,0)});
+/* ---------- 後勤行事曆（類似 TimeTree 的共用月曆） ---------- */
+const CAL_LABELS=[["公司","#2f9e6e"],["會議","#4b8fe5"],["出貨","#f08c00"],["安裝","#9c36b5"],["維修","#e5534b"],["休假","#d6336c"],["個人","#0ca678"],["其他","#868e96"]];
+const calColor=l=>(CAL_LABELS.find(x=>x[0]===l)||CAL_LABELS[0])[1];
+const LUNAR=new Intl.DateTimeFormat("zh-TW-u-ca-chinese",{month:"numeric",day:"numeric"});
+let calYM=todayStr().slice(0,7),calSel=todayStr(),calCar=true;
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const addDays=(s,n)=>{const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+n);return ymd(d)};
+function calItemsOn(ds){
+  const ev=S.calEvents.filter(e=>e.start&&e.start<=ds&&(e.end||e.start)>=ds).map(e=>({t:"ev",id:e.id,title:e.title,c:calColor(e.label),time:e.allDay?"":(e.start===ds?e.sTime||"":""),all:!!e.allDay||e.start!==ds,e}));
+  const car=calCar?S.carTasks.filter(t=>t.date===ds&&t.status!=="取消").map(t=>({t:"car",id:t.id,title:"🚚"+(t.kind||"")+" "+(t.cust||""),c:"#4bacc6",time:t.time||"",all:!t.time,e:t})):[];
+  return [...ev,...car].sort((a,b)=>(a.all?0:1)-(b.all?0:1)||String(a.time).localeCompare(b.time))}
+function viewCal(){
+  const [y,m]=calYM.split("-").map(Number),first=new Date(y,m-1,1),start=new Date(first);start.setDate(1-first.getDay());
+  const t0=todayStr(),cells=[];for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);cells.push(d)}
+  const rowsNeeded=cells.slice(35).some(d=>d.getMonth()===m-1)?42:35,ML=3;
+  let grid="";
+  for(let w=0;w<rowsNeeded;w+=7){const days=cells.slice(w,w+7).map(ymd),ws=days[0],we=days[6];
+    // 跨日行程畫成橫條，其餘逐日排入空格
+    const multi=S.calEvents.filter(e=>e.start&&(e.end||e.start)>e.start&&e.start<=we&&(e.end||e.start)>=ws).map(e=>{const a=Math.max(0,days.indexOf(e.start<ws?ws:e.start)),z=days.indexOf((e.end>we?we:e.end));return{a,z:z<0?6:z,e,c:calColor(e.label),title:e.title,id:e.id,t:"ev",cut:e.start<ws}}).sort((x,y)=>x.a-y.a||(y.z-y.a)-(x.z-x.a));
+    const lanes=[],place=(a,z)=>{for(let l=0;l<ML;l++){lanes[l]=lanes[l]||Array(7).fill(false);if(lanes[l].slice(a,z+1).every(v=>!v)){for(let i=a;i<=z;i++)lanes[l][i]=true;return l}}return -1};
+    const more=Array(7).fill(0),bars=[];
+    multi.forEach(x=>{const l=place(x.a,x.z);if(l<0){for(let i=x.a;i<=x.z;i++)more[i]++}else bars.push({...x,l})});
+    days.forEach((ds,i)=>calItemsOn(ds).filter(x=>!(x.t==="ev"&&(x.e.end||x.e.start)>x.e.start)).forEach(x=>{const l=place(i,i);if(l<0)more[i]++;else bars.push({...x,a:i,z:i,l})}));
+    const cellsH=cells.slice(w,w+7).map((d,i)=>{const ds=days[i],wd=d.getDay(),n=calItemsOn(ds).length;let lun="";try{lun=LUNAR.format(d)}catch(er){}
+      return `<button type="button" class="cal-day${d.getMonth()!==m-1?" out":""}${ds===t0?" today":""}${ds===calSel?" sel":""}${wd===0?" sun":wd===6?" sat":""}" style="grid-column:${i+1};grid-row:1/-1" data-calday="${ds}" aria-label="${ds}，${n} 個行程"><span class="dn">${d.getDate()}</span><span class="lun">${esc(lun)}</span></button>`}).join("");
+    const barsH=bars.map(x=>`<span class="cal-ev${x.t==="car"?" car":""}${x.a!==x.z?" span":""}" style="--c:${x.c};grid-column:${x.a+1}/${x.z+2};grid-row:${x.l+2}">${esc(x.title)}</span>`).join("");
+    const moreH=more.map((n,i)=>n?`<span class="cal-more" style="grid-column:${i+1};grid-row:${ML+2}">+${n}</span>`:"").join("");
+    grid+=`<div class="cal-week">${cellsH}${barsH}${moreH}</div>`}
+  const sel=calItemsOn(calSel),sd=new Date(calSel+"T00:00:00");
+  const ag=sel.map(x=>{const e=x.e;const when=x.t==="car"?(e.time||"全天"):e.allDay?(e.start!==(e.end||e.start)?`全天（${e.start.slice(5).replace("-","/")}～${(e.end).slice(5).replace("-","/")}）`:"全天"):`${e.start===calSel?e.sTime||"":"（續）"}${e.eTime&&(e.end||e.start)===calSel?"～"+e.eTime:""}`;
+    const sub=x.t==="car"?[e.addr,e.car,e.driver&&"駕駛 "+e.driver,e.status].filter(Boolean):[e.label,e.place,(e.who||[]).join("、"),e.byName&&"建立 "+e.byName].filter(Boolean);
+    return `<div class="row" ${x.t==="car"?`data-calcar="${esc(x.id)}"`:`data-calev="${esc(x.id)}"`} tabindex="0"><div><div class="t"><span class="dot" style="--c:${x.c}"></span><span class="mono m" style="font-size:12.5px">${esc(when)}</span>　${esc(x.title)}</div><div class="m">${sub.map(esc).join(" · ")}</div>${e.memo?`<div class="m" style="font-size:12.5px">${esc(e.memo)}</div>`:""}</div><div class="r">${x.t==="car"?'<span class="pill mute">派車</span>':""}</div></div>`}).join("");
+  return `<div class="cal-head"><button class="btn" type="button" data-calnav="-1" aria-label="上個月">‹</button><h3>${y} 年 ${m} 月</h3><button class="btn" type="button" data-calnav="1" aria-label="下個月">›</button><button class="btn small" type="button" data-calnav="0">今天</button>
+    <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;white-space:nowrap"><input type="checkbox" id="calCar" ${calCar?"checked":""} style="width:18px;height:18px"> 顯示派車</label></div>
+  <div class="cal-grid"><div class="cal-wds">${["日","一","二","三","四","五","六"].map((w,i)=>`<div class="wd${i===0?" sun":i===6?" sat":""}">週${w}</div>`).join("")}</div>${grid}</div>
+  <div class="cal-head" style="margin-top:14px"><h3 style="text-align:left;min-width:0;font-size:17px">${sd.getMonth()+1}月${sd.getDate()}日（${"日一二三四五六"[sd.getDay()]}）</h3>${canWrite?'<button class="btn primary" type="button" data-calnew style="margin-left:auto">＋ 新增行程</button>':""}</div>
+  <div class="card list cal-agenda">${ag||'<div class="empty">這天沒有行程</div>'}</div>
+  ${canWrite?'<button class="cal-fab" type="button" data-calnew aria-label="新增行程">＋</button>':""}
+  <div class="note" style="margin-top:10px">標籤：${CAL_LABELS.map(([n,c])=>`<span style="white-space:nowrap"><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c}"></span> ${n}</span>`).join("　")}</div>`}
+document.addEventListener("click",e=>{if(tab!=="cal")return;
+  const nv=e.target.closest("[data-calnav]");if(nv){const n=+nv.dataset.calnav;if(!n){calYM=todayStr().slice(0,7);calSel=todayStr()}else{const [y,m]=calYM.split("-").map(Number),d=new Date(y,m-1+n,1);calYM=ymd(d).slice(0,7)}render();return}
+  const dy=e.target.closest("[data-calday]");if(dy){const ds=dy.dataset.calday;if(calSel===ds&&canWrite&&!calItemsOn(ds).length){calForm(null,ds);return}calSel=ds;if(ds.slice(0,7)!==calYM)calYM=ds.slice(0,7);render();return}
+  if(e.target.closest("[data-calnew]")){calForm(null,calSel);return}
+  const ev=e.target.closest("[data-calev]");if(ev){calForm(S.calEvents.find(x=>x.id===ev.dataset.calev));return}
+  const cr=e.target.closest("[data-calcar]");if(cr){carTaskForm(S.carTasks.find(x=>x.id===cr.dataset.calcar));return}});
+document.addEventListener("change",e=>{if(e.target.id==="calCar"){calCar=e.target.checked;render()}});
+function calForm(src,day){
+  const isNew=!src,d=src?{...src}:{start:day||todayStr(),end:day||todayStr(),allDay:true,label:"公司",who:[]};
+  const emps=S.hrEmp.filter(hrActive).map(e=>e.name).filter(Boolean),canDel=!isNew&&(isAdm()||d.by===me.email);
+  openDlg(`<h3>${isNew?"新增行程":"行程"}</h3>
+  <label>標題<input name="title" value="${esc(d.title||"")}" required placeholder="例如：台中客戶安裝、月會、王小明休假"></label>
+  <div class="cal-labels" style="margin:10px 0">${CAL_LABELS.map(([n,c])=>`<label style="--c:${c}"><input type="radio" name="label" value="${n}"${(d.label||"公司")===n?" checked":""}><i></i>${n}</label>`).join("")}</div>
+  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="allDay" ${d.allDay?"checked":""} style="width:20px;height:20px"> 全天</label>
+  <div class="grid2">
+    <label>開始日期<input type="date" name="start" value="${esc(d.start||"")}" required></label>
+    <label class="tm">開始時間<input type="time" name="sTime" value="${esc(d.sTime||"")}"></label>
+    <label>結束日期<input type="date" name="end" value="${esc(d.end||d.start||"")}"></label>
+    <label class="tm">結束時間<input type="time" name="eTime" value="${esc(d.eTime||"")}"></label>
+    <label class="full">地點<input name="place" value="${esc(d.place||"")}"></label>
+  </div>
+  ${emps.length?`<fieldset><legend>參與人員</legend><div class="cal-labels">${emps.map(n=>`<label style="--c:#868e96"><input type="checkbox" name="who" value="${esc(n)}"${(d.who||[]).includes(n)?" checked":""}>${esc(n)}</label>`).join("")}</div></fieldset>`:""}
+  <label>備註<textarea name="memo" rows="3">${esc(d.memo||"")}</textarea></label>
+  ${d.by?`<div class="note">建立：${esc(d.byName||d.by)}　${esc(String(d.createdAt||"").slice(0,16).replace("T"," "))}</div>`:""}
+  <div class="actions">${canDel?'<button class="btn" type="button" id="calDel" style="margin-right:auto;color:var(--bad)">刪除</button>':""}<button class="btn" type="button" data-close>取消</button>${canWrite?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,async fd=>{
+    const o={title:val(fd,"title"),label:val(fd,"label")||"公司",allDay:fd.get("allDay")==="on",start:val(fd,"start"),end:val(fd,"end")||val(fd,"start"),sTime:val(fd,"sTime"),eTime:val(fd,"eTime"),place:val(fd,"place"),who:fd.getAll("who"),memo:val(fd,"memo")};
+    if(!o.title)throw{message:"請填寫標題"};if(o.end<o.start)throw{message:"結束日期不能早於開始日期"};
+    if(o.allDay){o.sTime="";o.eTime=""}else if(o.start===o.end&&o.sTime&&o.eTime&&o.eTime<o.sTime)throw{message:"結束時間不能早於開始時間"};
+    const now=new Date().toISOString();
+    if(isNew)await setDoc(doc(collection(fs,"calEvents")),{...o,by:me.email,byName:myName(),createdAt:now,updatedAt:now});
+    else await setDoc(doc(fs,"calEvents",d.id),{...o,updatedAt:now,updatedBy:me.email},{merge:true});
+    calSel=o.start;calYM=o.start.slice(0,7);toast(isNew?"已新增行程":"已儲存")});
+  const F=form.elements,tm=()=>form.querySelectorAll(".tm").forEach(l=>l.style.display=F.allDay.checked?"none":"");tm();F.allDay.addEventListener("change",tm);
+  F.start.addEventListener("change",()=>{if(!F.end.value||F.end.value<F.start.value)F.end.value=F.start.value});
+  const del=$("#calDel");if(del)del.onclick=async()=>{if(!confirm("確定刪除這個行程？"))return;try{await deleteDoc(doc(fs,"calEvents",d.id));dlg.close();toast("已刪除")}catch(er){showErr(er)}}}
 /* ---------- 派車任務登記 ---------- */
 const CAR_KINDS=["送貨","安裝","維修","保養","收回租賃設備","勘查估價","採購取貨","其他"];
 const CAR_ST=["待出車","已出車","已完成","取消"];
@@ -3094,6 +3192,7 @@ function startData(){
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
    hrSub("invProducts",d=>{S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
+   hrSub("calEvents",d=>S.calEvents=d.map(x=>({id:x.id,...x.data()})));
    hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrEmployees",d=>{S.hrEmp=d.map(x=>({id:x.id,...x.data()}));if(!$("#deptView").hidden)drawDept()});
