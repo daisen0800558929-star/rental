@@ -351,7 +351,7 @@ window.addEventListener("unhandledrejection",e=>{const m=e.reason?.message||Stri
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
-const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
+const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],carTasks:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={en:"Daisen Energy Saving Undertakings Co.,Ltd.",taxId:"42950678",addr:"彰化縣彰化市自強南路537號",northTel:"03-3818478",southTel:"07-6952951",name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
 let db=null, canWrite=true, tab="overview", q="", filter="all";
@@ -394,7 +394,7 @@ function render(){
   updateRemind();
   $("#accTab").hidden=me?.role!=="admin";$("#accBtn").hidden=me?.role!=="admin";if(tab==="accounts"&&me?.role!=="admin")tab="overview";
   $("#newBtn").hidden=!canWrite||!["overview","contracts","equipment"].includes(tab);
-  {const T={car:"派車任務管理",dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
+  {const T={car:"派車任務管理",car_task:"派車任務登記",dept_perm:"部門權限設定",take:"接案狀況",job_admin:"行政工作說明書",job_sales:"業務工作說明書",analysis:"ERP 內容分析",overview:"設備租賃管理",contracts:"設備租賃管理",equipment:"設備租賃管理",calls:"每日客戶通聯管理",customers:"客戶資料",inv_prod:"進銷存",inv_in:"進銷存",inv_out:"進銷存",inv_stock:"進銷存",inv_lend:"進銷存",inv_scrap:"進銷存",hr_vision:"人事管理",hr_job:"人事管理",hr_honor:"人事管理",hr_org:"人事管理",hr_emp:"人事管理",hr_pos:"人事管理",hr_con:"人事管理",quotes:"業務報價",accounts:"帳號管理"};
    if(soloTab&&soloTab===tab)T[tab]=MODULES.find(m=>m.solo&&m.go===tab)?.nm||T[tab];
    $("#pageTitle").textContent=T[tab]||"大森 ERP";document.title=(T[tab]?T[tab]+"｜":"")+"大森 ERP"}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
@@ -414,6 +414,7 @@ function render(){
   if(tab.startsWith("job_"))h=viewJobDesc(tab.slice(4),true);
   if(tab==="take")h=viewTake(loading);
   if(tab==="car")h=viewCar();
+  if(tab==="car_task")h=viewCarTask();
   if(tab==="dept_perm")h=viewDeptPerm();
   if(tab==="accounts")h=me?.role==="admin"?viewAccounts():"";
   const SEG=[[["overview","總覽"],["contracts","租約"],["equipment","設備"]],[["calls","通聯紀錄"],["customers","客戶資料"]],[["inv_prod","商品編號"],["inv_in","進貨"],["inv_out","銷貨"],["inv_stock","庫存"],["inv_lend","借出／試吹／展覽"],["inv_scrap","報廢"]],[["hr_vision","企業願景"],["hr_honor","榮譽典章"],["hr_org","組織圖"],["hr_emp","員工資料"],["hr_pos","編制表"],["hr_con","契約管理"],["hr_job","工作說明書"]]];
@@ -437,6 +438,7 @@ function suggestItems(){
   else if(tab==="hr_emp")S.hrEmp.forEach(e=>add("員工",e.name,[e.code,e.dept,e.title].filter(Boolean).join(" · "),e.name,[e.mobile,e.email]));
   else if(tab==="inv_prod"||tab==="inv_stock")S.invProd.forEach(p=>add("商品",p.name,[p.code,p.spec,p.cat].filter(Boolean).join(" · "),p.code||p.name,[p.spec]));
   else if(tab.startsWith("inv_"))S.invDocs.filter(d=>d.type===INV_TAB[tab]).forEach(d=>add(INV_T[d.type].nm,d.party||d.no,[d.no,d.date].filter(Boolean).join(" · "),d.party||d.no,[d.no,...(d.items||[]).map(i=>prodLabel(i.pid))]));
+  else if(tab==="car_task")S.carTasks.forEach(t=>add("派車",t.cust||t.addr||"",[t.date,t.kind,t.car,t.driver].filter(Boolean).join(" · "),t.cust||t.addr,[t.addr,t.content]));
   else if(tab==="hr_con")S.hrCon.forEach(c=>add("契約",empName(c.empId),c.type,empName(c.empId),[c.note]));
   return out;
 }
@@ -2914,9 +2916,85 @@ const CAR_ITEMS=[
   {k:"maint",ic:"🔧",nm:"保養維修管理",ds:"定期保養、維修紀錄與費用",c:"#c0504d"},
   {k:"mile",ic:"🛣️",nm:"里程登錄",ds:"每日出車里程、用途與加油",c:"#4bacc6"},
   {k:"fleet",ic:"🚚",nm:"公務車配置",ds:"車輛資料與使用人配置",c:"#9bbb59"},
-  {k:"tbd",ic:"＋",nm:"待規劃",ds:"第四項功能規劃中",c:"#8064a2",soon:true}];
-function viewCar(){return `<div class="note" style="text-align:center">請選擇要使用的項目</div><div class="car-grid">${CAR_ITEMS.map(x=>`<button class="car-tile${x.soon?" soon":""}" type="button" data-car="${x.k}" style="--c:${x.c}"><span class="ic" aria-hidden="true">${x.ic}</span><b>${esc(x.nm)}</b><small>${esc(x.ds)}</small></button>`).join("")}</div>`}
-document.addEventListener("click",e=>{const b=e.target.closest("[data-car]");if(!b)return;const x=CAR_ITEMS.find(i=>i.k===b.dataset.car);toast("「"+x.nm+"」建置中，敬請期待")});
+  {k:"task",ic:"📋",nm:"派車任務登記",ds:"日期、車輛、駕駛、客戶與任務",c:"#8064a2",go:"car_task"}];
+function viewCar(){const td=S.carTasks.filter(t=>t.date===todayStr()&&t.status!=="取消").length;
+  return `<div class="note" style="text-align:center">請選擇要使用的項目</div><div class="car-grid">${CAR_ITEMS.map(x=>`<button class="car-tile${x.go?"":" soon"}" type="button" data-car="${x.k}" style="--c:${x.c}"><span class="ic" aria-hidden="true">${x.ic}</span><b>${esc(x.nm)}</b><small>${esc(x.ds)}${x.k==="task"?`<br>今日 ${td} 趟`:x.go?"":"<br>建置中"}</small></button>`).join("")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-car]");if(!b)return;const x=CAR_ITEMS.find(i=>i.k===b.dataset.car);
+  if(!x.go){toast("「"+x.nm+"」建置中，敬請期待");return}tab=x.go;q="";carF="todo";render();window.scrollTo(0,0)});
+/* ---------- 派車任務登記 ---------- */
+const CAR_KINDS=["送貨","安裝","維修","保養","收回租賃設備","勘查估價","採購取貨","其他"];
+const CAR_ST=["待出車","已出車","已完成","取消"];
+const carStPill=st=>`<span class="pill ${st==="已完成"?"ok":st==="已出車"?"warn":st==="取消"?"mute":"bad"}">${esc(st||"待出車")}</span>`;
+let carF="todo";
+function viewCarTask(){
+  const t0=todayStr(),qq=nz(q.trim());
+  const F={today:t=>t.date===t0,todo:t=>t.status!=="已完成"&&t.status!=="取消",future:t=>t.date>=t0,all:()=>true};
+  const L=S.carTasks.filter(F[carF]||F.todo).filter(t=>!qq||nz([t.cust,t.addr,t.car,t.driver,t.crew,t.kind,t.content,t.contact,t.phone].join(" ")).includes(qq))
+    .sort((a,b)=>carF==="all"?String(b.date+b.time).localeCompare(a.date+a.time):String(a.date+a.time).localeCompare(b.date+b.time));
+  const cnt=k=>S.carTasks.filter(F[k]).length;
+  const chip=(k,lb)=>`<button class="btn small${carF===k?" primary":""}" type="button" data-carf="${k}">${lb}（${cnt(k)}）</button>`;
+  let last="";const rows=L.map(t=>{const hd=t.date!==last?`<div class="m" style="padding:10px 14px 4px;font-weight:700;border-top:1px solid var(--line)">${esc(t.date.replace(/-/g,"/"))}${t.date===t0?"（今天）":""}</div>`:"";last=t.date;
+    return hd+`<div class="row" data-cartask="${esc(t.id)}" tabindex="0"><div><div class="t">${t.time?`<span class="mono">${esc(t.time)}</span>　`:""}<b>${esc(t.kind||"")}</b>　${esc(t.cust||"（未填客戶）")}</div>
+      <div class="m">${[t.addr,t.car&&"🚚 "+t.car,t.driver&&"駕駛 "+t.driver,t.crew&&"隨車 "+t.crew].filter(Boolean).map(esc).join(" · ")}</div>${t.content?`<div class="m" style="font-size:12.5px">${esc(t.content)}</div>`:""}</div><div class="r">${carStPill(t.status)}</div></div>`}).join("");
+  return `<div class="toolbar"><button class="btn" type="button" data-carback>← 派車任務管理</button><input id="q" placeholder="搜尋客戶、地址、車輛、駕駛">${canWrite?'<button class="btn primary" type="button" data-carnew>＋ 新增派車</button>':""}</div>
+  <div class="toolbar" style="gap:6px;flex-wrap:wrap">${chip("todo","未完成")}${chip("today","今天")}${chip("future","今天以後")}${chip("all","全部")}</div>
+  ${S.hrErr==="permission-denied"&&!S.carTasks.length?'<div class="banner">讀取派車資料沒有權限，請管理員確認 Firestore 規則。</div>':""}
+  <div class="card list">${rows||'<div class="empty">沒有符合的派車任務，按「＋ 新增派車」登記。</div>'}</div>`}
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-carback]")){tab="car";q="";render();return}
+  const f=e.target.closest("[data-carf]");if(f){carF=f.dataset.carf;render();return}
+  if(e.target.closest("[data-carnew]")){carTaskForm(null);return}
+  const r=e.target.closest("[data-cartask]");if(r&&tab==="car_task")carTaskForm(S.carTasks.find(t=>t.id===r.dataset.cartask))});
+function carTaskForm(src){
+  const isNew=!src,d=src?{...src}:{date:todayStr(),status:"待出車",kind:"送貨"};
+  const cars=[...new Set(S.carTasks.map(t=>t.car).filter(Boolean))],emps=S.hrEmp.filter(hrActive).map(e=>e.name).filter(Boolean);
+  const canDel=!isNew&&(isAdm()||d.createdBy===me.email);
+  openDlg(`<h3>${isNew?"新增派車任務":"派車任務"}</h3>
+  <datalist id="carList">${cars.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+  <datalist id="empList">${emps.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>
+  <datalist id="ctCust">${S.customers.map(k=>`<option value="${esc(k.name)}">`).join("")}</datalist>
+  <fieldset><legend>派車資料</legend><div class="grid2">
+    <label>日期<input type="date" name="date" value="${esc(d.date||"")}" required></label>
+    <label>預計出發時間<input type="time" name="time" value="${esc(d.time||"")}"></label>
+    <label>任務類型<select name="kind">${CAR_KINDS.map(k=>opt(k,k,k===d.kind)).join("")}</select></label>
+    <label>狀態<select name="status">${CAR_ST.map(k=>opt(k,k,k===(d.status||"待出車"))).join("")}</select></label>
+    <label>車輛（車牌或名稱）<input name="car" list="carList" value="${esc(d.car||"")}" placeholder="例如 ABC-1234"></label>
+    <label>駕駛<input name="driver" list="empList" value="${esc(d.driver||"")}" placeholder="選擇或輸入"></label>
+    <label class="full">隨車人員<input name="crew" value="${esc(d.crew||"")}" placeholder="多人用頓號隔開"></label>
+  </div></fieldset>
+  <fieldset><legend>客戶與地點</legend><div class="grid2">
+    <label class="full">客戶<input name="cust" list="ctCust" value="${esc(d.cust||"")}" placeholder="選擇既有客戶或直接輸入"></label>
+    <label class="full">地址<select name="addrPick"><option value="">— 選擇客戶的地址 —</option></select></label>
+    <label class="full">地址（可修改）<input name="addr" value="${esc(d.addr||"")}" placeholder="選上面的地址，或直接輸入"></label>
+    <label>現場聯絡人<input name="contact" value="${esc(d.contact||"")}"></label>
+    <label>聯絡電話<input name="phone" value="${esc(d.phone||"")}" inputmode="tel"></label>
+    <label class="full">任務內容／攜帶設備<textarea name="content" rows="3" placeholder="例如：送 L80 水冷扇 ×2、安裝 54 吋負壓風機">${esc(d.content||"")}</textarea></label>
+  </div></fieldset>
+  <fieldset><legend>出車回報</legend><div class="grid2">
+    <label>出發里程（km）<input name="kmOut" type="number" min="0" inputmode="numeric" value="${esc(d.kmOut??"")}"></label>
+    <label>回程里程（km）<input name="kmIn" type="number" min="0" inputmode="numeric" value="${esc(d.kmIn??"")}"></label>
+    <label class="full">完成說明<textarea name="report" rows="2" placeholder="完成情形、待追蹤事項">${esc(d.report||"")}</textarea></label>
+  </div>${d.createdBy?`<div class="note">建立：${esc(d.createdName||d.createdBy)}　${esc(String(d.createdAt||"").slice(0,16).replace("T"," "))}${d.updatedAt&&d.updatedAt!==d.createdAt?"　最後修改："+esc(String(d.updatedAt).slice(0,16).replace("T"," ")):""}</div>`:""}</fieldset>
+  <div class="actions">${canDel?'<button class="btn" type="button" id="ctDel" style="margin-right:auto;color:var(--bad)">刪除</button>':""}<button class="btn" type="button" data-close>取消</button>${canWrite?'<button class="btn primary" type="submit">儲存</button>':""}</div>`,async fd=>{
+    const o={date:val(fd,"date"),time:val(fd,"time"),kind:val(fd,"kind"),status:val(fd,"status"),car:val(fd,"car"),driver:val(fd,"driver"),crew:val(fd,"crew"),
+      cust:val(fd,"cust"),addr:val(fd,"addr"),contact:val(fd,"contact"),phone:val(fd,"phone")?fmtAnyPhone(val(fd,"phone")):"",content:val(fd,"content"),
+      kmOut:val(fd,"kmOut")===""?null:+val(fd,"kmOut"),kmIn:val(fd,"kmIn")===""?null:+val(fd,"kmIn"),report:val(fd,"report")};
+    if(!o.date)throw{message:"請填寫日期"};if(!o.cust&&!o.addr)throw{message:"請填寫客戶或地址"};
+    if(o.kmOut!=null&&o.kmIn!=null&&o.kmIn<o.kmOut)throw{message:"回程里程不能小於出發里程"};
+    const now=new Date().toISOString();
+    if(o.status==="已完成"&&d.status!=="已完成")o.doneAt=now;
+    if(isNew){await setDoc(doc(collection(fs,"carTasks")),{...o,createdAt:now,createdBy:me.email,createdName:myName(),updatedAt:now});toast("已新增派車任務")}
+    else{await setDoc(doc(fs,"carTasks",d.id),{...o,updatedAt:now,updatedBy:me.email},{merge:true});toast("已儲存")}});
+  const F=form.elements,pk=F.addrPick;
+  const opts=()=>{const k=S.customers.find(x=>x.name===String(F.cust.value||"").trim());if(!k)return[];
+    const L=[];if(k.address)L.push({lb:"公司地址",a:k.address,c:k.contact||"",p:k.mobile||k.phone||""});
+    if(k.delivery)L.push({lb:"送貨地址 1",a:k.delivery,c:k.dlvContact||"",p:k.dlvPhone||""});
+    (k.dlvMore||[]).forEach((x,j)=>x.address&&L.push({lb:"送貨地址 "+(j+2),a:x.address,c:x.contact||"",p:x.phone||""}));return L};
+  const fill=()=>{const L=opts();pk.innerHTML=`<option value="">${L.length?"— 選擇客戶的地址 —":"（找不到這個客戶的地址，請直接輸入）"}</option>`+L.map((x,j)=>`<option value="${j}"${x.a===F.addr.value?" selected":""}>${esc(x.lb)}：${esc(x.a)}${x.c?"（"+esc(x.c)+"）":""}</option>`).join("");pk._L=L};
+  fill();F.cust.addEventListener("change",fill);F.cust.addEventListener("input",()=>{if(S.customers.some(x=>x.name===F.cust.value.trim()))fill()});
+  pk.addEventListener("change",()=>{const x=pk._L?.[+pk.value];if(!x)return;F.addr.value=x.a;if(x.c)F.contact.value=x.c;if(x.p)F.phone.value=x.p;F.phone.dispatchEvent(new Event("input"))});
+  const del=$("#ctDel");if(del)del.onclick=async()=>{if(!confirm("確定刪除這筆派車任務？刪除後無法復原。"))return;try{await deleteDoc(doc(fs,"carTasks",d.id));dlg.close();toast("已刪除")}catch(er){showErr(er)}};
+}
 function viewDeptPerm(){
   const adm=isAdm(),L=S.hrEmp.filter(hrActive).sort((a,b)=>String(a.code).localeCompare(b.code));
   const head=DEPTS.map(([k,n,c])=>`<th style="text-align:center;white-space:nowrap"><span style="border-bottom:3px solid ${c}">${esc(n)}</span></th>`).join("");
@@ -3016,6 +3094,7 @@ function startData(){
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
    hrSub("invProducts",d=>{S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
+   hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrEmployees",d=>{S.hrEmp=d.map(x=>({id:x.id,...x.data()}));if(!$("#deptView").hidden)drawDept()});
    hrSub("hrPositions",d=>S.hrPos=d.map(x=>({id:x.id,...x.data()})));
