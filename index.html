@@ -1186,7 +1186,7 @@ const famGroup=m=>CODE_FAMS.filter(f=>f.m===m);
 const SEG_CHARS="123456789ABCDEFGHJKLMNPRTUWXYZ";
 function mergeSegExtra(key,list){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;list.forEach(([c,t])=>{if(!g.o.some(o=>o[0]===c))g.o.push([c,t])})}
 function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [...SEG_CHARS].find(c=>!used.has(c))||null;for(let n=1;n<100;n++){const c=String(n).padStart(g.w,"0");if(!used.has(c))return c}return null}
-async function addSegVendor(f,i){const g=f.s[i];const at=1+f.s.slice(0,i).reduce((x,y)=>x+y.w,0);const t=String(prompt(`新增「${f.l}」第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼（${g.n}）的選項名稱：`,"")||"").trim();if(!t)return null;
+async function addSegVendor(f,i,name){const g=f.s[i];const at=1+f.s.slice(0,i).reduce((x,y)=>x+y.w,0);const t=String(name||"").trim();if(!t)return null;
   if(g.o.some(o=>o[1]===t)){toast("「"+t+"」已經在清單裡");return g.o.find(o=>o[1]===t)[0]}
   const c=nextSegCode(g);if(!c){toast("這一碼的代碼已經用完了");return null}
   const id="_opt_seg_"+f.k+"__"+i,cur=(await getDoc(doc(fs,"invProducts",id))).data()?.list||[];
@@ -1317,9 +1317,18 @@ function prodForm(p,copy){
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
        if(i===0&&G.length>1)return `<label style="font-size:12.5px">第 2 碼　${esc(g.n)}<select data-seg="0" data-sub="1">${G.map(x=>x.s[0].o.map(([k,t],j)=>`<option value="${esc(k)}" data-fam="${esc(x.k)}"${x.k===f.k?` data-j="${j}"`:""}${x.k===f.k&&k===c?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")).join("")}</select></label>`;
        return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${invCan("edit")?'<option value="__newv">＋ 新增'+(/預留/.test(g.n)?"選項":esc(g.n))+'…</option>':""}${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
-     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=async()=>{if(x.value!=="__newv"){build();return}
-       const i=+x.dataset.seg,at=1+f.s.slice(0,i).reduce((a,g)=>a+g.w,0);let c=null;try{c=await addSegVendor(f,i)}catch(er){toast("新增失敗："+(er?.message||er))}
-       if(c){const cd=F.code.value.padEnd(famLen(f),"?");F.code.value=cd.slice(0,at)+c+cd.slice(at+f.s[i].w)}segs();build()});
+     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=()=>{if(x.value!=="__newv"){build();return}
+       // 在下拉選單下方展開輸入框（不用跳出視窗，手機比較穩定）
+       const i=+x.dataset.seg,g=f.s[i],at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),prev=F.code.value.slice(at,at+g.w);
+       x.value=g.o.some(o=>o[0]===prev)?prev:"";box.querySelector(".segnew")?.remove();
+       const w=document.createElement("div");w.className="segnew";w.style.cssText="grid-column:1/-1;display:flex;gap:6px;align-items:center;margin:-4px 0 6px";
+       w.innerHTML=`<input placeholder="輸入新的${esc(/預留/.test(g.n)?"選項":g.n)}名稱" style="flex:1" enterkeyhint="done"><button class="btn primary small" type="button" data-ok>新增</button><button class="btn small" type="button" data-no>取消</button>`;
+       x.closest("label").after(w);const inp=w.querySelector("input");inp.focus();
+       const go=async()=>{const t=inp.value.trim();if(!t){inp.focus();return}w.querySelector("[data-ok]").disabled=true;let c=null;
+         try{c=await addSegVendor(f,i,t)}catch(er){toast("新增失敗："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er));w.querySelector("[data-ok]").disabled=false;return}
+         if(c){const cd=F.code.value.padEnd(famLen(f),"?");F.code.value=cd.slice(0,at)+c+cd.slice(at+g.w)}segs();build()};
+       w.querySelector("[data-ok]").onclick=go;w.querySelector("[data-no]").onclick=()=>w.remove();
+       inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go()}})});
      const sub=box.querySelector("select[data-sub]");if(sub)sub.onchange=()=>{const o=sub.selectedOptions[0],k=o.dataset.fam;if(k===F.fam.value){build();return}
        const f2=famOf(k);F.fam.value=k;F.code.value=f2.m+f2.s.map((g,i)=>i===0?sub.value:(g.o.length===1||g.o.every(x=>x[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w))).join("");segs();build()};
      cnt()};
