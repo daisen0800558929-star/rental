@@ -1180,6 +1180,8 @@ const CODE_FAMS=[{"k":"1","m":"1","g":"成品","l":"成品-風機","len":10,"s":
 const CODE_GRP=["成品","原料零件","租賃設備","贈品","加工與服務項目（不計庫存）"];
 const CODE_BAD=/[IOQSV]/;
 const famOf=k=>CODE_FAMS.find(f=>f.k===k);
+// 同一個第 1 碼有多個子分類（例如 6 風機零件：馬達、外殼…）→ 分類選單合併成一項，第 2 碼再選子分類
+const famGroup=m=>CODE_FAMS.filter(f=>f.m===m);
 const famLen=f=>1+f.s.reduce((a,x)=>a+x.w,0);
 // 由商品編號猜出所屬分類：第1碼相同，且每段都在選項裡的優先
 function guessFam(code){code=String(code||"").toUpperCase();let best=null,bs=-1;
@@ -1262,7 +1264,7 @@ function prodForm(p,copy){
   openDlg(`<h3>${src?"複製新增商品":isNew?"新增商品":"商品　"+esc(p.code)}</h3>${src?`<div class="banner" style="background:var(--accent-soft);color:var(--fg)">已複製「${esc(prodPrint(src))}」（${esc(src.code)}）的資料。只要改不同的那幾碼，商品名稱、規格、列印名稱會自動跟著換，再按儲存即可。</div>`:""}<datalist id="pcats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
   <div class="coderule"><div class="addr-t">品編說明${isAdm()?'<button class="btn small" type="button" id="editRule">編輯說明</button>':""}</div><div style="white-space:pre-wrap">${esc(S.invRule||INV_RULE_DEFAULT)}</div>
     ${(()=>{const last=S.invProd.map(x=>x.code).filter(Boolean).sort().slice(-5);return last.length?`<div class="note">目前已使用的編號（最後 5 個）：<span class="mono">${esc(last.join("、"))}</span></div>`:""})()}</div>
-  <div class="grid2"><label class="full">編碼分類（第 1 碼）<select name="fam"><option value="">請選擇</option>${CODE_GRP.map(g=>`<optgroup label="${esc(g)}">${CODE_FAMS.filter(f=>f.g===g).map(f=>opt(f.k,f.m+"　"+f.l+"（"+famLen(f)+" 碼）",(p.fam||guessFam(p.code)?.k)===f.k)).join("")}${g==="成品"?'<option value="" disabled>5　預留</option>':""}</optgroup>`).join("")}</select></label>
+  <div class="grid2"><label class="full">編碼分類（第 1 碼）<select name="famPick"><option value="">請選擇</option>${CODE_GRP.map(g=>{const cur=famOf(p.fam)||guessFam(p.code);return `<optgroup label="${esc(g)}">${[...new Set(CODE_FAMS.filter(f=>f.g===g).map(f=>f.m))].map(m=>{const G=famGroup(m);return G.length>1?opt("g:"+m,m+"　"+(MAIN_NAMES[m]||G[0].l.split("－")[0])+"（"+famLen(G[0])+" 碼）",cur?.m===m):opt(G[0].k,G[0].m+"　"+G[0].l+"（"+famLen(G[0])+" 碼）",cur?.k===G[0].k)}).join("")}${g==="成品"?'<option value="" disabled>5　預留</option>':""}</optgroup>`}).join("")}</select><input type="hidden" name="fam" value="${esc((famOf(p.fam)||guessFam(p.code))?.k||"")}"></label>
   <div class="full" id="segBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div>
   <label class="full">商品編號<input name="code" value="${esc(p.code||"")}" placeholder="選好上面的分類會自動組出，也可以直接輸入" maxlength="11" autocomplete="off" required style="font-family:var(--font-mono);letter-spacing:.12em;font-size:17px"><span class="note" id="codeCnt"></span></label><label>商品名稱<input name="name" value="${esc(p.name||"")}" placeholder="例：水冷扇" required>${!isNew&&(()=>{const g=genFromCode(p.code);return g&&(g.name!==p.name||g.spec!==p.spec)})()?'<span class="note" style="color:var(--warn)">名稱或規格跟編碼不一致　<button class="btn small" type="button" id="regenOne">依編碼更新</button></span>':""}</label><div class="full" style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="lbl" style="flex:1;color:var(--muted);font-size:13.5px">列印名稱（銷貨單、報價單只顯示這個）</span><button class="btn small" type="button" id="copyPN">複製類似名稱</button></div>
   <select id="pnPick" hidden></select>
@@ -1301,9 +1303,14 @@ function prodForm(p,copy){
    F.spec.addEventListener("input",()=>autoSpec=false);let autoPN=!p.printName,pnManual=false;F.printName.addEventListener("input",()=>{autoPN=false;pnManual=true});F.name.addEventListener("input",()=>autoName=false);F.cat.addEventListener("input",()=>autoCat=false);
    const cnt=()=>{const f=famOf(F.fam.value),n=F.code.value.length,L=f?famLen(f):0;$("#codeCnt").textContent=f?`已輸入 ${n}／${L} 碼${f.ns?"　・此類不計庫存":""}`:`已輸入 ${n} 碼`;$("#codeCnt").style.color=f&&n!==L?"var(--warn)":"var(--ok)"};
    const segs=()=>{const f=famOf(F.fam.value);if(!f){box.innerHTML="";cnt();return}let pos=1;
+     const G=famGroup(f.m);
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
+       if(i===0&&G.length>1)return `<label style="font-size:12.5px">第 2 碼　${esc(g.n)}<select data-seg="0" data-sub="1">${G.map(x=>x.s[0].o.map(([k,t],j)=>`<option value="${esc(k)}" data-fam="${esc(x.k)}"${x.k===f.k?` data-j="${j}"`:""}${x.k===f.k&&k===c?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")).join("")}</select></label>`;
        return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
-     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);cnt()};
+     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);
+     const sub=box.querySelector("select[data-sub]");if(sub)sub.onchange=()=>{const o=sub.selectedOptions[0],k=o.dataset.fam;if(k===F.fam.value){build();return}
+       const f2=famOf(k);F.fam.value=k;F.code.value=f2.m+f2.s.map((g,i)=>i===0?sub.value:(g.o.length===1||g.o.every(x=>x[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w))).join("");segs();build()};
+     cnt()};
    // 成品-風機：第 4 碼右邊加「尺寸 cm」（不進編碼，存在商品資料）
    // 尺寸（cm）：自訂下拉清單，最上方可自行輸入，每個尺寸後面有刪除
    let dimV=p.dimCm||"";
@@ -1335,11 +1342,15 @@ function prodForm(p,copy){
        // 複製新增：列印名稱依「不同的碼」自動替換（例如 54→42、220V→380V）
        if(base&&!autoPN&&!pnManual&&base.printName&&base.code&&base.code[0]===f.m){F.printName.value=subName(base.printName,codeLabels(f,base.code),codeLabels(f,F.code.value.toUpperCase()))}}
      cnt()};
+   const syncPick=()=>{const f=famOf(F.fam.value);if(!f)return;F.famPick.value=famGroup(f.m).length>1?"g:"+f.m:f.k};
+   F.famPick.addEventListener("change",()=>{const v=F.famPick.value;if(!v){F.fam.value="";segs();return}
+     if(v.startsWith("g:")){const m=v.slice(2),cur=famOf(F.fam.value);if(cur?.m===m)return;F.fam.value=famGroup(m)[0].k;F.code.value=""}else F.fam.value=v;
+     F.fam.dispatchEvent(new Event("change"))});
    F.fam.addEventListener("change",()=>{const f=famOf(F.fam.value);if(f){const keep=F.code.value[0]===f.m?F.code.value:"";F.code.value=keep||f.m;
        if(!keep){let pos=1;const fill=f.s.map(g=>g.o.length===1||g.o.every(o=>o[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w)).join("");F.code.value=f.m+fill}}
      segs();build()});
    F.code.addEventListener("input",()=>{const pos=F.code.selectionStart;F.code.value=F.code.value.toUpperCase().replace(/[^0-9A-Z?]/g,"");try{F.code.setSelectionRange(pos,pos)}catch(e){}
-     const f=famOf(F.fam.value);if(!f||F.code.value[0]!==f.m){const g=guessFam(F.code.value);if(g)F.fam.value=g.k}segs()});
+     const f=famOf(F.fam.value);if(!f||F.code.value[0]!==f.m){const g=guessFam(F.code.value);if(g){F.fam.value=g.k;syncPick()}}else{const g=guessFam(F.code.value);if(g&&g.k!==f.k&&g.m===f.m&&F.code.value.length>1){F.fam.value=g.k}}segs()});
    segs();
    // 複製類似名稱：從同類商品的列印名稱挑一個帶入，不同的碼（例如尺寸 46→42）自動換成目前所選
    {const pick=$("#pnPick");$("#copyPN").onclick=()=>{const code=F.code.value.toUpperCase(),f=famOf(F.fam.value)||guessFam(code);
