@@ -1182,6 +1182,16 @@ const CODE_BAD=/[IOQSV]/;
 const famOf=k=>CODE_FAMS.find(f=>f.k===k);
 // 同一個第 1 碼有多個子分類（例如 6 風機零件：馬達、外殼…）→ 分類選單合併成一項，第 2 碼再選子分類
 const famGroup=m=>CODE_FAMS.filter(f=>f.m===m);
+// 自行新增的廠商：存在 invProducts/_opt_seg_{分類}__{第幾段}，載入時併入編碼選項
+const SEG_CHARS="123456789ABCDEFGHJKLMNPRTUWXYZ";
+function mergeSegExtra(key,list){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;list.forEach(([c,t])=>{if(!g.o.some(o=>o[0]===c))g.o.push([c,t])})}
+function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [...SEG_CHARS].find(c=>!used.has(c))||null;for(let n=1;n<100;n++){const c=String(n).padStart(g.w,"0");if(!used.has(c))return c}return null}
+async function addSegVendor(f,i){const g=f.s[i];const t=String(prompt(`新增「${f.l}」的${g.n}名稱：`,"")||"").trim();if(!t)return null;
+  if(g.o.some(o=>o[1]===t)){toast("「"+t+"」已經在清單裡");return g.o.find(o=>o[1]===t)[0]}
+  const c=nextSegCode(g);if(!c){toast("這一碼的代碼已經用完了");return null}
+  const id="_opt_seg_"+f.k+"__"+i,cur=(await getDoc(doc(fs,"invProducts",id))).data()?.list||[];
+  await setDoc(doc(fs,"invProducts",id),{list:[...cur.filter(x=>x[0]!==c),[c,t]],updatedAt:new Date().toISOString(),updatedBy:me.email});
+  if(!g.o.some(o=>o[0]===c))g.o.push([c,t]);toast(`已新增${g.n}：${c} ${t}`);return c}
 const famLen=f=>1+f.s.reduce((a,x)=>a+x.w,0);
 // 由商品編號猜出所屬分類：第1碼相同，且每段都在選項裡的優先
 function guessFam(code){code=String(code||"").toUpperCase();let best=null,bs=-1;
@@ -1306,8 +1316,10 @@ function prodForm(p,copy){
      const G=famGroup(f.m);
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
        if(i===0&&G.length>1)return `<label style="font-size:12.5px">第 2 碼　${esc(g.n)}<select data-seg="0" data-sub="1">${G.map(x=>x.s[0].o.map(([k,t],j)=>`<option value="${esc(k)}" data-fam="${esc(x.k)}"${x.k===f.k?` data-j="${j}"`:""}${x.k===f.k&&k===c?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")).join("")}</select></label>`;
-       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
-     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=build);
+       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${BRAND_SEG.test(g.n)&&invCan("edit")?'<option value="__newv">＋ 新增'+esc(g.n)+'…</option>':""}${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
+     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=async()=>{if(x.value!=="__newv"){build();return}
+       const i=+x.dataset.seg,at=1+f.s.slice(0,i).reduce((a,g)=>a+g.w,0);let c=null;try{c=await addSegVendor(f,i)}catch(er){toast("新增失敗："+(er?.message||er))}
+       if(c){const cd=F.code.value.padEnd(famLen(f),"?");F.code.value=cd.slice(0,at)+c+cd.slice(at+f.s[i].w)}segs();build()});
      const sub=box.querySelector("select[data-sub]");if(sub)sub.onchange=()=>{const o=sub.selectedOptions[0],k=o.dataset.fam;if(k===F.fam.value){build();return}
        const f2=famOf(k);F.fam.value=k;F.code.value=f2.m+f2.s.map((g,i)=>i===0?sub.value:(g.o.length===1||g.o.every(x=>x[0]===g.o[0][0])?g.o[0][0]:"?".repeat(g.w))).join("");segs();build()};
      cnt()};
@@ -3237,7 +3249,7 @@ function startData(){
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
-   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
+   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>mergeSegExtra(x.id.slice(9),x.data().list||[]));d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("calEvents",d=>S.calEvents=d.map(x=>({id:x.id,...x.data()})));
    hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
