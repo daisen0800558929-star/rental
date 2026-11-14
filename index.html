@@ -374,6 +374,12 @@ window.addEventListener("unhandledrejection",e=>{const m=e.reason?.message||Stri
 const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
+// 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
+const APP_VER="20261114-1705";
+async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/const APP_VER="([^"]+)"/);
+  if(m&&m[1]>APP_VER){const go=()=>{try{if(sessionStorage.getItem("daisenRV")===m[1])return;sessionStorage.setItem("daisenRV",m[1])}catch(e){}location.replace(location.pathname+"?v="+encodeURIComponent(m[1])+location.hash)};
+    if(typeof dlg!=="undefined"&&dlg.open){const b=document.getElementById("verBar");if(!b){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統已更新，點這裡載入最新版本";d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35)";d.onclick=go;document.body.appendChild(d)}}else go()}}catch(e){}}
+setTimeout(checkVer,4000);setInterval(checkVer,5*60*1000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkVer()});
 const S={equipment:[],customers:[],contracts:[],quotes:[],calls:[],staff:[],invProd:[],invDocs:[],carTasks:[],calEvents:[],hrEmp:[],hrPos:[],chArt:[],chNotes:[],chAcks:[],charter:null,hrCon:[],hrPriv:{},vision:null,hrErr:"",loaded:{equipment:false,customers:false,contracts:false,quotes:false,calls:false}};
 /* 公司資料：印在報價單抬頭 */
 const COMPANY={en:"Daisen Energy Saving Undertakings Co.,Ltd.",taxId:"42950678",addr:"彰化縣彰化市自強南路537號",northTel:"03-3818478",southTel:"07-6952951",name:"大森節能事業有限公司",hotline:"0800-558-929",web:"www.daisencool.com.tw",email:"daisen0800558929@gmail.com",hq:"彰化市自強南路537號",north:"桃園市蘆竹區海湖東路372巷58號",tel:"04-7510728",hqTel:"0800-558929",fax:"04-7510738",bankName:"大森節能事業有限公司",bank:"台中銀行－鹿港分行（053-0215）",bankAcct:"062-22-1059746"};
@@ -1192,7 +1198,7 @@ async function addSegVendor(f,i,name){const g=f.s[i];const at=1+f.s.slice(0,i).r
   const id="_opt_seg_"+f.k+"__"+i;
   // 先在畫面上加入，背景寫入資料庫（不等待伺服器回應，避免網路慢時按了沒反應）
   if(!g.o.some(o=>o[0]===c))g.o.push([c,t]);
-  setDoc(doc(fs,"invProducts",id),{items:{[c]:t},updatedAt:new Date().toISOString(),updatedBy:me.email},{merge:true}).catch(er=>{toast("「"+t+"」沒有存進資料庫："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er));g.o=g.o.filter(o=>o[0]!==c)});toast(`已新增第 ${at+1} 碼選項：${c} ${t}`);return c}
+  setDoc(doc(fs,"invProducts",id),{items:{[c]:t},updatedAt:new Date().toISOString(),updatedBy:me.email},{merge:true}).catch(er=>{toast("「"+t+"」沒有存進資料庫，其他人看不到："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er))});toast(`已新增第 ${at+1} 碼選項：${c} ${t}`);return c}
 const famLen=f=>1+f.s.reduce((a,x)=>a+x.w,0);
 // 由商品編號猜出所屬分類：第1碼相同，且每段都在選項裡的優先
 function guessFam(code){code=String(code||"").toUpperCase();let best=null,bs=-1;
