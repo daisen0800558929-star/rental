@@ -1189,9 +1189,10 @@ function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [
 async function addSegVendor(f,i,name){const g=f.s[i];const at=1+f.s.slice(0,i).reduce((x,y)=>x+y.w,0);const t=String(name||"").trim();if(!t)return null;
   if(g.o.some(o=>o[1]===t)){toast("「"+t+"」已經在清單裡");return g.o.find(o=>o[1]===t)[0]}
   const c=nextSegCode(g);if(!c){toast("這一碼的代碼已經用完了");return null}
-  const id="_opt_seg_"+f.k+"__"+i,cur=(await getDoc(doc(fs,"invProducts",id))).data()?.list||[];
-  await setDoc(doc(fs,"invProducts",id),{list:[...cur.filter(x=>x[0]!==c),[c,t]],updatedAt:new Date().toISOString(),updatedBy:me.email});
-  if(!g.o.some(o=>o[0]===c))g.o.push([c,t]);toast(`已新增第 ${at+1} 碼選項：${c} ${t}`);return c}
+  const id="_opt_seg_"+f.k+"__"+i;
+  // 先在畫面上加入，背景寫入資料庫（不等待伺服器回應，避免網路慢時按了沒反應）
+  if(!g.o.some(o=>o[0]===c))g.o.push([c,t]);
+  setDoc(doc(fs,"invProducts",id),{items:{[c]:t},updatedAt:new Date().toISOString(),updatedBy:me.email},{merge:true}).catch(er=>{toast("「"+t+"」沒有存進資料庫："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er));g.o=g.o.filter(o=>o[0]!==c)});toast(`已新增第 ${at+1} 碼選項：${c} ${t}`);return c}
 const famLen=f=>1+f.s.reduce((a,x)=>a+x.w,0);
 // 由商品編號猜出所屬分類：第1碼相同，且每段都在選項裡的優先
 function guessFam(code){code=String(code||"").toUpperCase();let best=null,bs=-1;
@@ -3258,7 +3259,7 @@ function startData(){
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
-   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>mergeSegExtra(x.id.slice(9),x.data().list||[]));d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
+   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>{const v=x.data();mergeSegExtra(x.id.slice(9),[...(v.list||[]),...Object.entries(v.items||{})])});d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("calEvents",d=>S.calEvents=d.map(x=>({id:x.id,...x.data()})));
    hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
