@@ -375,7 +375,7 @@ const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 // 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
-const APP_VER="20261114-2300";
+const APP_VER="20261115-2150";
 async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/APP_VER="(\d{8}-\d{4})"/);
   if(m&&m[1]>APP_VER&&!document.getElementById("verBar")){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統有新版本，點這裡更新";
     d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap";
@@ -1118,9 +1118,9 @@ function invStock(exceptId){
   return st;
 }
 /* 商品排序：成品-風機依「尺寸大→小、風扇樣式、AC 先於 DC、不調速先於調速、電壓」；其他依編號 */
-var prodMain="";
+var prodMain="",prodSub="";
 const MAIN_NAMES={"1":"成品-風機","2":"成品-水冷扇","3":"其他設備","4":"成品-過濾設備","6":"風機零件","7":"水冷扇&水濂牆零配件","8":"水資源零配件","9":"電控類","A":"產品加工項目","B":"一般服務項目","C":"贈品","R":"租賃設備"};
-document.addEventListener("change",e=>{if(e.target.id==="pMain"){prodMain=e.target.value;render()}});
+document.addEventListener("change",e=>{if(e.target.id==="pMain"){prodMain=e.target.value;prodSub="";render()}if(e.target.id==="pSub"){prodSub=e.target.value;render()}});
 const FAN_DIMS=["166×116×60","145×145×60","145×145×62","144×94×63","140×172×72","138×138×40","130×75×55","128×82×51","126×126×60","124×124×46","110×156×72","115×128×60","116×116×90","108×108×60","108×108×55","108×108×52","100×100×60","79×79×50"];
 // 各分類的尺寸（cm）清單：風機預設一組，其他分類（如水冷扇）一開始是空的
 const DIM_FAMS=["1","2"];
@@ -1140,13 +1140,19 @@ function lendState(d){if(d.status==="轉銷貨")return["已轉銷貨","mute"];if
   return[(d.status==="部分歸還"?"部分歸還・":"")+"借出中 "+left+" 件","warn"]}
 function viewInv(t){
   if(!invCan("view"))return '<div class="card"><div class="empty">你沒有進銷存的查看權限。請管理員到「人事管理 → 員工資料」勾選「進銷存：查看」並連結你的登入帳號。</div></div>';
-  const N=S.hrErr==="permission-denied"?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
+  const N=["invProducts","invDocs"].some(c=>S.colErr?.[c]==="permission-denied")?'<div class="banner">進銷存的資料庫權限還沒開通，請管理員設定 Firestore 規則後再使用。</div>':"";
   const qq=nz(q.trim()),st=invStock();
   if(t==="inv_prod"){
     const mainOf=p=>{const c=String(p.code||"").toUpperCase();return MAIN_NAMES[c[0]]&&guessFam(c)?c[0]:"_"};
     const cnt={};S.invProd.forEach(p=>{const k=mainOf(p);cnt[k]=(cnt[k]||0)+1});
-    const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pMain" style="flex:1 1 100%"><option value="">全部類別（${S.invProd.length}）</option>${Object.entries(MAIN_NAMES).map(([k,v])=>`<option value="${k}"${prodMain===k?" selected":""}>${k}　${esc(v)}（${cnt[k]||0}）</option>`).join("")}${cnt._?`<option value="_"${prodMain==="_"?" selected":""}>其他／舊編號（${cnt._}）</option>`:""}</select></div>`;
-    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>!prodMain||mainOf(p)===prodMain).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
+    const quick=`<div class="toolbar" style="margin-top:-4px"><select id="pMain" style="flex:1 1 100%"><option value="">全部類別（${S.invProd.length}）</option>${Object.entries(MAIN_NAMES).map(([k,v])=>`<option value="${k}"${prodMain===k?" selected":""}>${k}　${esc(v)}（${cnt[k]||0}）</option>`).join("")}${cnt._?`<option value="_"${prodMain==="_"?" selected":""}>其他／舊編號（${cnt._}）</option>`:""}</select>${(()=>{if(!prodMain||prodMain==="_")return"";
+      // 第 2 碼（次類別）快速篩選
+      const subs=new Map();famGroup(prodMain).forEach(f=>f.s[0]?.o.forEach(([c,t])=>subs.set(c,t)));
+      const sc={};S.invProd.forEach(p=>{if(mainOf(p)===prodMain){const c=String(p.code||"").toUpperCase()[1];sc[c]=(sc[c]||0)+1}});
+      const keys=[...subs.keys()].filter(c=>sc[c]||subs.size<=12);Object.keys(sc).forEach(c=>{if(!subs.has(c))keys.push(c)});
+      if(keys.length<2)return"";
+      return `<select id="pSub" style="flex:1 1 100%"><option value="">全部次類別（${cnt[prodMain]||0}）</option>${keys.map(c=>`<option value="${esc(c)}"${prodSub===c?" selected":""}>${esc(c)}　${esc(subs.get(c)||"（未定義）")}（${sc[c]||0}）</option>`).join("")}</select>`})()}</div>`;
+    const rows=S.invProd.filter(p=>!qq||nz([p.code,p.name,p.printName,p.spec,p.cat].join(" ")).includes(qq)).filter(p=>!prodMain||mainOf(p)===prodMain).filter(p=>!prodSub||String(p.code||"").toUpperCase()[1]===prodSub).sort(prodSort).map(p=>{const s0=st[p.id]?.qty||0,low=(+p.safety||0)>0&&s0<(+p.safety||0);
       return `<div class="row" data-prod="${esc(p.id)}" tabindex="0"><div style="display:flex;gap:10px;align-items:flex-start">${p.img?`<img src="${p.img}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#fff">`:""}<div style="min-width:0"><div class="mono m" style="font-size:12.5px">${esc(p.code)}</div><div class="t" style="word-break:keep-all;overflow-wrap:anywhere">${esc(prodPrint(p))}</div>${p.printName&&p.printName!==p.name?`<div class="m" style="font-size:12px">${esc(p.name)}</div>`:""}
       <div class="m">${esc(p.cat||"未分類")}${p.dimCm?" · 尺寸 "+esc(p.dimCm)+" cm":""} · 單位 ${esc(p.unit||"台")}${p.price?" · 售價 "+money(p.price):""}${p.cost?" · 成本 "+money(p.cost):""}</div></div></div>
       <div class="r">${invCan("add")?`<button class="btn small" type="button" data-prodcopy="${esc(p.id)}">複製新增</button>`:""}<span class="pill ${p.active===false||p.noStock?"mute":low?"warn":"ok"}">${p.active===false?"停用":p.noStock?"不計庫存":"庫存 "+s0}</span>${low?'<span class="miss" style="color:var(--warn)">低於安全庫存 '+esc(p.safety)+'</span>':""}</div></div>`});
@@ -1547,7 +1553,7 @@ function seniority(from,to){if(!from)return"";const a=new Date(from),b=to?new Da
 /* 身分證／居留證號檢查 */
 function twIdOk(v){if(!v)return true;v=v.toUpperCase();if(!/^[A-Z][1289]\d{8}$/.test(v))return/^[A-Z][A-D]\d{8}$/.test(v);
   const L="ABCDEFGHJKLMNPQRSTUVXYWZIO",n=L.indexOf(v[0])+10,w=[8,7,6,5,4,3,2,1,1];let s=Math.floor(n/10)+(n%10)*9;for(let i=1;i<10;i++)s+=+v[i]*w[i-1];return s%10===0}
-function hrNotice(){return S.hrErr==="permission-denied"?'<div class="banner">人事資料的資料庫權限還沒開通，資料暫時無法讀取或儲存。請管理員設定 Firestore 規則後再使用。</div>':""}
+function hrNotice(){return ["hrEmployees","hrPositions","hrContracts","hrSettings","hrPrivate","hrCharter"].some(c=>S.colErr?.[c]==="permission-denied")?'<div class="banner">人事資料的資料庫權限還沒開通，資料暫時無法讀取或儲存。請管理員設定 Firestore 規則後再使用。</div>':""}
 /* 人事資料完整度檢查：基本資料所有人看得到；個資與契約只檢查給管理員看 */
 /* 報價權限：管理員，或員工資料權限為 2 且已連結登入帳號的在職員工 */
 /* 權限等級：1 一般職員／2 報價／3 進銷存查看與新增／4 加修改／5 加刪除；系統管理員視為 5 */
@@ -3037,6 +3043,7 @@ function viewCal(){
     return `<div class="row" ${x.t==="car"?`data-calcar="${esc(x.id)}"`:`data-calev="${esc(x.id)}"`} tabindex="0"><div><div class="t"><span class="dot" style="--c:${x.c}"></span><span class="mono m" style="font-size:12.5px">${esc(when)}</span>　${esc(x.title)}</div><div class="m">${sub.map(esc).join(" · ")}</div>${e.memo?`<div class="m" style="font-size:12.5px">${esc(e.memo)}</div>`:""}</div><div class="r">${x.t==="car"?'<span class="pill mute">派車</span>':""}</div></div>`}).join("");
   return `<div class="cal-head"><button class="btn" type="button" data-calnav="-1" aria-label="上個月">‹</button><h3>${y} 年 ${m} 月</h3><button class="btn" type="button" data-calnav="1" aria-label="下個月">›</button><button class="btn small" type="button" data-calnav="0">今天</button>
     <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;white-space:nowrap"><input type="checkbox" id="calCar" ${calCar?"checked":""} style="width:18px;height:18px"> 顯示派車</label>${isAdm()?'<button class="btn small" type="button" data-callab>標籤管理</button>':""}</div>
+  ${S.colErr?.calEvents==="permission-denied"?'<div class="banner">行事曆的資料庫權限還沒開通，行程暫時無法讀取或儲存。請管理員在 Firestore 規則加入 calEvents。</div>':""}
   <div class="cal-grid"><div class="cal-wds">${["日","一","二","三","四","五","六"].map((w,i)=>`<div class="wd${i===0?" sun":i===6?" sat":""}">週${w}</div>`).join("")}</div>${grid}</div>
   <div class="cal-head" style="margin-top:14px"><h3 style="text-align:left;min-width:0;font-size:17px">${sd.getMonth()+1}月${sd.getDate()}日（${"日一二三四五六"[sd.getDay()]}）</h3>${canWrite?'<button class="btn primary" type="button" data-calnew style="margin-left:auto">＋ 新增行程</button>':""}</div>
   <div class="card list cal-agenda">${ag||'<div class="empty">這天沒有行程</div>'}</div>
@@ -3120,7 +3127,7 @@ function viewCarTask(){
       <div class="m">${[t.addr,t.car&&"🚚 "+t.car,t.driver&&"駕駛 "+t.driver,t.crew&&"隨車 "+t.crew].filter(Boolean).map(esc).join(" · ")}</div>${t.content?`<div class="m" style="font-size:12.5px">${esc(t.content)}</div>`:""}</div><div class="r">${carStPill(t.status)}</div></div>`}).join("");
   return `<div class="toolbar"><button class="btn" type="button" data-carback>← 派車任務管理</button><input id="q" placeholder="搜尋客戶、地址、車輛、駕駛">${canWrite?'<button class="btn primary" type="button" data-carnew>＋ 新增派車</button>':""}</div>
   <div class="toolbar" style="gap:6px;flex-wrap:wrap">${chip("todo","未完成")}${chip("today","今天")}${chip("future","今天以後")}${chip("all","全部")}</div>
-  ${S.hrErr==="permission-denied"&&!S.carTasks.length?'<div class="banner">讀取派車資料沒有權限，請管理員確認 Firestore 規則。</div>':""}
+  ${S.colErr?.carTasks==="permission-denied"?'<div class="banner">讀取派車資料沒有權限，請管理員確認 Firestore 規則。</div>':""}
   <div class="card list">${rows||'<div class="empty">沒有符合的派車任務，按「＋ 新增派車」登記。</div>'}</div>`}
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-carback]")){tab="car";q="";render();return}
@@ -3274,7 +3281,7 @@ function startData(){
     },err=>{S.loaded[name]=true;fresh[name]=true;console.warn("讀取失敗",name,err.code);if(Object.keys(fresh).length===5)clearTimeout(timer);$("#sync").textContent=err.code==="permission-denied"?"部分資料沒有存取權限（"+name+"）":"資料連線中斷，請重新整理頁面";render()}));
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
-  {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{S.hrErr=err.code;if(!dlg.open)render()}))};
+  {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{(S.colErr=S.colErr||{})[col]=err.code;if(!dlg.open)render()}))};
    hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>{const v=x.data();mergeSegExtra(x.id.slice(9),[...(v.list||[]),...Object.entries(v.items||{})])});d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("calEvents",d=>S.calEvents=d.map(x=>({id:x.id,...x.data()})));
    hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
@@ -3290,7 +3297,7 @@ function startData(){
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
   render();
 }
-function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.invProd=[];S.invDocs=[];S.hrEmp=[];S.hrPos=[];S.chArt=[];S.chNotes=[];S.chAcks=[];S.charter=null;S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";me=null;for(const k in S.loaded)S.loaded[k]=false}
+function stopData(){unsubs.forEach(u=>u());unsubs=[];db=null;S.equipment=[];S.customers=[];S.contracts=[];S.quotes=[];S.calls=[];S.staff=[];S.invProd=[];S.invDocs=[];S.hrEmp=[];S.hrPos=[];S.chArt=[];S.chNotes=[];S.chAcks=[];S.charter=null;S.hrCon=[];S.hrPriv={};S.vision=null;S.hrErr="";S.colErr={};me=null;for(const k in S.loaded)S.loaded[k]=false}
 const loginErr=t=>{const e=$("#loginErr");e.textContent=t;e.hidden=!t};
 const authMsg=c=>({"auth/invalid-credential":"Email 或密碼錯誤。","auth/invalid-email":"Email 格式不正確。","auth/too-many-requests":"嘗試次數太多，請稍後再試。","auth/network-request-failed":"網路連線失敗，請檢查網路。","auth/missing-password":"請輸入密碼。"})[c]||"登入失敗，請再試一次。";
 $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();loginErr("");const b=$("#loginBtn");b.disabled=true;

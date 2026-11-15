@@ -1,0 +1,14 @@
+// 後勤行事曆、派車任務登記用的規則。
+// 貼進 Firebase 主控台 → Firestore Database → 規則，
+// 放在 match /databases/{database}/documents { ... } 的大括號裡面（跟 signReqs 那段放一起），再按「發布」。
+// 需要先有 daisenStaff() 這個函式（簽名功能那段規則裡已經有）。
+
+    // 後勤行事曆
+    match /calEvents/{id} {
+      allow read, write: if daisenStaff();
+    }
+
+    // 派車任務登記
+    match /carTasks/{id} {
+      allow read, write: if daisenStaff();
+    }
