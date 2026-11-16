@@ -375,7 +375,7 @@ const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 // 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
-const APP_VER="20261116-1145";
+const APP_VER="20261116-1235";
 async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/APP_VER="(\d{8}-\d{4})"/);
   if(m&&m[1]>APP_VER&&!document.getElementById("verBar")){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統有新版本，點這裡更新";
     d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap";
@@ -1201,8 +1201,10 @@ const BASE_OPT=new Set(CODE_FAMS.flatMap(f=>f.s.flatMap((g,i)=>g.o.map(o=>f.k+"_
 // 自行新增的廠商：存在 invProducts/_opt_seg_{分類}__{第幾段}，載入時併入編碼選項
 const SEG_CHARS="123456789ABCDEFGHJKLMNPRTUWXYZ";
 const segNorm=t=>String(t||"").replace(/\s/g,"").replace(/^0(?=\D)/,"");
-function mergeSegExtra(key,list,hidden){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;if(hidden)g.o=g.o.filter(o=>!hidden[o[0]]);list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c)||hidden?.[c])return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
+function mergeSegExtra(key,list,hidden){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;if(hidden)g.o=g.o.filter(o=>!hidden[o[0]]||SEG_KEEP.has(key+"|"+o[0]));list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c)||hidden?.[c])return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
 // 已刪除的自行新增選項（分類__段|代碼）
+// 曾被刪除、後來又要用回來的內建選項（不受刪除紀錄影響）
+const SEG_KEEP=new Set(["R__1|20","R__1|21","R__1|22"]);
 const SEG_HIDE=new Set(["7__4|4","7-Z__4|4","7__5|5","7-Z__5|5"]);
 function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [...SEG_CHARS].find(c=>!used.has(c))||null;for(let n=1;n<100;n++){const c=String(n).padStart(g.w,"0");if(!used.has(c))return c}return null}
 // 刪除下拉選項（只有管理員）：已有商品使用的代碼不能刪
@@ -3329,7 +3331,7 @@ function startData(){
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());{const cl=d.find(x=>x.id==="calLabels");S.calLabels=cl?cl.data().list?.map(x=>[x.n,x.c]):null}{const h=d.find(x=>x.id==="codeOptHidden")?.data()?.h||{};Object.keys(h).forEach(kc=>{if(!h[kc])return;SEG_HIDE.add(kc);const [key,c]=kc.split("|"),[k,i]=key.split("__"),g=famOf(k)?.s[+i];if(g)g.o=g.o.filter(o=>o[0]!==c)})}S.mig61=!!d.find(x=>x.id==="mig_61volt");S.mig7A=!!d.find(x=>x.id==="mig_7voltA");S.mig94=!!d.find(x=>x.id==="mig_94volt");S.mig93=!!d.find(x=>x.id==="mig_93brand");S.mig93L=!!d.find(x=>x.id==="mig_93len");S.mig9L=!!d.find(x=>x.id==="mig_9len");S.mig77=!!d.find(x=>x.id==="mig_77item");S.migRM=!!d.find(x=>x.id==="mig_Rmaker");S.migRM2=!!d.find(x=>x.id==="mig_Rmaker2");S.migRR=!!d.find(x=>x.id==="mig_Rres");S.migR6=!!d.find(x=>x.id==="mig_R6");S.migRS=!!d.find(x=>x.id==="mig_Rswap");S.hrSetLoaded=true;setTimeout(migVolt61,0);const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());{const cl=d.find(x=>x.id==="calLabels");S.calLabels=cl?cl.data().list?.map(x=>[x.n,x.c]):null}{const h=d.find(x=>x.id==="codeOptHidden")?.data()?.h||{};Object.keys(h).forEach(kc=>{if(!h[kc]||SEG_KEEP.has(kc))return;SEG_HIDE.add(kc);const [key,c]=kc.split("|"),[k,i]=key.split("__"),g=famOf(k)?.s[+i];if(g)g.o=g.o.filter(o=>o[0]!==c)})}S.mig61=!!d.find(x=>x.id==="mig_61volt");S.mig7A=!!d.find(x=>x.id==="mig_7voltA");S.mig94=!!d.find(x=>x.id==="mig_94volt");S.mig93=!!d.find(x=>x.id==="mig_93brand");S.mig93L=!!d.find(x=>x.id==="mig_93len");S.mig9L=!!d.find(x=>x.id==="mig_9len");S.mig77=!!d.find(x=>x.id==="mig_77item");S.migRM=!!d.find(x=>x.id==="mig_Rmaker");S.migRM2=!!d.find(x=>x.id==="mig_Rmaker2");S.migRR=!!d.find(x=>x.id==="mig_Rres");S.migR6=!!d.find(x=>x.id==="mig_R6");S.migRS=!!d.find(x=>x.id==="mig_Rswap");S.hrSetLoaded=true;setTimeout(migVolt61,0);const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
