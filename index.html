@@ -375,7 +375,7 @@ const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 // 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
-const APP_VER="20261116-1125";
+const APP_VER="20261116-1145";
 async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/APP_VER="(\d{8}-\d{4})"/);
   if(m&&m[1]>APP_VER&&!document.getElementById("verBar")){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統有新版本，點這裡更新";
     d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap";
@@ -1305,7 +1305,7 @@ async function migVolt61(){if(migRun||(S.mig61&&S.mig7A&&S.mig94&&S.mig93&&S.mig
       await setDoc(doc(fs,"hrSettings","mig_Rres"),{done:true,count:k,at:new Date().toISOString(),by:me.email});S.migRR=true;if(k)toast(`已將 ${k} 個租賃設備的第 7～10 碼改為 0`)}
     if(!S.migR6){let k=0;for(const p of S.invProd){const c=String(p.code||"").toUpperCase();if(c.length===10&&c[0]==="R"&&c[5]!=="0"){p.code=c.slice(0,5)+"0"+c.slice(6);await updateDoc(doc(fs,"invProducts",p.id),{code:p.code,updatedAt:new Date().toISOString(),updatedBy:me.email});k++}}
       await setDoc(doc(fs,"hrSettings","mig_R6"),{done:true,count:k,at:new Date().toISOString(),by:me.email});S.migR6=true;if(k)toast(`已將 ${k} 個租賃設備的第 6 碼改為 0`)}
-    if(!S.migRS){const V={"21":"22","22":"21"};let k=0;for(const p of S.invProd){const c=String(p.code||"").toUpperCase();if(c.length===10&&c[0]==="R"&&V[c.slice(2,4)]){p.code=c.slice(0,2)+V[c.slice(2,4)]+c.slice(4);await updateDoc(doc(fs,"invProducts",p.id),{code:p.code,segOpts:{},updatedAt:new Date().toISOString(),updatedBy:me.email});k++}}
+    if(!S.migRS){const V={"21":"22","22":"21"};let k=0;for(const p of S.invProd){const c=String(p.code||"").toUpperCase();const nm=String(p.name||"")+String(p.printName||"");if(c.length===10&&c[0]==="R"&&V[c.slice(2,4)]&&((c.slice(2,4)==="21"&&nm.includes("36吋"))||(c.slice(2,4)==="22"&&nm.includes("30吋")))){p.code=c.slice(0,2)+V[c.slice(2,4)]+c.slice(4);await updateDoc(doc(fs,"invProducts",p.id),{code:p.code,segOpts:{},updatedAt:new Date().toISOString(),updatedBy:me.email});k++}}
       await setDoc(doc(fs,"hrSettings","mig_Rswap"),{done:true,count:k,at:new Date().toISOString(),by:me.email});S.migRS=true;if(k)toast(`已將 ${k} 個租賃設備的機型代碼 21／22 對調`)}
     if(!S.mig61){await setDoc(doc(fs,"hrSettings","mig_61volt"),{done:true,count:n,at:new Date().toISOString(),by:me.email});S.mig61=true}if(n)toast(`已將 ${n} 個馬達的電壓代碼更新為新編號`)}
   catch(e){migRun=false;console.warn("migVolt61",e)}}
