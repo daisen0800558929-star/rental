@@ -375,7 +375,7 @@ const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 // 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
-const APP_VER="20261116-0915";
+const APP_VER="20261116-0930";
 async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/APP_VER="(\d{8}-\d{4})"/);
   if(m&&m[1]>APP_VER&&!document.getElementById("verBar")){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統有新版本，點這裡更新";
     d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap";
@@ -1199,10 +1199,15 @@ const famGroup=m=>CODE_FAMS.filter(f=>f.m===m);
 // 自行新增的廠商：存在 invProducts/_opt_seg_{分類}__{第幾段}，載入時併入編碼選項
 const SEG_CHARS="123456789ABCDEFGHJKLMNPRTUWXYZ";
 const segNorm=t=>String(t||"").replace(/\s/g,"").replace(/^0(?=\D)/,"");
-function mergeSegExtra(key,list){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c))return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
+function mergeSegExtra(key,list,hidden){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;if(hidden)g.o=g.o.filter(o=>!hidden[o[0]]);list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c)||hidden?.[c])return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
 // 已刪除的自行新增選項（分類__段|代碼）
 const SEG_HIDE=new Set(["7__4|4","7-Z__4|4","7__5|5","7-Z__5|5"]);
 function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [...SEG_CHARS].find(c=>!used.has(c))||null;for(let n=1;n<100;n++){const c=String(n).padStart(g.w,"0");if(!used.has(c))return c}return null}
+// 刪除下拉選項（只有管理員）：已有商品使用的代碼不能刪
+function segUseCount(f,i,c){const at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),w=f.s[i].w;return S.invProd.filter(p=>{const pc=String(p.code||"").toUpperCase();return guessFam(pc)===f&&pc.slice(at,at+w)===c}).length}
+function delSegOption(f,i,c){const g=f.s[i];
+  const peers=g.n==="適用機型"?famGroup(f.m).flatMap(x=>x.s.map((y,k)=>({f:x,i:k,g:y})).filter(z=>z.g.n==="適用機型")):[{f,i,g}];
+  for(const z of peers){z.g.o=z.g.o.filter(o=>o[0]!==c);setDoc(doc(fs,"invProducts","_opt_seg_"+z.f.k+"__"+z.i),{hidden:{[c]:true},items:{[c]:deleteField()},updatedAt:new Date().toISOString(),updatedBy:me.email},{merge:true}).catch(er=>toast("刪除沒有存進資料庫："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er)))}}
 async function addSegVendor(f,i,name){const g=f.s[i];const at=1+f.s.slice(0,i).reduce((x,y)=>x+y.w,0);const t=String(name||"").trim();if(!t)return null;
   if(g.o.some(o=>o[1]===t)){toast("「"+t+"」已經在清單裡");return g.o.find(o=>o[1]===t)[0]}
   // 「適用機型」同一大類共用：新增一次，所有子分類都會出現
@@ -1347,8 +1352,16 @@ function prodForm(p,copy){
      const G=famGroup(f.m);
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
        if(i===0&&G.length>1)return `<label style="font-size:12.5px">第 2 碼　${esc(g.n)}<select data-seg="0" data-sub="1">${G.map(x=>x.s[0].o.map(([k,t],j)=>`<option value="${esc(k)}" data-fam="${esc(x.k)}"${x.k===f.k?` data-j="${j}"`:""}${x.k===f.k&&k===c?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")).join("")}</select></label>`;
-       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${invCan("edit")?'<option value="__newv">＋ 新增'+(/預留/.test(g.n)?"選項":esc(g.n))+'…</option>':""}${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
-     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=()=>{if(x.value!=="__newv"){build();return}
+       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${invCan("edit")?'<option value="__newv">＋ 新增'+(/預留/.test(g.n)?"選項":esc(g.n))+'…</option>':""}${isAdm()?'<option value="__delv">－ 刪除選項…（管理員）</option>':""}${g.o.map(([k,t],j)=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
+     box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=()=>{
+       if(x.value==="__delv"){const i=+x.dataset.seg,g=f.s[i],at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),prev=F.code.value.slice(at,at+g.w);
+         x.value=g.o.some(o=>o[0]===prev)?prev:"";box.querySelector(".segnew")?.remove();
+         const w=document.createElement("div");w.className="segnew";w.style.cssText="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:-4px 0 8px";
+         const draw=()=>{w.innerHTML=`<div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:14px">刪除「${esc(g.n)}」的選項</b><button class="btn small" type="button" data-no style="margin-left:auto">完成</button></div>`+g.o.map(([c,t])=>{const n=segUseCount(f,i,c);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span class="mono" style="min-width:2.2em">${esc(c)}</span><span style="flex:1">${esc(t)}</span>${n?`<span class="m" style="font-size:12px">${n} 個商品使用</span>`:""}<button class="btn small" type="button" data-del="${esc(c)}" style="color:var(--bad)"${n?" disabled":""} aria-label="刪除 ${esc(t)}">✕</button></div>`}).join("")+(g.n==="適用機型"?'<div class="m" style="font-size:12px;margin-top:6px">適用機型是共用清單，刪除後所有子分類都會一起移除。</div>':"");
+           w.querySelector("[data-no]").onclick=()=>{w.remove();segs();build()};
+           w.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const c=b.dataset.del,t=(g.o.find(o=>o[0]===c)||[])[1];if(!confirm(`確定刪除「${c} ${t}」？`))return;delSegOption(f,i,c);toast(`已刪除 ${c} ${t}`);draw()})};
+         draw();x.closest("label").after(w);return}
+       if(x.value!=="__newv"){build();return}
        // 在下拉選單下方展開輸入框（不用跳出視窗，手機比較穩定）
        const i=+x.dataset.seg,g=f.s[i],at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),prev=F.code.value.slice(at,at+g.w);
        x.value=g.o.some(o=>o[0]===prev)?prev:"";box.querySelector(".segnew")?.remove();
@@ -3290,7 +3303,7 @@ function startData(){
   }
   if(canWrite)unsubs.push(onSnapshot(query(collection(fs,"signReqs"),where("status","==","signed")),snap=>snap.docs.forEach(applyRemote),err=>console.warn("signReqs",err.code)));
   {const hrSub=(col,set,admin)=>{if(admin&&me.role!=="admin")return;unsubs.push(onSnapshot(collection(fs,col),snap=>{set(snap.docs);if(!dlg.open)render()},err=>{(S.colErr=S.colErr||{})[col]=err.code;if(!dlg.open)render()}))};
-   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>{const v=x.data();mergeSegExtra(x.id.slice(9),[...(v.list||[]),...Object.entries(v.items||{})])});d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
+   hrSub("invProducts",d=>{S.invProdLoaded=true;setTimeout(migVolt61,0);S.invProd=d.filter(x=>!x.id.startsWith("_opt_")).map(x=>({id:x.id,...x.data()}));S.dimLists={};d.filter(x=>x.id.startsWith("_opt_seg_")).forEach(x=>{const v=x.data();mergeSegExtra(x.id.slice(9),[...(v.list||[]),...Object.entries(v.items||{})],v.hidden)});d.filter(x=>x.id.startsWith("_opt_")&&!x.id.startsWith("_opt_seg_")).forEach(x=>{const k=x.id==="_opt_fanDims"?"1":x.id.replace("_opt_dims_","");S.dimLists[k]=x.data().list||[]})});
    hrSub("calEvents",d=>S.calEvents=d.map(x=>({id:x.id,...x.data()})));
    hrSub("carTasks",d=>S.carTasks=d.map(x=>({id:x.id,...x.data()})));
    hrSub("invDocs",d=>S.invDocs=d.map(x=>({id:x.id,...x.data()})));
