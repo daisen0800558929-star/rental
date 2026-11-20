@@ -375,7 +375,7 @@ const OWNER="daisen0800558929@gmail.com";
 const ROLES={admin:"管理員",staff:"員工",viewer:"檢視"};
 let me=null;
 // 版本檢查：手機常停在舊畫面，偵測到伺服器有新版就自動重新載入
-const APP_VER="20261120-1830";
+const APP_VER="20261120-1850";
 async function checkVer(){try{const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text();const m=t.match(/APP_VER="(\d{8}-\d{4})"/);
   if(m&&m[1]>APP_VER&&!document.getElementById("verBar")){const d=document.createElement("button");d.id="verBar";d.type="button";d.textContent="系統有新版本，點這裡更新";
     d.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:12px 18px;border-radius:999px;border:0;background:#e5534b;color:#fff;font:inherit;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap";
@@ -1204,7 +1204,8 @@ const SEG_CHARS="123456789ABCDEFGHJKLMNPRTUWXYZ";
 const SEG_ORD="0"+SEG_CHARS+"IOQSV";
 const segOrder=o=>o.map(([k,t],j)=>[k,t,j]).sort((a,b)=>{const x=String(a[0]),y=String(b[0]);if(x.length!==y.length)return x.length-y.length;for(let i=0;i<x.length;i++){const d=SEG_ORD.indexOf(x[i])-SEG_ORD.indexOf(y[i]);if(d)return d}return a[2]-b[2]});
 const segNorm=t=>String(t||"").replace(/\s/g,"").replace(/^0(?=\D)/,"");
-function mergeSegExtra(key,list,hidden){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g)return;if(hidden)g.o=g.o.filter(o=>!hidden[o[0]]||SEG_KEEP.has(key+"|"+o[0]));list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c)||hidden?.[c])return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
+const SEG_OVR={};
+function mergeSegExtra(key,list,hidden){const [k,i]=key.split("__"),f=famOf(k),g=f?.s[+i];if(!g||SEG_OVR[key])return;if(hidden)g.o=g.o.filter(o=>!hidden[o[0]]||SEG_KEEP.has(key+"|"+o[0]));list.forEach(([c,t])=>{if(SEG_HIDE.has(key+"|"+c)||hidden?.[c])return;if(g.o.some(o=>o[0]===c||segNorm(o[1])===segNorm(t)))return;g.o.push([c,t])})}
 // 已刪除的自行新增選項（分類__段|代碼）
 // 曾被刪除、後來又要用回來的內建選項（不受刪除紀錄影響）
 const SEG_KEEP=new Set(["R__1|20","R__1|21","R__1|22","R__1|23","R__1|24","R__1|25","R__1|26"]);
@@ -1212,6 +1213,15 @@ const SEG_HIDE=new Set(["7__4|4","7-Z__4|4","7__5|5","7-Z__5|5"]);
 function nextSegCode(g){const used=new Set(g.o.map(o=>o[0]));if(g.w===1)return [...SEG_CHARS].find(c=>!used.has(c))||null;for(let n=1;n<100;n++){const c=String(n).padStart(g.w,"0");if(!used.has(c))return c}return null}
 // 刪除下拉選項（只有管理員）：已有商品使用的代碼不能刪
 function segUseCount(f,i,c){const at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),w=f.s[i].w;return S.invProd.filter(p=>{const pc=String(p.code||"").toUpperCase();return guessFam(pc)===f&&pc.slice(at,at+w)===c}).length}
+// 刪除後自動重編：0 保持不動，其餘依順序補成 1、2、3…，用到的商品編號一起改
+async function renumSeg(peers){const z0=peers[0],g=z0.g,w=g.w;const list=segOrder(g.o);let n=0;const map={},next=[];
+  for(const [c,t] of list){let nc=c;if(c!=="0"&&!/^0+$/.test(c)){nc=w===1?SEG_CHARS[n]:String(n+1).padStart(w,"0");n++}if(nc!==c)map[c]=nc;next.push([nc,t])}
+  if(!Object.keys(map).length)return 0;let k=0;
+  for(const z of peers){const key=z.f.k+"__"+z.i;z.g.o=next.map(x=>[...x]);SEG_OVR[key]=Object.fromEntries(next);[...SEG_HIDE].forEach(h=>{if(h.startsWith(key+"|"))SEG_HIDE.delete(h)});
+    await setDoc(doc(fs,"hrSettings","codeOpt_"+key),{m:SEG_OVR[key],updatedAt:new Date().toISOString(),updatedBy:me.email});
+    const at=1+z.f.s.slice(0,z.i).reduce((a,y)=>a+y.w,0);
+    for(const p of S.invProd){const pc=String(p.code||"").toUpperCase();if(pc.length!==famLen(z.f)||(famOf(p.fam)||guessFam(pc))!==z.f)continue;const sc=pc.slice(at,at+w);if(map[sc]){p.code=pc.slice(0,at)+map[sc]+pc.slice(at+w);await updateDoc(doc(fs,"invProducts",p.id),{code:p.code,segOpts:{},updatedAt:new Date().toISOString(),updatedBy:me.email});k++}}}
+  return k}
 function delSegOption(f,i,c){const g=f.s[i];
   const peers=g.n==="適用機型"?famGroup(f.m).flatMap(x=>x.s.map((y,k)=>({f:x,i:k,g:y})).filter(z=>z.g.n==="適用機型")):[{f,i,g}];
   setDoc(doc(fs,"hrSettings","codeOptHidden"),{h:Object.fromEntries(peers.map(z=>[z.f.k+"__"+z.i+"|"+c,true])),updatedAt:new Date().toISOString()},{merge:true}).catch(()=>{});peers.forEach(z=>SEG_HIDE.add(z.f.k+"__"+z.i+"|"+c));
@@ -1374,14 +1384,21 @@ function prodForm(p,copy){
      const G=famGroup(f.m);
      box.innerHTML=f.s.map((g,i)=>{const at=pos;pos+=g.w;const c=F.code.value.slice(at,at+g.w),known=g.o.some(o=>o[0]===c);
        if(i===0&&G.length>1)return `<label style="font-size:12.5px">第 2 碼　${esc(g.n)}<select data-seg="0" data-sub="1">${G.map(x=>x.s[0].o.map(([k,t],j)=>`<option value="${esc(k)}" data-fam="${esc(x.k)}"${x.k===f.k?` data-j="${j}"`:""}${x.k===f.k&&k===c?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")).join("")}</select></label>`;
-       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${invCan("edit")?'<option value="__newv">＋ 新增'+(/預留/.test(g.n)?"選項":esc(g.n))+'…</option>':""}${isAdm()?'<option value="__delv">－ 刪除選項…（管理員）</option>':""}${segOrder(g.o).map(([k,t,j])=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
+       return `<label style="font-size:12.5px">第 ${at+1}${g.w>1?"～"+(at+g.w):""} 碼　${esc(g.n)}<select data-seg="${i}"><option value="">請選擇</option>${invCan("edit")?'<option value="__newv">＋ 新增'+(/預留/.test(g.n)?"選項":esc(g.n))+'…</option>':""}${isAdm()?'<option value="__delv">✎ 修改／刪除選項…（管理員）</option>':""}${segOrder(g.o).map(([k,t,j])=>`<option value="${esc(k)}" data-j="${j}"${known&&k===c&&g.o.findIndex(o=>o[0]===c)===j?" selected":""}>${esc(k)}　${esc(t)}</option>`).join("")}${!known&&c.length===g.w&&!/[?]/.test(c)?`<option value="${esc(c)}" selected>${esc(c)}　（自訂）</option>`:""}</select></label>`+(DIM_FAMS.includes(f.k)&&i===2?dimSel():"")}).join("");
      box.querySelectorAll("select[data-seg]").forEach(x=>x.onchange=()=>{
        if(x.value==="__delv"){const i=+x.dataset.seg,g=f.s[i],at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),prev=F.code.value.slice(at,at+g.w);
          x.value=g.o.some(o=>o[0]===prev)?prev:"";box.querySelector(".segnew")?.remove();
          const w=document.createElement("div");w.className="segnew";w.style.cssText="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:-4px 0 8px";
-         const draw=()=>{w.innerHTML=`<div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:14px">刪除「${esc(g.n)}」的選項</b><button class="btn small" type="button" data-no style="margin-left:auto">完成</button></div>`+g.o.map(([c,t])=>{const n=segUseCount(f,i,c);return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span class="mono" style="min-width:2.2em">${esc(c)}</span><span style="flex:1">${esc(t)}</span>${n?`<span class="m" style="font-size:12px">${n} 個商品使用</span>`:""}<button class="btn small" type="button" data-del="${esc(c)}" style="color:var(--bad)"${n?" disabled":""} aria-label="刪除 ${esc(t)}">✕</button></div>`}).join("")+(g.n==="適用機型"?'<div class="m" style="font-size:12px;margin-top:6px">適用機型是共用清單，刪除後所有子分類都會一起移除。</div>':"");
+         const draw=()=>{w.innerHTML=`<div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:14px">修改／刪除「${esc(g.n)}」的選項</b><button class="btn small" type="button" data-no style="margin-left:auto">完成</button></div>`+g.o.map(([c,t])=>{const n=segUseCount(f,i,c);return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--line);flex-wrap:wrap"><span class="mono" style="min-width:2.2em">${esc(c)}</span><input data-ren="${esc(c)}" value="${esc(t)}" style="flex:1 1 9em;min-width:7em;padding:6px 8px" aria-label="選項名稱"><button class="btn small" type="button" data-rsave="${esc(c)}" aria-label="儲存名稱">✓</button>${n?`<span class="m" style="font-size:12px;white-space:nowrap">${n} 個使用</span>`:""}<button class="btn small" type="button" data-del="${esc(c)}" style="color:var(--bad)"${n?" disabled":""} aria-label="刪除 ${esc(t)}">✕</button></div>`}).join("")+(g.n==="適用機型"?'<div class="m" style="font-size:12px;margin-top:6px">適用機型是共用清單，刪除後所有子分類都會一起移除。</div>':"");
            w.querySelector("[data-no]").onclick=()=>{w.remove();segs();build()};
-           w.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const c=b.dataset.del,t=(g.o.find(o=>o[0]===c)||[])[1];if(!confirm(`確定刪除「${c} ${t}」？`))return;delSegOption(f,i,c);toast(`已刪除 ${c} ${t}`);draw()})};
+           w.querySelectorAll("[data-rsave]").forEach(b=>b.onclick=async()=>{const c=b.dataset.rsave,inp=w.querySelector(`[data-ren="${CSS.escape(c)}"]`),t=inp.value.trim();if(!t){toast("名稱不能空白");return}
+             const peers=g.n==="適用機型"?famGroup(f.m).flatMap(x=>x.s.map((y,k)=>({f:x,i:k,g:y})).filter(z=>z.g.n==="適用機型")):[{f,i,g}];
+             try{for(const z of peers){const key=z.f.k+"__"+z.i;z.g.o=z.g.o.map(o=>o[0]===c?[c,t]:o);SEG_OVR[key]=Object.fromEntries(z.g.o);await setDoc(doc(fs,"hrSettings","codeOpt_"+key),{m:SEG_OVR[key],updatedAt:new Date().toISOString(),updatedBy:me.email})}toast(`已改名：${c} ${t}（商品名稱可按「依編碼更新名稱」一起更新）`)}catch(er){toast("改名沒有存進資料庫："+(er?.code==="permission-denied"?"沒有寫入權限":er?.message||er))}draw()});
+           w.querySelectorAll("[data-ren]").forEach(x=>x.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();w.querySelector(`[data-rsave="${CSS.escape(x.dataset.ren)}"]`).click()}}));
+           w.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{const c=b.dataset.del,t=(g.o.find(o=>o[0]===c)||[])[1];if(!confirm(`確定刪除「${c} ${t}」？\n刪除後後面的選項會自動往前重新編號，用到的商品編號也會一起更新。`))return;
+             const peers=g.n==="適用機型"?famGroup(f.m).flatMap(x=>x.s.map((y,k)=>({f:x,i:k,g:y})).filter(z=>z.g.n==="適用機型")):[{f,i,g}];
+             delSegOption(f,i,c);let k=0;try{k=await renumSeg(peers)}catch(er){toast("重新編號失敗："+(er?.message||er))}toast(`已刪除 ${c} ${t}`+(k?`，並更新 ${k} 個商品編號`:""));
+             const at=1+f.s.slice(0,i).reduce((a,y)=>a+y.w,0),cur=F.code.value.slice(at,at+g.w);draw()})};
          draw();x.closest("label").after(w);return}
        if(x.value!=="__newv"){build();return}
        // 在下拉選單下方展開輸入框（不用跳出視窗，手機比較穩定）
@@ -3334,7 +3351,8 @@ function startData(){
    hrSub("hrCharter",d=>S.chArt=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterNotes",d=>S.chNotes=d.map(x=>({id:x.id,...x.data()})));
    hrSub("hrCharterAcks",d=>S.chAcks=d.map(x=>({id:x.id,...x.data()})));
-   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());{const cl=d.find(x=>x.id==="calLabels");S.calLabels=cl?cl.data().list?.map(x=>[x.n,x.c]):null}{const h=d.find(x=>x.id==="codeOptHidden")?.data()?.h||{};Object.keys(h).forEach(kc=>{if(!h[kc]||SEG_KEEP.has(kc))return;SEG_HIDE.add(kc);const [key,c]=kc.split("|"),[k,i]=key.split("__"),g=famOf(k)?.s[+i];if(g)g.o=g.o.filter(o=>o[0]!==c)})}S.mig61=!!d.find(x=>x.id==="mig_61volt");S.mig7A=!!d.find(x=>x.id==="mig_7voltA");S.mig94=!!d.find(x=>x.id==="mig_94volt");S.mig93=!!d.find(x=>x.id==="mig_93brand");S.mig93L=!!d.find(x=>x.id==="mig_93len");S.mig9L=!!d.find(x=>x.id==="mig_9len");S.mig77=!!d.find(x=>x.id==="mig_77item");S.migRM=!!d.find(x=>x.id==="mig_Rmaker");S.migRM2=!!d.find(x=>x.id==="mig_Rmaker2");S.migRR=!!d.find(x=>x.id==="mig_Rres");S.migR6=!!d.find(x=>x.id==="mig_R6");S.migRS=!!d.find(x=>x.id==="mig_Rswap");S.hrSetLoaded=true;setTimeout(migVolt61,0);const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
+   hrSub("hrSettings",d=>{const v=d.find(x=>x.id==="vision");S.vision=v?v.data():null;const c=d.find(x=>x.id==="charter");S.charter=c?c.data():null;{const t=d.find(x=>x.id==="salesTargets");S.targets=t?t.data():{}}{const t=d.find(x=>x.id==="invPricing");S.priceDiv=+(t?.data().div)||0.6}S.jobs={};d.filter(x=>x.id.startsWith("job_")).forEach(x=>S.jobs[x.id.slice(4)]=x.data());{const cl=d.find(x=>x.id==="calLabels");S.calLabels=cl?cl.data().list?.map(x=>[x.n,x.c]):null}{const h=d.find(x=>x.id==="codeOptHidden")?.data()?.h||{};d.filter(x=>x.id.startsWith("codeOpt_")).forEach(x=>{const key=x.id.slice(8),m=x.data()?.m||{},[k,i]=key.split("__"),g=famOf(k)?.s[+i];if(!g)return;SEG_OVR[key]=m;g.o=Object.entries(m).map(([c,t])=>[c,t])});
+    Object.keys(h).forEach(kc=>{if(!h[kc]||SEG_KEEP.has(kc)||SEG_OVR[kc.split("|")[0]])return;SEG_HIDE.add(kc);const [key,c]=kc.split("|"),[k,i]=key.split("__"),g=famOf(k)?.s[+i];if(g)g.o=g.o.filter(o=>o[0]!==c)})}S.mig61=!!d.find(x=>x.id==="mig_61volt");S.mig7A=!!d.find(x=>x.id==="mig_7voltA");S.mig94=!!d.find(x=>x.id==="mig_94volt");S.mig93=!!d.find(x=>x.id==="mig_93brand");S.mig93L=!!d.find(x=>x.id==="mig_93len");S.mig9L=!!d.find(x=>x.id==="mig_9len");S.mig77=!!d.find(x=>x.id==="mig_77item");S.migRM=!!d.find(x=>x.id==="mig_Rmaker");S.migRM2=!!d.find(x=>x.id==="mig_Rmaker2");S.migRR=!!d.find(x=>x.id==="mig_Rres");S.migR6=!!d.find(x=>x.id==="mig_R6");S.migRS=!!d.find(x=>x.id==="mig_Rswap");S.hrSetLoaded=true;setTimeout(migVolt61,0);const ir=d.find(x=>x.id==="invCodeRule10");S.invRule=ir?ir.data().text:""});
    hrSub("hrContracts",d=>S.hrCon=d.map(x=>({id:x.id,...x.data()})),true);
    hrSub("hrPrivate",d=>{S.hrPriv={};d.forEach(x=>S.hrPriv[x.id]=x.data())},true);}
   unsubs.push(onSnapshot(collection(fs,"staff"),snap=>{S.staff=snap.docs.map(d=>({id:d.id,...d.data()}));if(!dlg.open)render()},()=>{}));
